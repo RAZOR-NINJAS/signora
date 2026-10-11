@@ -21,12 +21,14 @@ class GameConfig:
         hold_ms: int = DEFAULT_HOLD_MS,
         min_conf: float = DEFAULT_MIN_CONF,
         max_cacti: int = 0,
+        mode: str = "asl",
     ):
         self.ready_ms = int(ready_ms)
         self.answer_ms = int(answer_ms)
         self.hold_ms = int(hold_ms)
         self.min_conf = float(min_conf)
         self.max_cacti = int(max_cacti)
+        self.mode = str(mode or "asl").lower()
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -35,6 +37,7 @@ class GameConfig:
             "hold_ms": self.hold_ms,
             "min_conf": self.min_conf,
             "max_cacti": self.max_cacti,
+            "mode": self.mode,
         }
 
 

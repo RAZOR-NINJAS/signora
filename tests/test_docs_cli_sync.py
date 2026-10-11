@@ -52,7 +52,7 @@ def test_documented_flags_exist():
     # Check game flags
     game_parser = subparser_dict["game"]
     game_flags = [opt for act in game_parser._actions for opt in act.option_strings]
-    for flag in ["--host", "--port", "-p", "--kiosk", "--no-camera"]:
+    for flag in ["--host", "--port", "-p", "--kiosk", "--no-camera", "--mode", "-m"]:
         assert flag in game_flags, f"Missing flag '{flag}' on 'signora game'"
 
     # Check learn flags

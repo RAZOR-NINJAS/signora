@@ -33,6 +33,7 @@ def run_asl_live(
     detect_every: int = 1,
     max_frames: Optional[int] = None,
     use_fake: bool = False,
+    dwell_ms: Optional[int] = None,
 ) -> int:
     """Run real-time ASL fingerspelling recognition loop."""
     print("=" * 60)
@@ -55,7 +56,7 @@ def run_asl_live(
     engine = DebounceEngine(
         predictor=predictor,
         smooth_ms=SMOOTH_MS,
-        dwell_ms=DWELL_MS,
+        dwell_ms=dwell_ms if dwell_ms is not None else DWELL_MS,
         space_dwell_ms=SPACE_DWELL_MS,
         threshold=CONFIRM_THRESHOLD,
         repeat_cooldown_ms=REPEAT_COOLDOWN_MS,

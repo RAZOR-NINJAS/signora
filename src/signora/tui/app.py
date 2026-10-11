@@ -5,6 +5,7 @@ flicker-free console navigation, cyberpunk-themed hardware diagnostics,
 and cross-platform compatibility across Linux (X11/Wayland) and Windows conhost/Terminal.
 """
 
+import inspect
 import os
 import sys
 import time
@@ -30,6 +31,12 @@ from signora.platform_compat import (
     get_platform_info,
     is_windows,
     probe_cameras,
+)
+from signora.tui.dictionary import (
+    ASL_GESTURES,
+    ISL_GESTURES,
+    WORDS_GESTURES,
+    search_all_gestures,
 )
 
 ASCII_BANNER = r"""
@@ -83,6 +90,12 @@ class SignoraTUI:
     def __init__(self):
         self.console = Console()
         self.models_dir = get_default_models_dir()
+        self.settings = {
+            "dwell_ms": 600,
+            "dwell_label": "Standard (600ms)",
+            "no_tts": False,
+            "camera_index": 0,
+        }
 
     def clear(self) -> None:
         """Clear screen cross-platform."""
@@ -140,12 +153,15 @@ class SignoraTUI:
             f"{tts_state}",
         )
 
+        audio_sub = "MUTED" if self.settings["no_tts"] else "Active (Piper)"
         panel = Panel(
             info_table,
             border_style="cyan",
             box=box.ROUNDED,
             title="[bold cyan]System Hardware & Inference Architecture[/bold cyan]",
             title_align="left",
+            subtitle=f"[dim]Session: Dwell [bold white]{self.settings['dwell_label']}[/bold white] • Audio [bold white]{audio_sub}[/bold white] • Camera Device [bold white]#{self.settings['camera_index']}[/bold white][/dim]",
+            subtitle_align="right",
             padding=(0, 1),
         )
         self.console.print(panel)
@@ -212,7 +228,27 @@ class SignoraTUI:
             "Low (~12%)",
         )
 
-        # Category 3: System Diagnostics & Tools
+        # Category 3: Knowledge & Preferences
+        table.add_row(
+            "[bold yellow]---[/bold yellow]",
+            "[bold yellow]KNOWLEDGE & PREFERENCES[/bold yellow]",
+            "[dim yellow]Visual hand posture dictionary & session configuration[/dim yellow]",
+            "[bold yellow]---[/bold yellow]",
+        )
+        table.add_row(
+            "G",
+            "Gesture Sign Dictionary",
+            "Visual hand postures & motion guide for ASL, ISL & Words",
+            "Reference",
+        )
+        table.add_row(
+            "S",
+            "Session Settings",
+            "Configure dwell speed, audio speech output, camera device",
+            "Config",
+        )
+
+        # Category 4: System Diagnostics & Tools
         table.add_row(
             "[bold green]---[/bold green]",
             "[bold green]DIAGNOSTICS & UTILITIES[/bold green]",
@@ -256,7 +292,24 @@ class SignoraTUI:
 
         return Prompt.ask(
             "[bold cyan]Select an operation[/bold cyan]",
-            choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "a", "0"],
+            choices=[
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                "A",
+                "a",
+                "G",
+                "g",
+                "S",
+                "s",
+                "0",
+            ],
             default="1",
             console=self.console,
         )
@@ -282,12 +335,14 @@ class SignoraTUI:
             except Exception as e:
                 self.console.print(f"[dim yellow]Pre-flight notice: {e}[/dim yellow]")
 
-        # Camera Probe
-        selected_source = 0
+        # Camera Probe & Selection
+        selected_source = self.settings.get("camera_index", 0)
         try:
-            cams = probe_cameras(max_probe=3)
-            if cams:
-                selected_source = cams[0]["index"]
+            cams = probe_cameras(max_probe=4)
+            avail_indices = [c["index"] for c in cams]
+            if avail_indices:
+                if selected_source not in avail_indices:
+                    selected_source = avail_indices[0]
             else:
                 self.console.print(
                     "[bold yellow]⚡ [Auto-Healing] No physical camera found. Using synthetic camera fallback.[/bold yellow]"
@@ -297,7 +352,14 @@ class SignoraTUI:
 
         while True:
             try:
-                runner_func(source=selected_source)
+                kwargs = {"source": selected_source}
+                sig = inspect.signature(runner_func)
+                if "no_tts" in sig.parameters:
+                    kwargs["no_tts"] = self.settings.get("no_tts", False)
+                if "dwell_ms" in sig.parameters:
+                    kwargs["dwell_ms"] = self.settings.get("dwell_ms", 600)
+
+                runner_func(**kwargs)
                 break
             except Exception as exc:
                 self.console.print()
@@ -608,6 +670,288 @@ class SignoraTUI:
         self.console.print(res_panel)
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
+    def run_settings_flow(self) -> None:
+        """Interactive session settings and preferences manager."""
+        while True:
+            self.clear()
+            self.print_header()
+
+            audio_mode = (
+                "[bold red]MUTED (Silent)[/bold red]"
+                if self.settings["no_tts"]
+                else "[bold green]ENABLED (Piper Neural Voice)[/bold green]"
+            )
+
+            table = Table(
+                border_style="cyan",
+                box=box.ROUNDED,
+                title="[bold cyan]Session Preferences & Hardware Settings[/bold cyan]",
+                title_justify="left",
+                header_style="bold cyan",
+                expand=True,
+            )
+            table.add_column("Key", style="bold yellow", width=8, justify="center")
+            table.add_column("Setting", style="bold white", width=28)
+            table.add_column("Current Value", width=30)
+            table.add_column("Description", style="dim")
+
+            table.add_row(
+                "1",
+                "Speech Vocalization",
+                audio_mode,
+                "Toggle offline neural TTS audio feedback upon sign confirmation",
+            )
+            table.add_row(
+                "2",
+                "Dwell Confirmation Time",
+                f"[bold cyan]{self.settings['dwell_label']}[/bold cyan]",
+                "Holding duration required to lock & commit detected sign letter",
+            )
+            table.add_row(
+                "3",
+                "Default Camera Device",
+                f"[bold cyan]Camera Index #{self.settings['camera_index']}[/bold cyan]",
+                "Preferred physical video capture hardware device",
+            )
+            table.add_row(
+                "4",
+                "Reset to Defaults",
+                "[dim]600ms • Audio ON • Cam 0[/dim]",
+                "Restore factory balanced operational parameters",
+            )
+            table.add_row("0", "Save & Return", "[dim]Apply and return to main menu[/dim]", "—")
+
+            self.console.print(table)
+            self.console.print()
+
+            choice = Prompt.ask(
+                "[bold cyan]Select setting to configure[/bold cyan]",
+                choices=["1", "2", "3", "4", "0"],
+                default="0",
+                console=self.console,
+            )
+
+            if choice == "1":
+                self.settings["no_tts"] = not self.settings["no_tts"]
+                new_state = "MUTED" if self.settings["no_tts"] else "ENABLED"
+                self.console.print(
+                    f"\n[bold green]✓ Speech Vocalization set to: {new_state}[/bold green]"
+                )
+                time.sleep(0.8)
+            elif choice == "2":
+                self.console.print(
+                    "\n[bold cyan]Select Recognition Dwell Timing Profile:[/bold cyan]"
+                )
+                self.console.print(
+                    "  [1] Fast (450ms)     — High-speed fingerspelling for fluent signers"
+                )
+                self.console.print(
+                    "  [2] Standard (600ms) — Factory balanced profile for optimal accuracy"
+                )
+                self.console.print(
+                    "  [3] Relaxed (800ms)  — Extended posture dwell for beginners and learners"
+                )
+                speed_choice = Prompt.ask(
+                    "Choose profile", choices=["1", "2", "3"], default="2", console=self.console
+                )
+                if speed_choice == "1":
+                    self.settings["dwell_ms"] = 450
+                    self.settings["dwell_label"] = "Fast (450ms)"
+                elif speed_choice == "2":
+                    self.settings["dwell_ms"] = 600
+                    self.settings["dwell_label"] = "Standard (600ms)"
+                elif speed_choice == "3":
+                    self.settings["dwell_ms"] = 800
+                    self.settings["dwell_label"] = "Relaxed (800ms)"
+                self.console.print(
+                    f"\n[bold green]✓ Dwell speed updated to: {self.settings['dwell_label']}[/bold green]"
+                )
+                time.sleep(0.8)
+            elif choice == "3":
+                cams = probe_cameras(max_probe=6)
+                if not cams:
+                    self.console.print(
+                        "\n[bold yellow]No physical cameras detected. Keeping device index 0.[/bold yellow]"
+                    )
+                    time.sleep(1.0)
+                else:
+                    self.console.print("\n[bold cyan]Available Video Devices:[/bold cyan]")
+                    cam_choices = []
+                    for c in cams:
+                        idx = str(c["index"])
+                        cam_choices.append(idx)
+                        self.console.print(
+                            f"  [{idx}] Video Device {idx} ({c['width']}x{c['height']})"
+                        )
+                    cam_sel = Prompt.ask(
+                        "Select preferred camera device index",
+                        choices=cam_choices,
+                        default=str(cams[0]["index"]),
+                        console=self.console,
+                    )
+                    self.settings["camera_index"] = int(cam_sel)
+                    self.console.print(
+                        f"\n[bold green]✓ Default camera set to device index #{cam_sel}[/bold green]"
+                    )
+                    time.sleep(0.8)
+            elif choice == "4":
+                self.settings["dwell_ms"] = 600
+                self.settings["dwell_label"] = "Standard (600ms)"
+                self.settings["no_tts"] = False
+                self.settings["camera_index"] = 0
+                self.console.print(
+                    "\n[bold green]✓ Preferences restored to factory defaults.[/bold green]"
+                )
+                time.sleep(0.8)
+            elif choice == "0":
+                break
+
+    def run_guide_flow(self) -> None:
+        """Interactive gesture dictionary and visual sign formation guide."""
+        while True:
+            self.clear()
+            self.print_header()
+
+            table = Table(
+                border_style="yellow",
+                box=box.ROUNDED,
+                title="[bold yellow]Signora Sign Reference Dictionary & Posture Guide[/bold yellow]",
+                title_justify="left",
+                header_style="bold yellow",
+                expand=True,
+            )
+            table.add_column("Key", style="bold yellow", width=8, justify="center")
+            table.add_column("Dictionary Catalog", style="bold white", width=28)
+            table.add_column("Scope & Vocabulary", width=28)
+            table.add_column("Features", style="dim")
+
+            table.add_row(
+                "1",
+                "ASL Fingerspelling",
+                "26 Letters (A-Z) + SPACE",
+                "Single-hand geometric finger formations & confidence tips",
+            )
+            table.add_row(
+                "2",
+                "Indian Sign Language",
+                "26 Letters + 10 Iconic Words",
+                "Dual-handed 164D spatial mudras, roof/book/namaste signs",
+            )
+            table.add_row(
+                "3",
+                "ASL Dynamic Words",
+                "25 Motion Vocabularies",
+                "Upper-body landmark trajectories (Hello, Thank You, Please)",
+            )
+            table.add_row(
+                "4",
+                "Search Dictionary",
+                "Cross-Engine Lookup",
+                "Instant search for any sign posture by letter, word, or keyword",
+            )
+            table.add_row("0", "Return to Menu", "—", "Return to main dashboard")
+
+            self.console.print(table)
+            self.console.print()
+
+            choice = Prompt.ask(
+                "[bold yellow]Select a dictionary catalog[/bold yellow]",
+                choices=["1", "2", "3", "4", "0"],
+                default="1",
+                console=self.console,
+            )
+
+            if choice == "1":
+                self._display_asl_dictionary()
+            elif choice == "2":
+                self._display_isl_dictionary()
+            elif choice == "3":
+                self._display_words_dictionary()
+            elif choice == "4":
+                self._search_dictionary_flow()
+            elif choice == "0":
+                break
+
+    def _display_asl_dictionary(self) -> None:
+        self.clear()
+        table = Table(
+            border_style="cyan",
+            box=box.ROUNDED,
+            title="[bold cyan]ASL Fingerspelling Dictionary (Single-Hand Alphabet)[/bold cyan]",
+            expand=True,
+        )
+        table.add_column("Sign", style="bold yellow", width=8, justify="center")
+        table.add_column("Hand Formation & Finger Posture", style="white")
+        table.add_column("Recognition Tip", style="dim cyan", width=34)
+
+        for sign, info in ASL_GESTURES.items():
+            table.add_row(sign, info["posture"], info["tip"])
+
+        self.console.print(table)
+        Prompt.ask("\nPress Enter to return to dictionary menu", console=self.console)
+
+    def _display_isl_dictionary(self) -> None:
+        self.clear()
+        table = Table(
+            border_style="cyan",
+            box=box.ROUNDED,
+            title="[bold cyan]ISL Indian Sign Language Dictionary (Dual-Handed Signs & Words)[/bold cyan]",
+            expand=True,
+        )
+        table.add_column("Sign", style="bold yellow", width=12, justify="center")
+        table.add_column("Type", style="bold magenta", width=10, justify="center")
+        table.add_column("Hands", style="bold white", width=10, justify="center")
+        table.add_column("Spatial Hand Formation & Mudra", style="white")
+        table.add_column("Recognition Tip", style="dim cyan", width=32)
+
+        for sign, info in ISL_GESTURES.items():
+            cat = info.get("category", "Letter")
+            table.add_row(sign, cat, info["hands"], info["posture"], info["tip"])
+
+        self.console.print(table)
+        Prompt.ask("\nPress Enter to return to dictionary menu", console=self.console)
+
+    def _display_words_dictionary(self) -> None:
+        self.clear()
+        table = Table(
+            border_style="cyan",
+            box=box.ROUNDED,
+            title="[bold cyan]ASL Dynamic Words Dictionary (Trajectory Motion Matching)[/bold cyan]",
+            expand=True,
+        )
+        table.add_column("Word", style="bold yellow", width=14, justify="center")
+        table.add_column("Hands", style="bold white", width=10, justify="center")
+        table.add_column("Upper-Body Motion & Trajectory", style="white")
+        table.add_column("Execution Tip", style="dim cyan", width=32)
+
+        for word, info in WORDS_GESTURES.items():
+            table.add_row(word, info["hands"], info["trajectory"], info["tip"])
+
+        self.console.print(table)
+        Prompt.ask("\nPress Enter to return to dictionary menu", console=self.console)
+
+    def _search_dictionary_flow(self) -> None:
+        query = Prompt.ask("\nEnter sign name, letter, or keyword to search", console=self.console)
+        results = search_all_gestures(query)
+        if not results:
+            self.console.print(f"\n[bold yellow]No signs found matching '{query}'.[/bold yellow]")
+        else:
+            self.console.print(
+                f"\n[bold green]Found {len(results)} match(es) for '{query}':[/bold green]\n"
+            )
+            for r in results:
+                desc = r.get("posture") or r.get("trajectory", "")
+                panel = Panel(
+                    f"[bold white]{desc}[/bold white]\n\n"
+                    f"[bold cyan]Tip:[/bold cyan] {r.get('tip', '—')}\n"
+                    f"[dim]Hands: {r.get('hands', '1 Hand')} • Engine: {r.get('system')}[/dim]",
+                    title=f"[bold yellow]{r['sign']} ({r['system']})[/bold yellow]",
+                    border_style="cyan",
+                    box=box.ROUNDED,
+                )
+                self.console.print(panel)
+        Prompt.ask("\nPress Enter to return to dictionary menu", console=self.console)
+
     def loop(self) -> int:
         """Main interaction loop."""
         while True:
@@ -625,6 +969,10 @@ class SignoraTUI:
                 self.run_game_flow()
             elif choice == "5":
                 self.run_learn_flow()
+            elif choice in ("G", "g"):
+                self.run_guide_flow()
+            elif choice in ("S", "s"):
+                self.run_settings_flow()
             elif choice == "6":
                 self.run_doctor_flow()
             elif choice == "7":

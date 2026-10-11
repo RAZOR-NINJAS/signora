@@ -101,6 +101,13 @@ def create_parser() -> argparse.ArgumentParser:
         "--no-camera", action="store_true", help="Do not initialize camera detector automatically"
     )
     p_game.add_argument(
+        "-m",
+        "--mode",
+        choices=["asl", "isl"],
+        default="asl",
+        help="Sign language gesture set: 'asl' (single-handed) or 'isl' (dual-handed) (default: asl)",
+    )
+    p_game.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
     )
 
@@ -211,6 +218,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             kiosk=args.kiosk,
             camera=not args.no_camera,
             use_fake=args.fake_camera,
+            mode=args.mode,
         )
         return 0
 

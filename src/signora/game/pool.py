@@ -9,8 +9,21 @@ DEFAULT_EXCLUDE = frozenset()
 THIN_LABELS = frozenset()
 
 
-def model_labels(path: Optional[str] = None) -> List[str]:
+def model_labels(path: Optional[str] = None, mode: str = "asl") -> List[str]:
     """Known alphabet letters in canonical order."""
+    if str(mode).lower() == "isl":
+        try:
+            from signora.isl.model import Predictor as ISLPredictor
+
+            p = ISLPredictor()
+            letters = [c for c in p.labels if len(c) == 1 and c.isalpha()]
+            if letters:
+                return letters
+        except Exception:
+            pass
+        from signora.isl.config import STATIC_LETTERS
+
+        return list(STATIC_LETTERS)
     return list(LETTERS)
 
 
@@ -19,9 +32,10 @@ def build_pool(
     exclude: Optional[Iterable[str]] = None,
     thin: Iterable[str] = THIN_LABELS,
     labels: Optional[Sequence[str]] = None,
+    mode: str = "asl",
 ) -> List[str]:
     """Build a filtered list of letters safe to ask players for in game mode."""
-    known = model_labels() if labels is None else list(labels)
+    known = model_labels(mode=mode) if labels is None else list(labels)
     letters = [c for c in known if len(c) == 1 and c.isalpha()]
 
     if include:

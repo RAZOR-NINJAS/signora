@@ -139,11 +139,15 @@ signora
 │  ---   INTERACTIVE BROWSER LABS     Local web app on localhost:8000 ---          │
 │   4    Shadow-Play Game             Gesture-controlled Dino runner  Low (~12%)   │
 │   5    Interactive Learning Kiosk   Posture drills & timed quizzes  Low (~12%)   │
+│  ---   KNOWLEDGE & PREFERENCES      Visual dictionary & settings    ---          │
+│   G    Gesture Sign Dictionary      Visual hand postures & motion   Reference    │
+│   S    Session Settings             Dwell time, voice TTS, camera   Config       │
 │  ---   DIAGNOSTICS & UTILITIES      Hardware & model validation     ---          │
 │   6    System Doctor                Automated 10-point self-test    Instant      │
 │   7    Model Asset Manager          Inspect / fetch neural weights  I/O Bound    │
 │   8    Hardware Camera Probe        Scan connected video devices    Instant      │
 │   9    Live Camera & HUD Test       5-second live camera test bench Real-time    │
+│   A    Auto-Repair & Self-Healing   Auto-repair models, cam, audio  Instant      │
 │   0    Exit Signora                 Close interactive dashboard     —            │
 ╰──────────────────────────────────────────────────────────────────────────────────╯
 ```

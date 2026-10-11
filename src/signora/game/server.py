@@ -26,15 +26,41 @@ class GameHub:
         exclude: Optional[List[str]] = None,
         seed: Optional[int] = None,
         use_fake: bool = False,
+        mode: str = "asl",
     ):
-        self.reader = None
-        self.state = GameState(
-            config or GameConfig(),
-            LetterPool(build_pool(include=include, exclude=exclude), rng=seed),
-        )
+        self.mode = str(mode or "asl").lower()
+        self.include = include
+        self.exclude = exclude
+        self.seed = seed
         self.source = source
         self.use_fake = use_fake
         self._lock = threading.Lock()
+        self.reader = None
+
+        cfg = config or GameConfig(mode=self.mode)
+        cfg.mode = self.mode
+        pool = LetterPool(
+            build_pool(include=include, exclude=exclude, mode=self.mode),
+            rng=seed,
+        )
+        self.state = GameState(cfg, pool)
+
+    def set_mode(self, new_mode: str) -> None:
+        """Switch between ASL and ISL gesture modes dynamically."""
+        new_mode = str(new_mode or "asl").lower()
+        if new_mode not in ("asl", "isl"):
+            return
+        with self._lock:
+            if new_mode == self.mode:
+                return
+            self.mode = new_mode
+            self.state.config.mode = new_mode
+            self.state.pool = LetterPool(
+                build_pool(include=self.include, exclude=self.exclude, mode=new_mode),
+                rng=self.seed,
+            )
+            if self.reader is not None:
+                self.reader.set_mode(new_mode)
 
     def start_detector(self) -> tuple[bool, str]:
         if self.reader is not None:
@@ -45,6 +71,7 @@ class GameHub:
             source=self.source,
             hold_ms=self.state.config.hold_ms,
             use_fake=self.use_fake,
+            mode=self.mode,
         )
         try:
             ok = reader.start()
@@ -81,6 +108,7 @@ class GameHub:
             "frames": frames,
             "hands_seen": hands,
         }
+        snap["mode"] = self.mode
         snap["pool_size"] = len(self.state.pool)
         snap["pool"] = self.state.pool.letters
         return snap
@@ -157,6 +185,10 @@ def make_handler(hub: GameHub, stop_event: threading.Event):
                     ok, msg = True, "camera off"
                 return self._json({"ok": ok, "message": msg})
             if url.path == "/api/settings":
+                if "mode" in payload:
+                    m = str(payload["mode"]).lower()
+                    if m in ("asl", "isl"):
+                        hub.set_mode(m)
                 cfg = hub.state.config
                 for key in ("ready_ms", "answer_ms", "hold_ms", "max_cacti"):
                     if key in payload:
@@ -207,12 +239,23 @@ def serve(
     camera: bool = True,
     kiosk: bool = False,
     use_fake: bool = False,
+    mode: str = "asl",
 ) -> None:
     """Start the Dino gesture game server."""
-    hub = GameHub(source=source, config=config, include=include, exclude=exclude, use_fake=use_fake)
+    hub = GameHub(
+        source=source,
+        config=config,
+        include=include,
+        exclude=exclude,
+        use_fake=use_fake,
+        mode=mode,
+    )
     stop_event = threading.Event()
 
     print("[signora game] Shadow-play Dino runner initializing...")
+    print(
+        f"  Sign language mode: {hub.mode.upper()} ({'Dual-handed' if hub.mode == 'isl' else 'Single-handed'})"
+    )
     print(f"  Letters in pool: {len(hub.state.pool)} ({' '.join(hub.state.pool.letters)})")
     print(
         f"  Timing: ready {hub.state.config.ready_ms}ms, answer window {hub.state.config.answer_ms}ms"

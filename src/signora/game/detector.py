@@ -15,20 +15,22 @@ PREVIEW_WIDTH = 320
 
 
 class LetterReader:
-    """Classifies ASL hand shapes on a background thread for browser game polling."""
+    """Classifies ASL or ISL hand shapes on a background thread for browser game polling."""
 
     def __init__(
         self,
         source: Any = 0,
-        predictor: Optional[Predictor] = None,
+        predictor: Optional[Any] = None,
         hold_ms: int = 420,
         min_conf: float = 0.0,
         use_fake: bool = False,
+        mode: str = "asl",
     ):
         self.source = source
         self.hold_ms = int(hold_ms)
         self.min_conf = float(min_conf)
         self.use_fake = use_fake
+        self.mode = str(mode or "asl").lower()
         self._predictor = predictor
         self._lock = threading.Lock()
         self._letter: Optional[str] = None
@@ -66,9 +68,31 @@ class LetterReader:
 
     def start(self) -> bool:
         if self._predictor is None:
-            self._predictor = Predictor()
+            if self.mode == "isl":
+                try:
+                    from signora.isl.model import Predictor as ISLPredictor
 
-        self._pipeline = HandPipeline(source=self.source, num_hands=1, use_fake=self.use_fake)
+                    self._predictor = ISLPredictor()
+                except FileNotFoundError:
+                    from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
+                    from signora.models.manifest import get_default_models_dir
+
+                    fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
+                    from signora.isl.model import Predictor as ISLPredictor
+
+                    self._predictor = ISLPredictor()
+            else:
+                try:
+                    self._predictor = Predictor()
+                except FileNotFoundError:
+                    from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
+                    from signora.models.manifest import get_default_models_dir
+
+                    fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
+                    self._predictor = Predictor()
+
+        num_hands = 2 if self.mode == "isl" else 1
+        self._pipeline = HandPipeline(source=self.source, num_hands=num_hands, use_fake=self.use_fake)
         self._pipeline.started.wait(timeout=15)
         if self._pipeline.error:
             self._error = self._pipeline.error
@@ -104,7 +128,7 @@ class LetterReader:
                 window_start, window_frames = now, 0
 
             if landmarks is not None:
-                draw_landmarks(frame, landmarks, size=3)
+                draw_cyber_hands(frame, landmarks, handedness)
             self._encode_preview(frame, now)
 
             if landmarks is None:
@@ -157,13 +181,54 @@ class LetterReader:
         if self._predictor is None:
             return None, 0.0
         try:
-            pts = normalize_hand([(lm.x, lm.y, lm.z) for lm in landmarks], handedness)
-            feats = landmark_features(pts)
-            probs = self._predictor.probs(feats)
+            if self.mode == "isl":
+                from signora.isl.features import extract_features
+
+                lms_list = (
+                    landmarks
+                    if isinstance(landmarks, list) and isinstance(landmarks[0], (list, tuple))
+                    else [landmarks]
+                )
+                hnd_list = handedness if isinstance(handedness, list) else [handedness]
+                feats = extract_features(lms_list, hnd_list)
+                probs = self._predictor.probs(feats)
+            else:
+                lms = (
+                    landmarks[0]
+                    if (
+                        isinstance(landmarks, list)
+                        and landmarks
+                        and isinstance(landmarks[0], (list, tuple))
+                    )
+                    else landmarks
+                )
+                hnd = (
+                    handedness[0]
+                    if (isinstance(handedness, list) and handedness)
+                    else handedness
+                )
+                pts = normalize_hand([(lm.x, lm.y, lm.z) for lm in lms], hnd)
+                feats = landmark_features(pts)
+                probs = self._predictor.probs(feats)
         except Exception:
             return None, 0.0
         i = int(np.argmax(probs))
         return self._predictor.labels[i], float(probs[i])
+
+    def set_mode(self, new_mode: str) -> None:
+        """Switch between ASL and ISL recognition dynamically."""
+        new_mode = str(new_mode or "asl").lower()
+        if new_mode == self.mode:
+            return
+        was_running = self._thread is not None and self._thread.is_alive()
+        self.stop()
+        self.mode = new_mode
+        self._predictor = None
+        self._letter = None
+        self._conf = 0.0
+        self._stop.clear()
+        if was_running:
+            self.start()
 
     def stop(self) -> None:
         self._stop.set()

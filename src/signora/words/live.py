@@ -415,6 +415,7 @@ def run_live(
     max_frames: Optional[int] = None,
     headless: bool = False,
     display: bool = True,
+    no_tts: bool = False,
 ) -> int:
     """Run real-time ASL Words live recognition.
 
@@ -488,7 +489,7 @@ def run_live(
         print("Tip: If running without a webcam, test with a recorded video or words.eval.")
         return 1
 
-    tts = PiperTTS(enabled=True)
+    tts = PiperTTS(enabled=not no_tts)
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
