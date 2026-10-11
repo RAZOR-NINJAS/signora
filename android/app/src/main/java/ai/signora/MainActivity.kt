@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private var lastFpsTimestamp = System.currentTimeMillis()
     private var currentFps = 30f
 
+    private lateinit var previewView: PreviewView
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -64,12 +66,17 @@ class MainActivity : ComponentActivity() {
         assetManager = AutoAssetManager(this)
         speechManager = SpeechManager(this)
 
-        val previewView = PreviewView(this)
+        previewView = PreviewView(this).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
 
         setContent {
             SignoraTheme {
                 SignoraScreen(
                     previewView = previewView,
+                    hasCameraPermission = hasCameraPermission,
+                    onRequestCameraPermission = { checkCameraPermission() },
                     debounceState = debounceState,
                     handLandmarks = activeLandmarks,
                     currentMode = currentMode,
@@ -109,14 +116,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Initialize and self-heal model assets in background
+        // 1. Immediately verify and prompt for camera permission on startup
+        checkCameraPermission()
+
+        // 2. Initialize and self-heal model assets in background
         lifecycleScope.launch {
             val ok = assetManager.ensureModelAssets { status ->
                 assetStatus = status
             }
             if (ok) {
                 loadNeuralEngines()
-                checkCameraPermission()
+                if (hasCameraPermission && cameraManager == null) {
+                    setupVisionPipeline()
+                }
             }
         }
     }
@@ -144,6 +156,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupVisionPipeline() {
+        if (cameraManager != null) return
+
         val landmarkerTaskFile = assetManager.getModelFile("hand_landmarker.task")
 
         handHelper = HandLandmarkerHelper(
@@ -152,16 +166,15 @@ class MainActivity : ComponentActivity() {
             onResults = { hands, timestamp ->
                 onHandsDetected(hands, timestamp)
             },
-            onError = { err ->
-                // Non-critical logging
+            onError = { _ ->
+                // Vision pipeline logging
             }
         )
 
-        val preview = PreviewView(this)
         cameraManager = CameraXManager(
             context = this,
             lifecycleOwner = this,
-            previewView = preview,
+            previewView = previewView,
             onFrame = { mpImage, frameTime ->
                 handHelper?.detectLiveStream(mpImage, frameTime)
             }

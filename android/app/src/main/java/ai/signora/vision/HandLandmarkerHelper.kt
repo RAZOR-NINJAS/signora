@@ -30,24 +30,44 @@ class HandLandmarkerHelper(
     }
 
     private fun setupLandmarker() {
-        try {
-            // Attempt GPU acceleration first, fallback to CPU
+        val gpuSuccess = tryInit(Delegate.GPU)
+        if (!gpuSuccess) {
+            val cpuSuccess = tryInit(Delegate.CPU)
+            if (!cpuSuccess) {
+                onError("Failed to initialize MediaPipe HandLandmarker with GPU and CPU.")
+            }
+        }
+    }
+
+    private fun tryInit(delegate: Delegate): Boolean {
+        return try {
             val baseOptionsBuilder = BaseOptions.builder()
-            if (modelFile != null && modelFile.exists()) {
-                baseOptionsBuilder.setModelAssetPath(modelFile.absolutePath)
-            } else {
+            baseOptionsBuilder.setDelegate(delegate)
+
+            var configured = false
+            // 1. Prefer loading directly from APK assets
+            try {
                 baseOptionsBuilder.setModelAssetPath("models/hand_landmarker.task")
+                configured = true
+            } catch (_: Exception) {
+                // Fallback below
             }
 
-            try {
-                baseOptionsBuilder.setDelegate(Delegate.GPU)
+            // 2. If needed, load from external downloaded file buffer
+            if (!configured && modelFile != null && modelFile.exists() && modelFile.length() > 0) {
+                val bytes = modelFile.readBytes()
+                baseOptionsBuilder.setModelAssetBuffer(java.nio.ByteBuffer.wrap(bytes))
+                configured = true
+            }
+
+            if (configured) {
                 initWithOptions(baseOptionsBuilder.build())
-            } catch (e: Exception) {
-                baseOptionsBuilder.setDelegate(Delegate.CPU)
-                initWithOptions(baseOptionsBuilder.build())
+                true
+            } else {
+                false
             }
         } catch (e: Exception) {
-            onError("MediaPipe initialization error: ${e.message}")
+            false
         }
     }
 

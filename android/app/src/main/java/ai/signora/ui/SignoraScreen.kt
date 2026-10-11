@@ -31,6 +31,8 @@ import ai.signora.recovery.AutoAssetManager
 @Composable
 fun SignoraScreen(
     previewView: PreviewView,
+    hasCameraPermission: Boolean,
+    onRequestCameraPermission: () -> Unit,
     debounceState: DebounceState,
     handLandmarks: List<HandLandmarks>,
     currentMode: RecognitionMode,
@@ -56,7 +58,10 @@ fun SignoraScreen(
     ) {
         // 1. CameraX Live Viewport
         AndroidView(
-            factory = { previewView },
+            factory = { _ ->
+                (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
+                previewView
+            },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -431,7 +436,7 @@ fun SignoraScreen(
                             }
                         }
 
-                        Divider(color = Slate800, modifier = Modifier.padding(vertical = 12.dp))
+                        HorizontalDivider(color = Slate800, modifier = Modifier.padding(vertical = 12.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -468,7 +473,65 @@ fun SignoraScreen(
             )
         }
 
-        // 7. Self-Healing Model Downloader Banner
+        // 7. Camera Permission Overlay Banner
+        if (!hasCameraPermission) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Slate950.copy(alpha = 0.95f)),
+                color = Color.Transparent
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Slate900),
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .border(1.dp, Cyan400, RoundedCornerShape(16.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Camera Permission",
+                                tint = Cyan400,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Camera Permission Required",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Signora needs camera access to detect and translate sign language in real time.",
+                                color = Slate300,
+                                fontSize = 14.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Button(
+                                onClick = onRequestCameraPermission,
+                                colors = ButtonDefaults.buttonColors(containerColor = Cyan400),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = "Grant Camera Permission",
+                                    color = Slate950,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 8. Self-Healing Model Downloader Banner
         if (!assetStatus.isReady) {
             Surface(
                 modifier = Modifier

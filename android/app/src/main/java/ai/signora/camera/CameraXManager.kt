@@ -36,8 +36,12 @@ class CameraXManager(
     fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
-            cameraProvider = cameraProviderFuture.get()
-            bindCameraUseCases()
+            try {
+                cameraProvider = cameraProviderFuture.get()
+                bindCameraUseCases()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }, ContextCompat.getMainExecutor(context))
     }
 
@@ -57,14 +61,12 @@ class CameraXManager(
         }
 
         val preview = Preview.Builder()
-            .setTargetResolution(Size(640, 480))
             .build()
             .also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
 
         val imageAnalysis = ImageAnalysis.Builder()
-            .setTargetResolution(Size(640, 480))
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
@@ -88,39 +90,42 @@ class CameraXManager(
 
     private fun processImageProxy(imageProxy: ImageProxy) {
         val frameTime = System.currentTimeMillis()
-        val bitmapBuffer = Bitmap.createBitmap(
-            imageProxy.width,
-            imageProxy.height,
-            Bitmap.Config.ARGB_8888
-        )
-        imageProxy.use {
-            bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer)
-        }
+        try {
+            val bitmap = imageProxy.toBitmap()
 
-        // Apply rotation and mirroring for front camera
-        val matrix = Matrix().apply {
-            postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
-            if (isFrontCamera) {
-                postScale(-1f, 1f, imageProxy.width / 2f, imageProxy.height / 2f)
+            // Apply rotation and mirroring for front camera
+            val matrix = Matrix().apply {
+                postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
+                if (isFrontCamera) {
+                    postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
+                }
             }
+
+            val rotatedBitmap = Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.width,
+                bitmap.height,
+                matrix,
+                true
+            )
+
+            val mpImage = BitmapImageBuilder(rotatedBitmap).build()
+            onFrame(mpImage, frameTime)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            imageProxy.close()
         }
-
-        val rotatedBitmap = Bitmap.createBitmap(
-            bitmapBuffer,
-            0,
-            0,
-            bitmapBuffer.width,
-            bitmapBuffer.height,
-            matrix,
-            true
-        )
-
-        val mpImage = BitmapImageBuilder(rotatedBitmap).build()
-        onFrame(mpImage, frameTime)
     }
 
     fun stopCamera() {
-        cameraProvider?.unbindAll()
-        cameraExecutor.shutdown()
+        try {
+            cameraProvider?.unbindAll()
+            cameraExecutor.shutdown()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
