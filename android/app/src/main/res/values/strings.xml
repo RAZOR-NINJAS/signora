@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Signora</string>
+    <string name="app_name">Unspoken</string>
     <string name="camera_permission_required">Camera access is required for real-time sign language recognition.</string>
     <string name="grant_permission">Grant Camera Permission</string>
 </resources>

@@ -52,7 +52,7 @@ class SignoraMLP(
         // 1. Scale-invariant standardization: (x - mean) / std
         val xNorm = FloatArray(inDim)
         for (i in 0 until effectiveInDim) {
-            val s = if (std[i] > 1e-6f) std[i] else 1.0f
+            val s = if (std[i] > 1e-8f) std[i] else 1.0f
             xNorm[i] = (feats[i] - mean[i]) / s
         }
 
@@ -137,12 +137,20 @@ class SignoraMLP(
         }
     }
 
+    private fun erf(x: Float): Float {
+        // Abramowitz & Stegun 7.1.26 (max error < 1.5e-7)
+        val sign = if (x < 0f) -1f else 1f
+        val absX = kotlin.math.abs(x)
+        val t = 1.0f / (1.0f + 0.3275911f * absX)
+        val poly = 1.0f - (((((1.061405429f * t - 1.453152027f) * t) + 1.421413741f) * t - 0.284496736f) * t + 0.254829592f) * t * exp(-absX * absX)
+        return sign * poly
+    }
+
     private fun geluInPlace(arr: FloatArray) {
-        val sqrt2OverPi = 0.7978845608f // sqrt(2.0 / Math.PI)
+        val invSqrt2 = 0.70710678118f // 1 / sqrt(2)
         for (i in arr.indices) {
             val x = arr[i]
-            val inner = sqrt2OverPi * (x + 0.044715f * (x * x * x))
-            arr[i] = 0.5f * x * (1.0f + tanh(inner))
+            arr[i] = 0.5f * x * (1.0f + erf(x * invSqrt2))
         }
     }
 

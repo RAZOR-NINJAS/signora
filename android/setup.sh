@@ -135,15 +135,17 @@ echo "✓ Android SDK environment verified."
 
 # 5. Compile Standalone Android APK
 echo
-echo "⚡ [5/5] Compiling Signora standalone APK..."
+echo "⚡ [5/5] Compiling Unspoken standalone APK..."
 cd "${SCRIPT_DIR}"
 ./gradlew assembleDebug --no-daemon
 
 OUTPUT_APK="${SCRIPT_DIR}/app/build/outputs/apk/debug/app-debug.apk"
-FINAL_APK="${ROOT_DIR}/Signora.apk"
+FINAL_APK="${ROOT_DIR}/Unspoken.apk"
 
 if [ -f "${OUTPUT_APK}" ]; then
     cp -f "${OUTPUT_APK}" "${FINAL_APK}"
+    cp -f "${OUTPUT_APK}" "${SCRIPT_DIR}/Unspoken.apk"
+    cp -f "${OUTPUT_APK}" "${ROOT_DIR}/Signora.apk"
     cp -f "${OUTPUT_APK}" "${SCRIPT_DIR}/Signora.apk"
     
     APK_SIZE=$(du -h "${FINAL_APK}" | cut -f1)
@@ -158,7 +160,7 @@ if [ -f "${OUTPUT_APK}" ]; then
     echo "      adb install -r ${FINAL_APK}"
     echo
     echo "   2. Direct Transfer:"
-    echo "      Send 'Signora.apk' to your phone via USB cable, Google Drive,"
+    echo "      Send 'Unspoken.apk' to your phone via USB cable, Google Drive,"
     echo "      or WhatsApp/Telegram, and tap to install!"
     echo "============================================================"
 else

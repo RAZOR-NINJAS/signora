@@ -93,11 +93,11 @@ class CameraXManager(
         try {
             val bitmap = imageProxy.toBitmap()
 
-            // Apply rotation and mirroring for front camera
+            // Apply rotation and mirroring matching official MediaPipe Android standards
             val matrix = Matrix().apply {
                 postRotate(imageProxy.imageInfo.rotationDegrees.toFloat())
                 if (isFrontCamera) {
-                    postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
+                    postScale(-1f, 1f, imageProxy.width.toFloat(), imageProxy.height.toFloat())
                 }
             }
 

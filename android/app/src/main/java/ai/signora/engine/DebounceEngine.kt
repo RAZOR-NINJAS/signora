@@ -11,10 +11,14 @@ import ai.signora.models.RecognitionResult
 class DebounceEngine(
     var dwellMs: Long = 600L,
     var threshold: Float = 0.52f,
+    private val smoothMs: Long = 300L,
     private val spaceDwellMs: Long = 500L,
     private val repeatCooldownMs: Long = 550L
 ) {
-    private var lastCandidate: String = ""
+    private data class HistoryEntry(val timestampMs: Long, val label: String, val confidence: Float)
+    private val history = ArrayDeque<HistoryEntry>()
+
+    private var activeDwellCandidate: String = ""
     private var dwellStartMs: Long = 0L
     private var lastConfirmed: String = ""
     private var lastConfirmedTimeMs: Long = 0L
@@ -24,8 +28,36 @@ class DebounceEngine(
         result: RecognitionResult?,
         nowMs: Long = System.currentTimeMillis()
     ): DebounceState {
-        if (result == null || result.confidence < threshold) {
-            lastCandidate = ""
+        if (result != null && result.confidence >= threshold) {
+            history.addLast(HistoryEntry(nowMs, result.label, result.confidence))
+        }
+
+        // Evict older entries outside smoothing window
+        val cutoff = nowMs - smoothMs
+        while (history.isNotEmpty() && history.first().timestampMs < cutoff) {
+            history.removeFirst()
+        }
+
+        // Find dominant label in smoothing window
+        var dominant: String? = null
+        var maxWeight = 0f
+        var dominantConf = 0f
+        if (history.isNotEmpty()) {
+            val weights = mutableMapOf<String, Float>()
+            for (entry in history) {
+                weights[entry.label] = (weights[entry.label] ?: 0f) + entry.confidence
+            }
+            for ((lbl, weight) in weights) {
+                if (weight > maxWeight) {
+                    maxWeight = weight
+                    dominant = lbl
+                }
+            }
+            dominantConf = history.lastOrNull { it.label == dominant }?.confidence ?: (result?.confidence ?: 0f)
+        }
+
+        if (dominant == null) {
+            activeDwellCandidate = ""
             dwellStartMs = 0L
             return DebounceState(
                 candidate = "",
@@ -37,14 +69,11 @@ class DebounceEngine(
             )
         }
 
-        val candidate = result.label
-        val conf = result.confidence
+        val requiredDwell = if (dominant == "SPACE") spaceDwellMs else dwellMs
         var confirmed = false
 
-        val requiredDwell = if (candidate == "SPACE") spaceDwellMs else dwellMs
-
-        if (candidate != lastCandidate) {
-            lastCandidate = candidate
+        if (dominant != activeDwellCandidate) {
+            activeDwellCandidate = dominant
             dwellStartMs = nowMs
         }
 
@@ -53,27 +82,27 @@ class DebounceEngine(
 
         if (dwellProgress >= 1.0f) {
             val cooldownOk = (nowMs - lastConfirmedTimeMs) >= repeatCooldownMs
-            val isNewChar = candidate != lastConfirmed
+            val isNewChar = dominant != lastConfirmed
 
             if (isNewChar || cooldownOk) {
                 confirmed = true
-                lastConfirmed = candidate
+                lastConfirmed = dominant
                 lastConfirmedTimeMs = nowMs
                 dwellStartMs = nowMs // Reset for repeat
 
-                if (candidate == "SPACE") {
+                if (dominant == "SPACE") {
                     if (transcriptBuilder.isNotEmpty() && !transcriptBuilder.endsWith(" ")) {
                         transcriptBuilder.append(" ")
                     }
                 } else {
-                    transcriptBuilder.append(candidate)
+                    transcriptBuilder.append(dominant)
                 }
             }
         }
 
         return DebounceState(
-            candidate = candidate,
-            confidence = conf,
+            candidate = dominant,
+            confidence = dominantConf,
             dwellProgress = dwellProgress,
             confirmed = confirmed,
             lastConfirmed = lastConfirmed,
