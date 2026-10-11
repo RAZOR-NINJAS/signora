@@ -40,8 +40,17 @@ models/*.npz
 scratch/
 temp/
 
+# Android builds & caches
+.gradle/
+android/**/build/
+android/.gradle/
+android/local.properties
+*.apk
+*.aab
+
 # IDE & OS
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+

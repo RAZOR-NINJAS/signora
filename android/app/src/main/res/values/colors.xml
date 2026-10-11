@@ -1,0 +1,8 @@
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="cyan_400">#FF22D3EE</color>
+    <color name="cyan_500">#FF06B6D4</color>
+    <color name="slate_900">#FF0F172A</color>
+    <color name="slate_950">#FF020617</color>
+</resources>

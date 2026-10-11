@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Signora" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/slate_950</item>
+        <item name="android:navigationBarColor">@color/slate_950</item>
+        <item name="android:windowBackground">@color/slate_950</item>
+    </style>
+</resources>
