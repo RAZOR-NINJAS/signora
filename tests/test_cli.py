@@ -110,3 +110,11 @@ def test_cli_models_args():
     assert args.subcommand == "models"
     assert args.action == "verify"
     assert args.dir == "/tmp/models"
+
+
+def test_tui_initialization_and_header():
+    from signora.tui.app import SignoraTUI
+
+    tui = SignoraTUI()
+    tui.print_header()
+    assert tui.models_dir.exists()

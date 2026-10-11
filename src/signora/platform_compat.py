@@ -33,6 +33,7 @@ def is_macos() -> bool:
 
 def get_platform_info() -> Dict[str, str]:
     """Return platform metadata dictionary."""
+    backend = "DirectShow" if is_windows() else ("V4L2" if is_linux() else "Default")
     return {
         "system": platform.system(),
         "release": platform.release(),
@@ -40,6 +41,7 @@ def get_platform_info() -> Dict[str, str]:
         "machine": platform.machine(),
         "processor": platform.processor(),
         "python_version": platform.python_version(),
+        "camera_backend": backend,
     }
 
 

@@ -14,7 +14,7 @@ from rich.table import Table
 from signora import __version__
 from signora.doctor.checks import run_all_checks
 from signora.models.manifest import get_default_models_dir, load_manifest, verify_all_models
-from signora.platform_compat import get_platform_info, probe_cameras
+from signora.platform_compat import get_platform_info, is_windows, probe_cameras
 
 ASCII_BANNER = r"""
   ███████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗  █████╗
@@ -57,13 +57,13 @@ class SignoraTUI:
             "Version:",
             f"v{__version__}",
             "Platform:",
-            f"{plat['system']} ({plat['machine']})",
+            f"{plat.get('system', sys.platform)} ({plat.get('machine', 'unknown')})",
         )
         info_table.add_row(
             "Python:",
             f"{v.major}.{v.minor}.{v.micro}",
             "Backend:",
-            f"{plat['camera_backend']}",
+            f"{plat.get('camera_backend', 'DirectShow' if is_windows() else 'V4L2')}",
         )
 
         panel = Panel(
@@ -81,7 +81,7 @@ class SignoraTUI:
         table = Table(
             border_style="cyan",
             title="[bold cyan]Interactive Operations & Modes[/bold cyan]",
-            title_align="left",
+            title_justify="left",
             header_style="bold cyan",
             expand=True,
         )
