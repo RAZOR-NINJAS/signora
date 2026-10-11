@@ -74,7 +74,18 @@ def test_cli_words_args():
 def test_cli_game_args():
     parser = create_parser()
     args = parser.parse_args(
-        ["game", "--host", "0.0.0.0", "-p", "8080", "--kiosk", "--no-camera", "--fake-camera"]
+        [
+            "game",
+            "--host",
+            "0.0.0.0",
+            "-p",
+            "8080",
+            "--kiosk",
+            "--no-camera",
+            "--fake-camera",
+            "--mode",
+            "isl",
+        ]
     )
     assert args.subcommand == "game"
     assert args.host == "0.0.0.0"
@@ -82,6 +93,7 @@ def test_cli_game_args():
     assert args.kiosk is True
     assert args.no_camera is True
     assert args.fake_camera is True
+    assert args.mode == "isl"
 
 
 def test_cli_learn_args():
