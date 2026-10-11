@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 110" width="100%" height="100%">
+  <defs>
+    <linearGradient id="statCardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b1120" />
+      <stop offset="100%" stop-color="#090e1a" />
+    </linearGradient>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#60a5fa" />
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#a855f7" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background bar -->
+  <rect x="2" y="2" width="996" height="106" rx="14" fill="url(#statCardBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- Metric 1: Latency -->
+  <g transform="translate(24, 18)">
+    <rect width="216" height="74" rx="10" fill="#131d31" stroke="#1e293b" stroke-width="1" />
+    <circle cx="28" cy="37" r="14" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+    <text x="28" y="42" text-anchor="middle" font-size="14">⚡</text>
+    <text x="52" y="32" class="sans" font-size="20" font-weight="800" fill="url(#skyGrad)">&lt; 30 ms</text>
+    <text x="52" y="48" class="sans" font-size="11" font-weight="600" fill="#f8fafc">INFERENCE LATENCY</text>
+    <text x="52" y="62" class="mono" font-size="9.5" fill="#64748b">GPU (&lt;30ms) · 2-Core CPU (~50ms)</text>
+  </g>
+
+  <!-- Metric 2: Engines -->
+  <g transform="translate(268, 18)">
+    <rect width="216" height="74" rx="10" fill="#131d31" stroke="#1e293b" stroke-width="1" />
+    <circle cx="28" cy="37" r="14" fill="#0f172a" stroke="#c084fc" stroke-width="1.5" />
+    <text x="28" y="42" text-anchor="middle" font-size="14">🧠</text>
+    <text x="52" y="32" class="sans" font-size="20" font-weight="800" fill="url(#purpleGrad)">3 ENGINES</text>
+    <text x="52" y="48" class="sans" font-size="11" font-weight="600" fill="#f8fafc">RECOGNITION MODES</text>
+    <text x="52" y="62" class="mono" font-size="9.5" fill="#64748b">ISL 164D · ASL 74D · Words DTW</text>
+  </g>
+
+  <!-- Metric 3: Privacy -->
+  <g transform="translate(512, 18)">
+    <rect width="216" height="74" rx="10" fill="#131d31" stroke="#1e293b" stroke-width="1" />
+    <circle cx="28" cy="37" r="14" fill="#0f172a" stroke="#34d399" stroke-width="1.5" />
+    <text x="28" y="42" text-anchor="middle" font-size="14">🔒</text>
+    <text x="52" y="32" class="sans" font-size="20" font-weight="800" fill="url(#emeraldGrad)">0 BYTES</text>
+    <text x="52" y="48" class="sans" font-size="11" font-weight="600" fill="#f8fafc">TO THE CLOUD</text>
+    <text x="52" y="62" class="mono" font-size="9.5" fill="#64748b">100% Offline · Stays in Local RAM</text>
+  </g>
+
+  <!-- Metric 4: Install -->
+  <g transform="translate(756, 18)">
+    <rect width="218" height="74" rx="10" fill="#131d31" stroke="#1e293b" stroke-width="1" />
+    <circle cx="28" cy="37" r="14" fill="#0f172a" stroke="#fbbf24" stroke-width="1.5" />
+    <text x="28" y="42" text-anchor="middle" font-size="14">🚀</text>
+    <text x="52" y="32" class="sans" font-size="20" font-weight="800" fill="url(#amberGrad)">1 COMMAND</text>
+    <text x="52" y="48" class="sans" font-size="11" font-weight="600" fill="#f8fafc">ZERO-PREREQ INSTALL</text>
+    <text x="52" y="62" class="mono" font-size="9.5" fill="#64748b">Windows PowerShell &amp; Linux Bash</text>
+  </g>
+</svg>

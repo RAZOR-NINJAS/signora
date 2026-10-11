@@ -1,0 +1,231 @@
+/* Shadow-play ASL game. The canvas is the world; the camera is a small
+   window in the corner and never feeds back into the game loop. */
+
+:root {
+  --amber: #f2b950;
+  --amber-dim: #8a6a33;
+  --ink: #0b0a0f;
+  --ink-2: #14121c;
+  --paper: #f4e9d4;
+  --paper-dim: #cdb894;
+  --lilac: #9d8ad4;
+  --good: #7fca8f;
+  --bad: #e0685f;
+  --font: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ---- overlays ---- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 45%, rgba(24,20,32,.82), rgba(8,7,12,.95));
+  backdrop-filter: blur(3px);
+  z-index: 20;
+  padding: 24px;
+}
+
+.overlay[hidden] { display: none; }
+
+.card {
+  text-align: center;
+  max-width: 620px;
+  width: 100%;
+}
+
+.eyebrow {
+  font-size: 13px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--amber-dim);
+  margin: 0 0 10px;
+}
+
+h1 {
+  font-size: clamp(30px, 6vw, 52px);
+  margin: 0 0 12px;
+  letter-spacing: -.02em;
+  font-weight: 700;
+}
+
+h1 .lit { color: var(--amber); }
+
+.sub {
+  color: var(--paper-dim);
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.55;
+  margin: 0 auto 26px;
+  max-width: 46ch;
+}
+
+.big-btn {
+  font: inherit;
+  font-size: clamp(19px, 2.6vw, 24px);
+  font-weight: 700;
+  padding: 18px 54px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  color: #241a06;
+  background: linear-gradient(180deg, #ffd27d, var(--amber));
+  box-shadow: 0 10px 34px rgba(242,185,80,.30), inset 0 -3px 0 rgba(0,0,0,.16);
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+}
+
+.big-btn:hover { transform: translateY(-2px); box-shadow: 0 16px 44px rgba(242,185,80,.40); }
+.big-btn:active { transform: translateY(0); filter: brightness(.95); }
+.big-btn:focus-visible { outline: 3px solid var(--lilac); outline-offset: 4px; }
+.big-btn[disabled] { opacity: .45; cursor: wait; transform: none; }
+
+.ghost-btn {
+  font: inherit;
+  font-size: 15px;
+  padding: 10px 22px;
+  margin-top: 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--paper-dim);
+  background: transparent;
+  border: 1px solid rgba(205,184,148,.28);
+  transition: color .16s ease, border-color .16s ease;
+}
+.ghost-btn:hover { color: var(--paper); border-color: rgba(205,184,148,.6); }
+
+.hint { color: var(--amber-dim); font-size: 14px; margin-top: 18px; }
+.hint code { color: var(--paper-dim); }
+
+/* ---- corner camera ---- */
+
+#cam-wrap {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: clamp(180px, 21vw, 268px);
+  z-index: 15;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(242,185,80,.24);
+  box-shadow: 0 14px 40px rgba(0,0,0,.55);
+}
+
+#cam {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #000;
+  /* No CSS mirror here: hands.py already flips the frame (SIGNLANG_MIRROR),
+     so flipping again in the browser would cancel it out. */
+}
+
+#cam-meta {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--paper-dim);
+  background: linear-gradient(180deg, transparent, rgba(6,5,9,.86));
+}
+
+#cam-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--paper-dim);
+  background: #0e0d13;
+}
+#cam-off[hidden] { display: none; }
+
+/* ---- settings ---- */
+
+#panel {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 15;
+  width: 214px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(14,12,20,.90);
+  border: 1px solid rgba(205,184,148,.16);
+  font-size: 13px;
+  display: none;
+}
+#panel[open], #panel.show { display: block; }
+
+#panel h3 {
+  margin: 0 0 12px;
+  font-size: 12px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--amber-dim);
+  font-weight: 700;
+}
+
+#panel label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--paper-dim);
+}
+
+#panel input[type="range"] { width: 96px; accent-color: var(--amber); }
+#panel .val { color: var(--paper); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+
+#settings-btn {
+  position: absolute;
+  left: 20px;
+  top: 20px;
+  z-index: 15;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--paper-dim);
+  background: rgba(14,12,20,.86);
+  border: 1px solid rgba(205,184,148,.20);
+}
+#settings-btn:hover { color: var(--paper); }
+
+@media (max-width: 640px) {
+  #cam-wrap { width: 132px; right: 12px; bottom: 12px; }
+  #panel { display: none !important; }
+  #settings-btn { left: 12px; top: 12px; }
+}

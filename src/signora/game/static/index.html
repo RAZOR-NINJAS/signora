@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignLang &middot; Sign Dino</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<button id="settings-btn" type="button">Settings</button>
+
+<section id="panel" aria-label="Game settings">
+  <h3>Settings</h3>
+  <label>Ready beat
+    <input id="s-ready" type="range" min="800" max="6000" step="100">
+    <span class="val" id="v-ready">2200 ms</span>
+  </label>
+  <label>Answer window
+    <input id="s-answer" type="range" min="1500" max="8000" step="250">
+    <span class="val" id="v-answer">2000 ms</span>
+  </label>
+  <label>Hold to confirm
+    <input id="s-hold" type="range" min="200" max="1200" step="50">
+    <span class="val" id="v-hold">420 ms</span>
+  </label>
+  <label>Cacti
+    <input id="s-cacti" type="range" min="0" max="20" step="1">
+    <span class="val" id="v-cacti">endless</span>
+  </label>
+  <button class="ghost-btn" id="apply-btn" type="button">Apply</button>
+</section>
+
+<div id="cam-wrap">
+  <img id="cam" alt="your hand, as the camera sees it">
+  <div id="cam-off">camera off &mdash; press start</div>
+  <div id="cam-meta">
+    <span id="cam-letter">&mdash;</span>
+    <span id="cam-fps"></span>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <p class="eyebrow">SignLang</p>
+    <h1 id="ov-title">Sign <span class="lit">Dino</span></h1>
+    <p class="sub" id="ov-sub">
+      A dinosaur runs toward a cactus. When it stops, form the letter before
+      the timer runs out &mdash; get it right and it jumps clear.
+    </p>
+    <button class="big-btn" id="start-btn" type="button">Start</button>
+    <div class="hint" id="ov-hint"></div>
+  </div>
+</div>
+
+<script src="/static/game.js"></script>
+</body>
+</html>

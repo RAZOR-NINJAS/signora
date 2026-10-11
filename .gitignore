@@ -1,0 +1,46 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging & Build
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Testing & Linters
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Neural model weights and audio binaries (downloaded via scripts/fetch_models.py)
+models/*.task
+models/*.pt
+models/*.onnx*
+models/*.npz
+*.onnx
+*.onnx.json
+*.task
+*.pt
+*.npz
+
+# Logs & temporary files
+*.log
+*.part
+scratch/
+temp/
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

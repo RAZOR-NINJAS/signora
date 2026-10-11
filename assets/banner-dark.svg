@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080c14" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#070a12" />
+    </linearGradient>
+
+    <linearGradient id="borderGradDark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#c084fc" />
+    </linearGradient>
+
+    <!-- Text Gradients -->
+    <linearGradient id="textGradDark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="35%" stop-color="#818cf8" />
+      <stop offset="70%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#f472b6" />
+    </linearGradient>
+
+    <linearGradient id="badgeGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="glowDark" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="softGlowDark" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <style>
+      .pulse-node {
+        animation: pulseDark 2.5s infinite ease-in-out;
+        transform-origin: center;
+      }
+      .pulse-node-alt {
+        animation: pulseDark 2.5s infinite ease-in-out 1.25s;
+        transform-origin: center;
+      }
+      .shimmer-line {
+        stroke-dasharray: 8 4;
+        animation: dashDark 30s linear infinite;
+      }
+      @keyframes pulseDark {
+        0%, 100% { r: 5px; opacity: 0.8; }
+        50% { r: 7.5px; opacity: 1; }
+      }
+      @keyframes dashDark {
+        to { stroke-dashoffset: -300; }
+      }
+    </style>
+  </defs>
+
+  <!-- Card Background -->
+  <rect x="6" y="6" width="1188" height="368" rx="24" fill="url(#bgGradDark)" stroke="url(#borderGradDark)" stroke-width="2" />
+
+  <!-- Subtle Cyber Grid -->
+  <g opacity="0.07" stroke="#94a3b8" stroke-width="1">
+    <line x1="60" y1="6" x2="60" y2="374" />
+    <line x1="160" y1="6" x2="160" y2="374" />
+    <line x1="260" y1="6" x2="260" y2="374" />
+    <line x1="360" y1="6" x2="360" y2="374" />
+    <line x1="460" y1="6" x2="460" y2="374" />
+    <line x1="560" y1="6" x2="560" y2="374" />
+    <line x1="660" y1="6" x2="660" y2="374" />
+    <line x1="760" y1="6" x2="760" y2="374" />
+    <line x1="860" y1="6" x2="860" y2="374" />
+    <line x1="960" y1="6" x2="960" y2="374" />
+    <line x1="1060" y1="6" x2="1060" y2="374" />
+    <line x1="6" y1="60" x2="1194" y2="60" />
+    <line x1="6" y1="140" x2="1194" y2="140" />
+    <line x1="6" y1="220" x2="1194" y2="220" />
+    <line x1="6" y1="300" x2="1194" y2="300" />
+  </g>
+
+  <!-- Ambient Light Halos behind Hand Landmark Constellation -->
+  <circle cx="980" cy="190" r="140" fill="#38bdf8" opacity="0.08" filter="url(#softGlowDark)" />
+  <circle cx="880" cy="140" r="120" fill="#c084fc" opacity="0.08" filter="url(#softGlowDark)" />
+
+  <!-- LEFT HERO TYPOGRAPHY -->
+  <g transform="translate(60, 48)">
+    <!-- Top Pill Badge -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="310" height="32" rx="16" fill="url(#badgeGradDark)" stroke="#38bdf8" stroke-opacity="0.4" stroke-width="1.2" />
+      <circle cx="16" cy="16" r="4.5" fill="#10b981" />
+      <text x="30" y="21" fill="#38bdf8" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">⚡ 100% LOCAL &amp; OFFLINE &bull; &lt; 30ms</text>
+    </g>
+
+    <!-- Main Title -->
+    <text x="0" y="112" fill="url(#textGradDark)" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="72" font-weight="900" letter-spacing="-1.5" filter="url(#glowDark)">SIGNORA</text>
+
+    <!-- Subtitle -->
+    <text x="2" y="152" fill="#e2e8f0" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="21" font-weight="600" letter-spacing="0.2">
+      Real-Time Sign Language Translation &amp; Learning Engine
+    </text>
+
+    <!-- Tagline description -->
+    <text x="2" y="184" fill="#94a3b8" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="14.5" font-weight="400">
+      Zero Cloud &bull; Edge Neural Landmark Pipeline &bull; ISL (Two-Handed) &bull; ASL &bull; Game Kiosk
+    </text>
+
+    <!-- Platform / Feature Pill Row -->
+    <g transform="translate(0, 222)">
+      <!-- Pill 1: Windows -->
+      <rect x="0" y="0" width="140" height="36" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="18" y="23" fill="#38bdf8" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">🪟 Windows 10/11</text>
+
+      <!-- Pill 2: Linux -->
+      <rect x="152" y="0" width="105" height="36" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="168" y="23" fill="#facc15" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">🐧 Linux</text>
+
+      <!-- Pill 3: ISL Dual-Hand -->
+      <rect x="269" y="0" width="138" height="36" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="283" y="23" fill="#a78bfa" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">🤲 2-Hand ISL</text>
+
+      <!-- Pill 4: Offline Piper TTS -->
+      <rect x="419" y="0" width="148" height="36" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1" />
+      <text x="433" y="23" fill="#f472b6" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="13" font-weight="600">🔊 Neural Voice</text>
+    </g>
+  </g>
+
+  <!-- RIGHT HAND LANDMARK NEURAL CONSTELLATION -->
+  <g transform="translate(680, 20)">
+    <!-- Bones / Landmark Connection Skeleton Lines -->
+    <g stroke="#38bdf8" stroke-width="2.5" opacity="0.65" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Wrist to MCP bases -->
+      <line x1="260" y1="310" x2="190" y2="250" />
+      <line x1="260" y1="310" x2="225" y2="195" />
+      <line x1="260" y1="310" x2="270" y2="185" />
+      <line x1="260" y1="310" x2="315" y2="195" />
+      <line x1="260" y1="310" x2="355" y2="220" />
+
+      <!-- Palm Knuckle Arch -->
+      <line x1="190" y1="250" x2="225" y2="195" />
+      <line x1="225" y1="195" x2="270" y2="185" />
+      <line x1="270" y1="185" x2="315" y2="195" />
+      <line x1="315" y1="195" x2="355" y2="220" />
+
+      <!-- Thumb (1..4) -->
+      <line x1="190" y1="250" x2="145" y2="220" stroke="#818cf8" stroke-width="2.5" />
+      <line x1="145" y1="220" x2="115" y2="180" stroke="#818cf8" stroke-width="2.5" />
+      <line x1="115" y1="180" x2="95" y2="140" stroke="#818cf8" stroke-width="3" />
+
+      <!-- Index (5..8) -->
+      <line x1="225" y1="195" x2="215" y2="135" stroke="#38bdf8" stroke-width="2.5" />
+      <line x1="215" y1="135" x2="205" y2="85" stroke="#38bdf8" stroke-width="2.5" />
+      <line x1="205" y1="85" x2="200" y2="40" stroke="#38bdf8" stroke-width="3" />
+
+      <!-- Middle (9..12) -->
+      <line x1="270" y1="185" x2="270" y2="120" stroke="#c084fc" stroke-width="2.5" />
+      <line x1="270" y1="120" x2="270" y2="70" stroke="#c084fc" stroke-width="2.5" />
+      <line x1="270" y1="70" x2="270" y2="25" stroke="#c084fc" stroke-width="3" />
+
+      <!-- Ring (13..16) -->
+      <line x1="315" y1="195" x2="325" y2="135" stroke="#f472b6" stroke-width="2.5" />
+      <line x1="325" y1="135" x2="335" y2="85" stroke="#f472b6" stroke-width="2.5" />
+      <line x1="335" y1="85" x2="340" y2="45" stroke="#f472b6" stroke-width="3" />
+
+      <!-- Pinky (17..20) -->
+      <line x1="355" y1="220" x2="380" y2="175" stroke="#818cf8" stroke-width="2.5" />
+      <line x1="380" y1="175" x2="400" y2="135" stroke="#818cf8" stroke-width="2.5" />
+      <line x1="400" y1="135" x2="415" y2="98" stroke="#818cf8" stroke-width="3" />
+    </g>
+
+    <!-- Synthetic Feature Extraction Projection Rays (Dotted) -->
+    <g stroke="#38bdf8" stroke-width="1.2" opacity="0.3" stroke-dasharray="3 3">
+      <line x1="95" y1="140" x2="200" y2="40" />
+      <line x1="200" y1="40" x2="270" y2="25" />
+      <line x1="270" y1="25" x2="340" y2="45" />
+      <line x1="340" y1="45" x2="415" y2="98" />
+      <line x1="260" y1="310" x2="95" y2="140" />
+      <line x1="260" y1="310" x2="415" y2="98" />
+    </g>
+
+    <!-- Landmark Nodes (Joints) -->
+    <!-- Wrist -->
+    <circle cx="260" cy="310" r="7" fill="#38bdf8" filter="url(#glowDark)" />
+
+    <!-- Palm MCPs -->
+    <circle cx="190" cy="250" r="5" fill="#818cf8" />
+    <circle cx="225" cy="195" r="5" fill="#38bdf8" />
+    <circle cx="270" cy="185" r="5" fill="#c084fc" />
+    <circle cx="315" cy="195" r="5" fill="#f472b6" />
+    <circle cx="355" cy="220" r="5" fill="#818cf8" />
+
+    <!-- Intermediates -->
+    <circle cx="145" cy="220" r="4.5" fill="#818cf8" />
+    <circle cx="115" cy="180" r="4.5" fill="#818cf8" />
+    <circle cx="215" cy="135" r="4.5" fill="#38bdf8" />
+    <circle cx="205" cy="85" r="4.5" fill="#38bdf8" />
+    <circle cx="270" cy="120" r="4.5" fill="#c084fc" />
+    <circle cx="270" cy="70" r="4.5" fill="#c084fc" />
+    <circle cx="325" cy="135" r="4.5" fill="#f472b6" />
+    <circle cx="335" cy="85" r="4.5" fill="#f472b6" />
+    <circle cx="380" cy="175" r="4.5" fill="#818cf8" />
+    <circle cx="400" cy="135" r="4.5" fill="#818cf8" />
+
+    <!-- Fingertips (Active Pulses) -->
+    <circle cx="95" cy="140" r="6" fill="#f43f5e" class="pulse-node" filter="url(#glowDark)" />
+    <circle cx="200" cy="40" r="6" fill="#38bdf8" class="pulse-node" filter="url(#glowDark)" />
+    <circle cx="270" cy="25" r="6.5" fill="#c084fc" class="pulse-node-alt" filter="url(#glowDark)" />
+    <circle cx="340" cy="45" r="6" fill="#f472b6" class="pulse-node" filter="url(#glowDark)" />
+    <circle cx="415" cy="98" r="6" fill="#38bdf8" class="pulse-node-alt" filter="url(#glowDark)" />
+
+    <!-- Floating Tracking HUD Matrix Coordinates -->
+    <g font-family="'JetBrains Mono', 'Fira Code', monospace" font-size="10.5" fill="#38bdf8" opacity="0.75">
+      <text x="35" y="135">T:[0.18, 0.42]</text>
+      <text x="140" y="32">I:[0.38, 0.12]</text>
+      <text x="282" y="22">M:[0.50, 0.08]</text>
+      <text x="352" y="42">R:[0.62, 0.14]</text>
+      <text x="425" y="98">P:[0.76, 0.28]</text>
+      <text x="285" y="320">W:CONF 0.99</text>
+    </g>
+  </g>
+</svg>

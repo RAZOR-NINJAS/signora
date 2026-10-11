@@ -1,0 +1,68 @@
+{
+  "version": "0.1.0",
+  "models": {
+    "hand_landmarker": {
+      "filename": "hand_landmarker.task",
+      "subdir": "vision",
+      "description": "MediaPipe HandLandmarker Tasks API model",
+      "size_bytes": 7868898,
+      "sha256": "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+      "urls": [
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/hand_landmarker.task"
+      ]
+    },
+    "piper_voice": {
+      "filename": "en_US-lessac-medium.onnx",
+      "subdir": "tts",
+      "description": "Piper offline neural TTS voice model (Lessac medium)",
+      "size_bytes": 63948012,
+      "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
+      "urls": [
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/en_US-lessac-medium.onnx"
+      ]
+    },
+    "piper_config": {
+      "filename": "en_US-lessac-medium.onnx.json",
+      "subdir": "tts",
+      "description": "Piper TTS voice configuration",
+      "size_bytes": 4874,
+      "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0",
+      "urls": [
+        "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/en_US-lessac-medium.onnx.json"
+      ]
+    },
+    "asl_letters": {
+      "filename": "signs_mlp.pt",
+      "subdir": "asl",
+      "description": "74D ASL static letters MLP classifier",
+      "size_bytes": 165190,
+      "sha256": "9670be00cff21e416fc1f76d360fc0f4dbe0ffa7f0e62794ce59f7b07d755ad9",
+      "urls": [
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/signs_mlp.pt"
+      ]
+    },
+    "isl_signs": {
+      "filename": "isl_mlp.pt",
+      "subdir": "isl",
+      "description": "164D ISL two-handed MLP classifier (A-Z + 10 static words)",
+      "size_bytes": 224706,
+      "sha256": "51d25c393781dfc6208f8e0c6fe7d978672539b2baecfe0ff1276e9693a70389",
+      "urls": [
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/isl_mlp.pt"
+      ]
+    },
+    "asl_words": {
+      "filename": "words_classifier.npz",
+      "subdir": "words",
+      "description": "25-word holistic motion DTW-kNN classifier templates",
+      "size_bytes": 1391101,
+      "sha256": "8bf4f958779ed066492fd31ab55792bd6604fd2f68226295d6088e2b1e2e5180",
+      "urls": [
+        "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/words_classifier.npz"
+      ]
+    }
+  }
+}

@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 280" width="100%" height="100%">
+  <defs>
+    <linearGradient id="pipeBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080c14" />
+      <stop offset="50%" stop-color="#0e1726" />
+      <stop offset="100%" stop-color="#060910" />
+    </linearGradient>
+    <linearGradient id="boxBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#818cf8" />
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#e879f9" />
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <style>
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      .flow-arrow { stroke: #475569; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Background panel -->
+  <rect x="2" y="2" width="1096" height="276" rx="14" fill="url(#pipeBg)" stroke="#1e293b" stroke-width="1.5" />
+
+  <!-- 1. CAMERA -->
+  <g transform="translate(24, 60)">
+    <rect width="150" height="150" rx="12" fill="url(#boxBg)" stroke="#38bdf8" stroke-width="1.5" />
+    <circle cx="75" cy="46" r="22" fill="#0b1120" stroke="#38bdf8" stroke-width="1.5" />
+    <text x="75" y="53" text-anchor="middle" font-size="20">📷</text>
+    <text x="75" y="92" class="sans" font-size="13" font-weight="700" fill="#f8fafc" text-anchor="middle">VIDEO CAPTURE</text>
+    <text x="75" y="112" class="mono" font-size="10" fill="#38bdf8" text-anchor="middle">DirectShow (Win)</text>
+    <text x="75" y="127" class="mono" font-size="10" fill="#94a3b8" text-anchor="middle">V4L2 (Linux) · Buf=1</text>
+    <text x="75" y="142" class="mono" font-size="9" fill="#64748b" text-anchor="middle">640x480 @ 30 FPS</text>
+  </g>
+
+  <!-- Arrow 1 -> 2 -->
+  <path d="M 174,135 L 214,135 M 206,129 L 214,135 L 206,141" class="flow-arrow" />
+
+  <!-- 2. MEDIAPIPE -->
+  <g transform="translate(216, 60)">
+    <rect width="160" height="150" rx="12" fill="url(#boxBg)" stroke="#818cf8" stroke-width="1.5" />
+    <circle cx="80" cy="46" r="22" fill="#0b1120" stroke="#818cf8" stroke-width="1.5" />
+    <text x="80" y="53" text-anchor="middle" font-size="20">🖐️</text>
+    <text x="80" y="92" class="sans" font-size="13" font-weight="700" fill="#f8fafc" text-anchor="middle">LANDMARK TRACKING</text>
+    <text x="80" y="112" class="mono" font-size="10" fill="#818cf8" text-anchor="middle">MediaPipe Tasks API</text>
+    <text x="80" y="127" class="mono" font-size="10" fill="#94a3b8" text-anchor="middle">21 Spatial Points (x,y,z)</text>
+    <text x="80" y="142" class="mono" font-size="9" fill="#64748b" text-anchor="middle">CPU/GPU Delegation</text>
+  </g>
+
+  <!-- Branching Arrows 2 -> 3 -->
+  <path d="M 376,135 L 406,135" class="flow-arrow" />
+  <path d="M 406,135 L 406,50 L 426,50 M 418,45 L 426,50 L 418,55" class="flow-arrow" />
+  <path d="M 406,135 L 426,135 M 418,130 L 426,135 L 418,140" class="flow-arrow" />
+  <path d="M 406,135 L 406,220 L 426,220 M 418,215 L 426,220 L 418,225" class="flow-arrow" />
+
+  <!-- 3. THREE CLASSIFIERS -->
+  <!-- 3A: ISL -->
+  <g transform="translate(428, 16)">
+    <rect width="210" height="68" rx="10" fill="url(#boxBg)" stroke="#c084fc" stroke-width="1.2" />
+    <text x="14" y="26" class="sans" font-size="12" font-weight="700" fill="#c084fc">🤲 ISL TWO-HANDED</text>
+    <text x="14" y="44" class="mono" font-size="10.5" font-weight="700" fill="#f8fafc">164D Canonical Vector</text>
+    <text x="14" y="58" class="mono" font-size="9" fill="#94a3b8">PyTorch / NumPy MLP (35 signs)</text>
+  </g>
+
+  <!-- 3B: ASL Letters -->
+  <g transform="translate(428, 101)">
+    <rect width="210" height="68" rx="10" fill="url(#boxBg)" stroke="#38bdf8" stroke-width="1.2" />
+    <text x="14" y="26" class="sans" font-size="12" font-weight="700" fill="#38bdf8">🔤 ASL FINGERSPELLING</text>
+    <text x="14" y="44" class="mono" font-size="10.5" font-weight="700" fill="#f8fafc">74D Geometric Features</text>
+    <text x="14" y="58" class="mono" font-size="9" fill="#94a3b8">PyTorch MLP (A-Z + Space)</text>
+  </g>
+
+  <!-- 3C: Dynamic Words -->
+  <g transform="translate(428, 186)">
+    <rect width="210" height="68" rx="10" fill="url(#boxBg)" stroke="#fbbf24" stroke-width="1.2" />
+    <text x="14" y="26" class="sans" font-size="12" font-weight="700" fill="#fbbf24">🏃 ASL DYNAMIC WORDS</text>
+    <text x="14" y="44" class="mono" font-size="10.5" font-weight="700" fill="#f8fafc">Holistic Motion Sequence</text>
+    <text x="14" y="58" class="mono" font-size="9" fill="#94a3b8">DTW-kNN Classifier (25 words)</text>
+  </g>
+
+  <!-- Converging Arrows 3 -> 4 -->
+  <path d="M 638,50 L 658,50 L 658,135" class="flow-arrow" />
+  <path d="M 638,135 L 678,135 M 670,130 L 678,135 L 670,140" class="flow-arrow" />
+  <path d="M 638,220 L 658,220 L 658,135" class="flow-arrow" />
+
+  <!-- 4. DEBOUNCE ENGINE -->
+  <g transform="translate(680, 60)">
+    <rect width="160" height="150" rx="12" fill="url(#boxBg)" stroke="#34d399" stroke-width="1.5" />
+    <circle cx="80" cy="46" r="22" fill="#0b1120" stroke="#34d399" stroke-width="1.5" />
+    <text x="80" y="53" text-anchor="middle" font-size="20">⏳</text>
+    <text x="80" y="92" class="sans" font-size="13" font-weight="700" fill="#f8fafc" text-anchor="middle">DEBOUNCE ENGINE</text>
+    <text x="80" y="112" class="mono" font-size="10" fill="#34d399" text-anchor="middle">Dwell Confirmation</text>
+    <text x="80" y="127" class="mono" font-size="10" fill="#94a3b8" text-anchor="middle">800–1000ms Hold Timer</text>
+    <text x="80" y="142" class="mono" font-size="9" fill="#64748b" text-anchor="middle">Ergonomic Space Filter</text>
+  </g>
+
+  <!-- Branching Arrows 4 -> 5 -->
+  <path d="M 840,135 L 866,135" class="flow-arrow" />
+  <path d="M 866,135 L 866,85 L 886,85 M 878,80 L 886,85 L 878,90" class="flow-arrow" />
+  <path d="M 866,135 L 866,185 L 886,185 M 878,180 L 886,185 L 878,190" class="flow-arrow" />
+
+  <!-- 5. OUTPUTS -->
+  <!-- 5A: Live HUD -->
+  <g transform="translate(888, 45)">
+    <rect width="186" height="80" rx="10" fill="url(#boxBg)" stroke="#38bdf8" stroke-width="1.2" />
+    <circle cx="26" cy="40" r="14" fill="#0f172a" stroke="#38bdf8" stroke-width="1.2" />
+    <text x="26" y="45" text-anchor="middle" font-size="13">🖥️</text>
+    <text x="48" y="32" class="sans" font-size="12" font-weight="700" fill="#f8fafc">OPENCV LIVE HUD</text>
+    <text x="48" y="48" class="mono" font-size="9.5" fill="#38bdf8">Real-time Transcript</text>
+    <text x="48" y="62" class="mono" font-size="8.5" fill="#94a3b8">[C] Clear · [Backspace] Undo</text>
+  </g>
+
+  <!-- 5B: Offline Piper TTS -->
+  <g transform="translate(888, 145)">
+    <rect width="186" height="80" rx="10" fill="url(#boxBg)" stroke="#f472b6" stroke-width="1.2" />
+    <circle cx="26" cy="40" r="14" fill="#0f172a" stroke="#f472b6" stroke-width="1.2" />
+    <text x="26" y="45" text-anchor="middle" font-size="13">🔊</text>
+    <text x="48" y="32" class="sans" font-size="12" font-weight="700" fill="#f8fafc">PIPER NEURAL TTS</text>
+    <text x="48" y="48" class="mono" font-size="9.5" fill="#f472b6">100% Offline Speech</text>
+    <text x="48" y="62" class="mono" font-size="8.5" fill="#94a3b8">Press [R] to Speak Aloud</text>
+  </g>
+</svg>

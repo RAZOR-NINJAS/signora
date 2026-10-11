@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signora — Learning Kiosk</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-logo">✦</span>
+        <h1>SIGNORA <span class="brand-sub">LEARNING KIOSK</span></h1>
+      </div>
+      <div class="header-stats">
+        <div class="stat-badge">
+          <span class="stat-label">SCORE</span>
+          <span class="stat-value" id="stat-score">0</span>
+        </div>
+        <div class="stat-badge">
+          <span class="stat-label">STREAK</span>
+          <span class="stat-value highlight" id="stat-streak">🔥 0</span>
+        </div>
+        <div class="mode-toggles">
+          <button class="mode-btn active" id="btn-mode-drill" onclick="setMode('drill')">Drill</button>
+          <button class="mode-btn" id="btn-mode-quiz" onclick="setMode('quiz')">Timed Quiz</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <!-- Left sidebar: Sign selector -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h3>ASL Alphabet</h3>
+          <span class="badge-sub">26 Signs</span>
+        </div>
+        <div class="alphabet-grid" id="alphabet-grid">
+          <!-- Dynamically filled with buttons A-Z -->
+        </div>
+      </aside>
+
+      <!-- Center: Practice / Quiz Challenge Area -->
+      <section class="challenge-area">
+        <div class="card challenge-card">
+          <div class="challenge-header">
+            <span class="badge" id="challenge-badge">PRACTICE DRILL</span>
+            <div class="quiz-timer hidden" id="quiz-timer">
+              ⏱ Time remaining: <span id="quiz-seconds">15</span>s
+            </div>
+          </div>
+
+          <div class="target-display">
+            <span class="target-sub">TARGET SIGN</span>
+            <div class="target-symbol" id="target-symbol">A</div>
+            <p class="target-tip" id="target-tip">Form a fist with your thumb resting against the index finger side.</p>
+          </div>
+
+          <div class="feedback-banner idle" id="feedback-banner">
+            <span id="feedback-icon">👁</span>
+            <span id="feedback-text">Position your hand in camera view to begin</span>
+          </div>
+
+          <div class="action-row">
+            <button class="btn btn-secondary" onclick="nextRandomSign()">Random Sign</button>
+            <button class="btn btn-primary" onclick="skipSign()">Skip</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Live Camera & Detection Feedback -->
+      <aside class="camera-panel">
+        <div class="card preview-card">
+          <div class="preview-header">
+            <h3>Live Recognition</h3>
+            <span class="cam-status" id="cam-status">Camera On</span>
+          </div>
+          <div class="video-container">
+            <img id="cam-feed" src="/api/preview.jpg" alt="Live Camera Preview">
+            <div class="detection-overlay" id="detection-overlay">
+              <div class="detected-badge" id="detected-badge">—</div>
+              <div class="conf-bar-container">
+                <div class="conf-bar-fill" id="conf-bar-fill" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="camera-footer">
+            <button class="btn btn-small" id="btn-toggle-cam" onclick="toggleCamera()">Toggle Camera</button>
+            <span class="fps-indicator" id="fps-indicator">0.0 FPS</span>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="/static/learn.js"></script>
+</body>
+</html>

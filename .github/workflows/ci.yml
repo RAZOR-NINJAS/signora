@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }} - Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          uv pip install -e .
+          uv pip install pytest ruff
+
+      - name: Check code formatting and linting
+        run: |
+          uv run ruff check src/ tests/ scripts/
+          uv run ruff format --check src/ tests/ scripts/
+
+      - name: Fetch model assets
+        run: |
+          uv run python scripts/fetch_models.py --target-dir models
+
+      - name: Run test suite
+        run: |
+          uv run pytest -v
+
+      - name: Run system doctor check
+        run: |
+          uv run signora doctor --check-only
