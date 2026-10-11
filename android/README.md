@@ -1,6 +1,10 @@
-# 📱 Signora Native Android
+# 📱 Unspoken (Codename: Signora) Native Android
 
 **100% Offline Edge Neural Sign Language Recognition for Android (Kotlin + Jetpack Compose + MediaPipe Tasks Vision)**
+
+> 💡 **Package Status**:
+> - **`Unspoken.apk`** — ⭐ **(New & Recommended)**: Flagship release featuring the Material 3 Expressive UI, upright front-camera vision pipeline, tuned fist-gesture recognition, and pure on-device neural MLP engine.
+> - **`Signora.apk` (Legacy)** / **`Signora-legacy.apk`** — Previous preview build.
 
 ---
 
