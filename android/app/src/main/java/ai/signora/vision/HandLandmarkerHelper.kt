@@ -59,8 +59,8 @@ class HandLandmarkerHelper(
             .setMinHandPresenceConfidence(0.5f)
             .setNumHands(2)
             .setRunningMode(RunningMode.LIVE_STREAM)
-            .setResultListener { result: HandLandmarkerResult, input: MPImage ->
-                processResult(result, input.timestamp)
+            .setResultListener { result: HandLandmarkerResult, _ ->
+                processResult(result, result.timestampMs())
             }
             .setErrorListener { error ->
                 onError("MediaPipe tracking error: ${error.message}")
