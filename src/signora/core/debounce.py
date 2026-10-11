@@ -72,11 +72,12 @@ class DebounceEngine:
         now_ms: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Process a raw prediction and return state dictionary."""
-        t = (
-            timestamp_ms
-            if timestamp_ms is not None
-            else (now_ms if now_ms is not None else now_ms())
-        )
+        if timestamp_ms is not None:
+            t = float(timestamp_ms)
+        elif now_ms is not None:
+            t = float(now_ms)
+        else:
+            t = time.monotonic() * 1000.0
 
         # Add to history window
         if label is not None and confidence >= self.threshold:

@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 
+# On Linux under Wayland, OpenCV Qt windows require XCB (XWayland) fallback
+if sys.platform.startswith("linux") and "QT_QPA_PLATFORM" not in os.environ:
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 
 def is_windows() -> bool:
     """Return True if running on Microsoft Windows."""

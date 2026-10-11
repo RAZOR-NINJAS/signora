@@ -51,3 +51,11 @@ def test_debounce_backspace_and_clear():
 
     engine.clear()
     assert engine.buffer == ""
+
+
+def test_debounce_default_monotonic_clock():
+    engine = DebounceEngine(dwell_ms=50, smooth_ms=50, threshold=0.5)
+    # Call without timestamp_ms or now_ms (tests default time.monotonic fallback)
+    st = engine.update("B", 0.95)
+    assert st["candidate"] == "B"
+    assert st["confirmed"] is None
