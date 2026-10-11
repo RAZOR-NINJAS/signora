@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "signora"
-version = "0.1.0"
+version = "0.1.1"
 description = "Real-time sign language recognition engine (ISL, ASL letters & words). 100% offline, local neural inference."
 readme = "README.md"
 authors = [{ name = "Vaibhav Singh Shekhawat", email = "vaibhavthegoat123@gmail.com" }]
