@@ -255,6 +255,9 @@ def draw_keycap(
     return kw + 6 + label_w + 14
 
 
+_CANVAS_CACHE: dict = {}
+
+
 def prepare_window_canvas(
     frame: np.ndarray,
     window_name: Optional[str] = None,
@@ -281,15 +284,20 @@ def prepare_window_canvas(
     new_w = max(1, int(fw * scale))
     new_h = max(1, int(fh * scale))
 
-    if new_w == win_w and new_h == win_h:
-        return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    cache_key = (win_h, win_w, bg_color)
+    if cache_key not in _CANVAS_CACHE:
+        _CANVAS_CACHE.clear()
+        _CANVAS_CACHE[cache_key] = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
 
-    scaled_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-    canvas = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
-
+    canvas = _CANVAS_CACHE[cache_key].copy()
     ox = (win_w - new_w) // 2
     oy = (win_h - new_h) // 2
-    canvas[oy : oy + new_h, ox : ox + new_w] = scaled_frame
+    cv2.resize(
+        frame,
+        (new_w, new_h),
+        dst=canvas[oy : oy + new_h, ox : ox + new_w],
+        interpolation=cv2.INTER_LINEAR,
+    )
     return canvas
 
 
@@ -317,7 +325,7 @@ def render_flagship_hud(
     # --------------------------------------------------------------------------
     header_w = min(w - 32, 680)
     hx = (w - header_w) // 2
-    draw_glass_card(frame, hx, 14, header_w, 42, alpha=0.80, radius=12)
+    draw_glass_card(frame, hx, 14, header_w, 42, alpha=0.82, radius=12)
 
     # Live indicator dot (blinks every second)
     dot_color = COLOR_EMERALD if int(now * 2) % 2 == 0 else COLOR_CYAN_NEON
@@ -342,13 +350,14 @@ def render_flagship_hud(
     fps_color = (
         COLOR_EMERALD if fps >= 20.0 else (COLOR_AMBER if fps >= 10.0 else COLOR_MAGENTA_NEON)
     )
-    metrics_str = f"{fps:4.1f} FPS   |   {delegate.upper()}   |   LOCAL"
+    audio_str = "SPEAKING" if tts_speaking else "TTS READY"
+    metrics_str = f"{fps:4.1f} FPS   |   {delegate.upper()}   |   {audio_str}"
     cv2.putText(
         frame,
         metrics_str,
-        (hx + header_w - 240, 38),
+        (hx + header_w - 275, 38),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.44,
+        0.42,
         fps_color,
         1,
         cv2.LINE_AA,
@@ -359,42 +368,47 @@ def render_flagship_hud(
     # --------------------------------------------------------------------------
     cand = st.get("candidate")
     dwell = float(st.get("dwell_progress", 0.0))
+    in_cooldown = bool(st.get("in_cooldown", False))
 
     if cand:
-        cw, ch = 200, 115
+        cw, ch = 210, 118
         cx = w - cw - 20
         cy = 68
 
-        draw_glass_card(frame, cx, cy, cw, ch, border_color=COLOR_CYAN_NEON, alpha=0.88, radius=14)
+        border_c = COLOR_EMERALD if (dwell >= 0.95 or in_cooldown) else COLOR_CYAN_NEON
+        draw_glass_card(frame, cx, cy, cw, ch, border_color=border_c, alpha=0.90, radius=14)
 
         # Card Title
+        title_txt = "LOCKED SIGN" if in_cooldown else "DETECTED SIGN"
+        title_col = COLOR_EMERALD if in_cooldown else COLOR_TEXT_DIM
         cv2.putText(
             frame,
-            "DETECTED SIGN",
+            title_txt,
             (cx + 16, cy + 24),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.40,
-            COLOR_TEXT_DIM,
+            title_col,
             1,
             cv2.LINE_AA,
         )
 
         # Active Sign Display
         disp_cand = "[SPACE]" if cand == "SPACE" else cand
-        font_scale = 1.3 if len(disp_cand) <= 2 else 0.8
+        font_scale = 1.35 if len(disp_cand) <= 2 else 0.82
+        sign_color = COLOR_EMERALD if in_cooldown else COLOR_WHITE
         cv2.putText(
             frame,
             disp_cand,
             (cx + 18, cy + 68),
             cv2.FONT_HERSHEY_SIMPLEX,
             font_scale,
-            COLOR_WHITE,
+            sign_color,
             2,
             cv2.LINE_AA,
         )
 
         # Smooth Neon Dwell Progress Bar
-        bar_x, bar_y, bar_w, bar_h = cx + 16, cy + 86, cw - 32, 10
+        bar_x, bar_y, bar_w, bar_h = cx + 16, cy + 88, cw - 32, 10
         draw_rounded_rectangle(
             frame,
             (bar_x, bar_y),
@@ -404,9 +418,9 @@ def render_flagship_hud(
             thickness=-1,
         )
 
-        fill_w = int(bar_w * max(0.0, min(1.0, dwell)))
+        fill_w = int(bar_w * (1.0 if in_cooldown else max(0.0, min(1.0, dwell))))
         if fill_w > 4:
-            bar_color = COLOR_EMERALD if dwell >= 0.95 else COLOR_CYAN_NEON
+            bar_color = COLOR_EMERALD if (dwell >= 0.95 or in_cooldown) else COLOR_CYAN_NEON
             draw_rounded_rectangle(
                 frame,
                 (bar_x, bar_y),
@@ -416,15 +430,46 @@ def render_flagship_hud(
                 thickness=-1,
             )
 
-        # Percentage text
-        pct_text = f"{int(dwell * 100)}%"
+        # Status text (Percentage or Confirmed)
+        pct_text = "CONFIRMED" if in_cooldown else f"{int(dwell * 100)}%"
+        pct_col = COLOR_EMERALD if in_cooldown else COLOR_CYAN_NEON
         cv2.putText(
             frame,
             pct_text,
-            (cx + cw - 48, cy + 24),
+            (cx + cw - (78 if in_cooldown else 46), cy + 24),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.40,
-            COLOR_CYAN_NEON,
+            0.38,
+            pct_col,
+            1,
+            cv2.LINE_AA,
+        )
+    else:
+        # Subtle scanning radar pill
+        cw, ch = 200, 50
+        cx = w - cw - 20
+        cy = 68
+        draw_glass_card(
+            frame, cx, cy, cw, ch, border_color=COLOR_BORDER_GLASS, alpha=0.72, radius=12
+        )
+        dot_c = COLOR_CYAN_NEON if int(now * 3) % 2 == 0 else COLOR_TEXT_DIM
+        cv2.circle(frame, (cx + 18, cy + 25), 4, dot_c, -1, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            "AWAITING GESTURE",
+            (cx + 30, cy + 22),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            COLOR_TEXT_DIM,
+            1,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame,
+            "Hold hand in frame to sign",
+            (cx + 30, cy + 38),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.32,
+            COLOR_BORDER_GLASS,
             1,
             cv2.LINE_AA,
         )
@@ -474,7 +519,7 @@ def render_flagship_hud(
 
     draw_glass_card(frame, bx, by, card_w, card_h, alpha=0.86, radius=16)
 
-    # Transcript Header with Status Dot
+    # Transcript Header with Status Dot and Metrics
     cv2.circle(frame, (bx + 20, by + 24), 4, COLOR_EMERALD, -1, cv2.LINE_AA)
     cv2.putText(
         frame,
@@ -482,6 +527,21 @@ def render_flagship_hud(
         (bx + 32, by + 28),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.42,
+        COLOR_TEXT_DIM,
+        1,
+        cv2.LINE_AA,
+    )
+
+    words = transcript.strip().split()
+    w_count = len(words)
+    c_count = len(transcript)
+    meta_str = f"{w_count} {'WORD' if w_count == 1 else 'WORDS'}   |   {c_count} CHARS"
+    cv2.putText(
+        frame,
+        meta_str,
+        (bx + card_w - 200, by + 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.38,
         COLOR_TEXT_DIM,
         1,
         cv2.LINE_AA,
@@ -495,23 +555,23 @@ def render_flagship_hud(
         cv2.putText(
             frame,
             f"{disp_txt}{cursor}",
-            (bx + 20, by + 60),
+            (bx + 24, by + 60),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.85,
+            0.88,
             COLOR_EMERALD,
             2,
             cv2.LINE_AA,
         )
     else:
         cursor = "_" if int(now * 2) % 2 == 0 else ""
-        hint = f"Perform sign gestures to build transcript{cursor}"
+        hint = f"Present hand gestures in camera view to dictate transcript{cursor}"
         cv2.putText(
             frame,
             hint,
-            (bx + 20, by + 60),
+            (bx + 24, by + 60),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.60,
-            COLOR_BORDER_GLASS,
+            0.56,
+            COLOR_TEXT_DIM,
             1,
             cv2.LINE_AA,
         )

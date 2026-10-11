@@ -20,13 +20,13 @@ class DebounceEngine:
     def __init__(
         self,
         predictor: Any = None,
-        smooth_ms: float = 420.0,
-        dwell_ms: float = 1000.0,
-        space_dwell_ms: float = 800.0,
-        threshold: float = 0.70,
+        smooth_ms: float = 300.0,
+        dwell_ms: float = 600.0,
+        space_dwell_ms: float = 500.0,
+        threshold: float = 0.52,
         confirm_threshold: Optional[float] = None,
-        repeat_cooldown_ms: float = 900.0,
-        space_cooldown_ms: float = 900.0,
+        repeat_cooldown_ms: float = 550.0,
+        space_cooldown_ms: float = 600.0,
     ):
         self.predictor = predictor
         self.smooth_ms = smooth_ms
@@ -39,10 +39,23 @@ class DebounceEngine:
         self.buffer = ""
         self._hist = deque()  # (t_ms, label, prob)
         self._candidate: Optional[str] = None
+        self._active_dwell_cand: Optional[str] = None
         self._dwell_start: Optional[float] = None
+        self._last_seen_cand_t: float = 0.0
         self._just_emitted: Optional[str] = None
         self._just_emitted_at: float = 0.0
         self._last_emit_time: Dict[str, float] = {}
+
+    @property
+    def word_count(self) -> int:
+        """Return total completed words in current transcript."""
+        text = self.buffer.strip()
+        return len(text.split()) if text else 0
+
+    @property
+    def char_count(self) -> int:
+        """Return character count of current transcript."""
+        return len(self.buffer)
 
     def set_dwell(self, ms: int) -> None:
         self.dwell_ms = float(max(100, ms))
@@ -55,12 +68,13 @@ class DebounceEngine:
         self.buffer = ""
         self._hist.clear()
         self._candidate = None
+        self._active_dwell_cand = None
         self._dwell_start = None
         self._just_emitted = None
         self._last_emit_time.clear()
 
     def backspace(self) -> None:
-        """Delete last character or word from transcript buffer."""
+        """Delete last character or word boundary from transcript buffer."""
         if self.buffer:
             self.buffer = self.buffer[:-1]
 
@@ -79,7 +93,7 @@ class DebounceEngine:
         else:
             t = time.monotonic() * 1000.0
 
-        # Add to history window
+        # Add to history window if confident
         if label is not None and confidence >= self.threshold:
             self._hist.append((t, label, confidence))
 
@@ -103,42 +117,57 @@ class DebounceEngine:
 
         confirmed = None
         dwell_progress = 0.0
+        in_cooldown = False
 
         if dominant is not None:
-            # Check cooldown against last emission of this specific sign
+            self._candidate = dominant
             last_emitted_t = self._last_emit_time.get(dominant, 0.0)
             in_cooldown = (t - last_emitted_t) < cooldown
 
             if not in_cooldown:
-                if dominant == self._candidate:
+                if dominant == self._active_dwell_cand:
                     if self._dwell_start is not None:
                         elapsed = t - self._dwell_start
                         dwell_progress = min(1.0, elapsed / needed_dwell)
                         if elapsed >= needed_dwell:
                             confirmed = dominant
                             self._dwell_start = None
-                            self._candidate = None
+                            self._active_dwell_cand = None
                             self._just_emitted = dominant
                             self._just_emitted_at = t
                             self._last_emit_time[dominant] = t
                             self._append_to_buffer(dominant)
                 else:
-                    self._candidate = dominant
+                    self._active_dwell_cand = dominant
                     self._dwell_start = t
                     dwell_progress = 0.0
+                self._last_seen_cand_t = t
+            else:
+                # Active in cooldown
+                dwell_progress = 0.0
+                self._active_dwell_cand = None
+        else:
+            # Allow brief 180ms grace period for momentary blur/frame drop
+            if self._active_dwell_cand and (t - self._last_seen_cand_t) < 180.0:
+                pass
+            elif self._just_emitted and (t - self._just_emitted_at) < cooldown:
+                # Keep confirmed sign visible during cooldown feedback
+                self._candidate = self._just_emitted
+                in_cooldown = True
             else:
                 self._candidate = None
+                self._active_dwell_cand = None
                 self._dwell_start = None
-        else:
-            self._candidate = None
-            self._dwell_start = None
 
         return {
             "candidate": self._candidate,
             "dwell_progress": dwell_progress,
             "dwell_needed_ms": needed_dwell,
             "confirmed": confirmed,
+            "in_cooldown": in_cooldown,
             "transcript": self.buffer,
+            "word_count": self.word_count,
+            "char_count": self.char_count,
         }
 
     def _append_to_buffer(self, token: str) -> None:

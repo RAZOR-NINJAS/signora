@@ -16,6 +16,8 @@ import cv2
 import numpy as np
 
 from signora.core.hud import draw_glass_card
+from signora.platform_compat import probe_cameras
+from signora.tts.piper import PiperTTS
 
 from .classifier import DTWKNNClassifier
 from .config import (
@@ -470,10 +472,23 @@ def run_live(
     else:
         cap = cv2.VideoCapture(src_val)
 
+    if not cap.isOpened() and isinstance(src_val, int):
+        cams = probe_cameras(max_probe=4)
+        for c in cams:
+            if c["index"] != src_val:
+                print(
+                    f"[Auto-Healing] Switched to alternative camera {c['index']}.", file=sys.stderr
+                )
+                cap = cv2.VideoCapture(c["index"])
+                if cap.isOpened():
+                    break
+
     if not cap.isOpened():
         print(f"Error: Could not open video source {source!r}")
         print("Tip: If running without a webcam, test with a recorded video or words.eval.")
         return 1
+
+    tts = PiperTTS(enabled=True)
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
@@ -495,7 +510,7 @@ def run_live(
     mp_draw = mp.solutions.drawing_utils
 
     if not headless and display:
-        cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow(WINDOW_TITLE, FRAME_WIDTH, FRAME_HEIGHT)
 
     # State variables
@@ -671,6 +686,8 @@ def run_live(
                                 last_word = pred
                                 last_conf = conf
                                 transcript.append(pred)
+                                if tts.is_ready:
+                                    tts.speak_async(pred)
                                 state = "CONFIRMED"
                                 cooldown = COOLDOWN_FRAMES
                                 active_segment = []
@@ -719,6 +736,12 @@ def run_live(
                     last_word = None
                     last_conf = 0.0
                     last_details = {}
+                elif k in (32, 10, 13):
+                    if tts.is_ready and transcript:
+                        tts.speak_async(" ".join(transcript))
+                elif k in (8, 127, 255):
+                    if transcript:
+                        transcript.pop()
                 elif k in (ord("d"), ord("D")):
                     show_debug = not show_debug
 
@@ -729,6 +752,7 @@ def run_live(
         pass
     finally:
         cap.release()
+        tts.close()
         if not headless and display:
             cv2.destroyAllWindows()
         holistic.close()

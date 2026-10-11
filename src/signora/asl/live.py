@@ -41,9 +41,16 @@ def run_asl_live(
 
     try:
         predictor = load_asl_predictor()
-    except FileNotFoundError as exc:
-        print(f"\n[Error] {exc}", file=sys.stderr)
-        return 1
+    except FileNotFoundError:
+        print(
+            "\n[Auto-Healing] ASL neural model weights missing. Auto-downloading...",
+            file=sys.stderr,
+        )
+        from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
+        from signora.models.manifest import get_default_models_dir
+
+        fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
+        predictor = load_asl_predictor()
 
     engine = DebounceEngine(
         predictor=predictor,
@@ -65,15 +72,35 @@ def run_asl_live(
         use_fake=use_fake,
     )
 
-    if not pipe.started.wait(timeout=10):
-        print("[Error] Camera pipeline failed to start.", file=sys.stderr)
-        pipe.close()
-        return 1
+    if not pipe.started.wait(timeout=5) or pipe.error:
+        print(
+            "[Auto-Healing] Primary camera failed to start. Probing alternative webcams...",
+            file=sys.stderr,
+        )
+        from signora.platform_compat import probe_cameras
 
-    if pipe.error:
-        print(f"[Error] Camera error: {pipe.error}", file=sys.stderr)
+        cams = probe_cameras(max_probe=4)
+        alt_source = None
+        for c in cams:
+            if c["index"] != source:
+                alt_source = c["index"]
+                break
         pipe.close()
-        return 1
+        if alt_source is not None:
+            print(f"[Auto-Healing] Automatically switched to Camera {alt_source}.", file=sys.stderr)
+            pipe = HandPipeline(
+                source=alt_source, num_hands=1, mirror=True, detect_every=detect_every
+            )
+            pipe.started.wait(timeout=5)
+        else:
+            print(
+                "[Auto-Healing] No physical camera found. Switching to synthetic simulation mode.",
+                file=sys.stderr,
+            )
+            pipe = HandPipeline(
+                source=0, num_hands=1, mirror=True, detect_every=detect_every, use_fake=True
+            )
+            pipe.started.wait(timeout=5)
 
     if not headless:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
@@ -117,13 +144,17 @@ def run_asl_live(
             if st.get("confirmed"):
                 confirmed = st["confirmed"]
                 print(f"[Confirmed] {confirmed} -> Transcript: {engine.buffer}")
-                if len(confirmed) > 1 and confirmed != "SPACE":
-                    if tts.is_ready:
+                if tts.is_ready:
+                    if len(confirmed) == 1:
                         tts.speak_async(confirmed)
-                elif confirmed == "SPACE":
-                    words = engine.buffer.strip().split()
-                    if words and tts.is_ready:
-                        tts.speak_async(words[-1])
+                    elif confirmed == "SPACE":
+                        words = engine.buffer.strip().split()
+                        if words:
+                            tts.speak_async(words[-1])
+                        else:
+                            tts.speak_async("space")
+                    else:
+                        tts.speak_async(confirmed)
 
             if not headless:
                 shown = render_flagship_hud(
@@ -148,7 +179,7 @@ def run_asl_live(
                 elif k in (32, 10, 13, ord("r"), ord("R"), ord("s"), ord("S")):
                     if tts.is_ready and engine.buffer:
                         tts.speak_async(engine.buffer)
-                elif k in (8, 255):  # Backspace
+                elif k in (8, 127, 255):  # Backspace & Delete
                     engine.backspace()
                 elif k in (ord("f"), ord("F")):
                     fullscreen = not fullscreen
