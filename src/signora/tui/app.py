@@ -429,7 +429,7 @@ class SignoraTUI:
             return
 
         window_name = "Signora HUD Test Bench - Press [Q] to return"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow(window_name, 960, 720)
 
         mock_state = {
@@ -465,6 +465,7 @@ class SignoraTUI:
                     fps=fps,
                     delegate="CPU",
                     tts_speaking=False,
+                    window_name=window_name,
                 )
 
                 cv2.imshow(window_name, hud_frame)

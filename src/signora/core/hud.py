@@ -5,7 +5,7 @@ smooth dwell progress animations, audio speech indicators, and sleek keyboard to
 """
 
 import time
-from typing import Any, Tuple
+from typing import Any, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -255,6 +255,44 @@ def draw_keycap(
     return kw + 6 + label_w + 14
 
 
+def prepare_window_canvas(
+    frame: np.ndarray,
+    window_name: Optional[str] = None,
+    bg_color: Tuple[int, int, int] = COLOR_BG_GLASS,
+) -> np.ndarray:
+    """Scale and fit camera frame onto a window-matching dark canvas to eliminate white borders."""
+    if not window_name:
+        return frame
+
+    try:
+        rect = cv2.getWindowImageRect(window_name)
+        if not rect or len(rect) < 4:
+            return frame
+        win_w, win_h = int(rect[2]), int(rect[3])
+    except Exception:
+        return frame
+
+    fh, fw = frame.shape[:2]
+    if win_w <= 120 or win_h <= 120 or (win_w == fw and win_h == fh):
+        return frame
+
+    # Scale camera frame to fit window while preserving aspect ratio
+    scale = min(win_w / fw, win_h / fh)
+    new_w = max(1, int(fw * scale))
+    new_h = max(1, int(fh * scale))
+
+    if new_w == win_w and new_h == win_h:
+        return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+    scaled_frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+    canvas = np.full((win_h, win_w, 3), bg_color, dtype=np.uint8)
+
+    ox = (win_w - new_w) // 2
+    oy = (win_h - new_h) // 2
+    canvas[oy : oy + new_h, ox : ox + new_w] = scaled_frame
+    return canvas
+
+
 def render_flagship_hud(
     frame: np.ndarray,
     mode_name: str,
@@ -265,8 +303,12 @@ def render_flagship_hud(
     tts_speaking: bool = False,
     last_spoken: str = "",
     last_spoken_time: float = 0.0,
+    window_name: Optional[str] = None,
 ) -> np.ndarray:
     """Render high-polish cyberpunk glassmorphic HUD over camera frame."""
+    if window_name:
+        frame = prepare_window_canvas(frame, window_name=window_name)
+
     h, w = frame.shape[:2]
     now = time.monotonic()
 
@@ -477,8 +519,8 @@ def render_flagship_hud(
     # Hotkey Badges in Footer Row
     ky = by + 74
     kx = bx + 20
+    kx += draw_keycap(frame, kx, ky, "Space", "Speak")
     kx += draw_keycap(frame, kx, ky, "C", "Clear")
-    kx += draw_keycap(frame, kx, ky, "R", "Speak")
     kx += draw_keycap(frame, kx, ky, "Bksp", "Undo")
     kx += draw_keycap(frame, kx, ky, "F", "Fullscreen")
     kx += draw_keycap(frame, kx, ky, "Q", "Quit")

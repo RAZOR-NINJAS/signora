@@ -104,3 +104,16 @@ def test_render_flagship_hud():
     )
     assert out2.shape == (480, 640, 3)
     assert np.any(out2 > 0)
+
+
+def test_prepare_window_canvas():
+    """Verify window canvas scaling and letterboxing."""
+    from signora.core.hud import prepare_window_canvas
+
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    # When window_name is None, returns frame untouched
+    assert prepare_window_canvas(frame, None) is frame
+
+    # When window_name is non-existent, gracefully returns frame
+    assert prepare_window_canvas(frame, "non_existent_window_12345") is frame

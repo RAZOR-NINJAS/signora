@@ -76,7 +76,7 @@ def run_asl_live(
         return 1
 
     if not headless:
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
         cv2.resizeWindow(WINDOW_NAME, 960, 540)
 
     frame_count = 0
@@ -114,6 +114,17 @@ def run_asl_live(
 
             st = engine.update(cand_label, cand_prob)
 
+            if st.get("confirmed"):
+                confirmed = st["confirmed"]
+                print(f"[Confirmed] {confirmed} -> Transcript: {engine.buffer}")
+                if len(confirmed) > 1 and confirmed != "SPACE":
+                    if tts.is_ready:
+                        tts.speak_async(confirmed)
+                elif confirmed == "SPACE":
+                    words = engine.buffer.strip().split()
+                    if words and tts.is_ready:
+                        tts.speak_async(words[-1])
+
             if not headless:
                 shown = render_flagship_hud(
                     frame=frame,
@@ -125,6 +136,7 @@ def run_asl_live(
                     tts_speaking=tts.is_speaking,
                     last_spoken=tts.last_spoken_text,
                     last_spoken_time=tts.last_spoken_time,
+                    window_name=WINDOW_NAME,
                 )
                 cv2.imshow(WINDOW_NAME, shown)
 
@@ -133,18 +145,15 @@ def run_asl_live(
                     break
                 elif k in (ord("c"), ord("C")):
                     engine.clear()
-                elif k in (ord("r"), ord("R")):
+                elif k in (32, 10, 13, ord("r"), ord("R"), ord("s"), ord("S")):
                     if tts.is_ready and engine.buffer:
                         tts.speak_async(engine.buffer)
-                elif k == 8:  # Backspace
+                elif k in (8, 255):  # Backspace
                     engine.backspace()
                 elif k in (ord("f"), ord("F")):
                     fullscreen = not fullscreen
                     prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
                     cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, prop)
-            else:
-                if st.get("confirmed"):
-                    print(f"[Confirmed] {st['confirmed']} -> Transcript: {engine.buffer}")
 
             if max_frames and frame_count >= max_frames:
                 break

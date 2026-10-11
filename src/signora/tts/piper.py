@@ -1,13 +1,11 @@
 """Offline Piper neural text-to-speech engine with non-blocking audio playback."""
 
 import atexit
-import io
 import queue
 import threading
 import time
-import wave
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -25,11 +23,11 @@ except (ImportError, OSError):
 
 
 class PiperTTS:
-    """Asynchronous offline text-to-speech engine with pre-cached letter phonetics."""
+    """Asynchronous offline text-to-speech engine with fast audio chunk dispatch."""
 
     def __init__(self, model_path: Optional[Path] = None, enabled: bool = True):
         self.enabled = enabled and _HAS_TTS_LIBS
-        self._voice = None
+        self._voice: Optional[Any] = None
         self._queue: "queue.Queue" = queue.Queue(maxsize=32)
         self._stop_event = threading.Event()
         self._worker_thread: Optional[threading.Thread] = None
@@ -49,8 +47,9 @@ class PiperTTS:
             if self.model_path.exists() and self.config_path.exists():
                 self._voice = PiperVoice.load(str(self.model_path), str(self.config_path))
                 self.is_ready = True
-                self._precache_common()
-                self._worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
+                self._worker_thread = threading.Thread(
+                    target=self._worker_loop, daemon=True, name="PiperTTSWorker"
+                )
                 self._worker_thread.start()
                 atexit.register(self.close)
             else:
@@ -58,27 +57,24 @@ class PiperTTS:
         except Exception:
             self.is_ready = False
 
-    def _precache_common(self) -> None:
+    def _synthesize_audio(self, text: str) -> Optional[Tuple[np.ndarray, int]]:
+        """Synthesize text into raw float32 audio numpy array and sample rate."""
         if not self._voice:
-            return
-        common_words = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
-        common_words.extend(["space", "clear", "hello", "thank you", "yes", "no"])
-        for item in common_words:
-            try:
-                buf = io.BytesIO()
-                with wave.open(buf, "wb") as wf:
-                    self._voice.synthesize(item, wf)
-                buf.seek(0)
-                with wave.open(buf, "rb") as wf:
-                    sr = wf.getframerate()
-                    n = wf.getnframes()
-                    raw = wf.readframes(n)
-                    audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-                    self._cache[item.upper()] = (audio, sr)
-            except Exception:
-                continue
+            return None
+        try:
+            chunks = []
+            sr = 22050
+            for chunk in self._voice.synthesize(text):
+                chunks.append(chunk.audio_float_array)
+                sr = chunk.sample_rate
+            if not chunks:
+                return None
+            return np.concatenate(chunks), sr
+        except Exception:
+            return None
 
     def _worker_loop(self) -> None:
+        """Background audio synthesis and playback loop."""
         while not self._stop_event.is_set():
             try:
                 text = self._queue.get(timeout=0.2)
@@ -91,20 +87,19 @@ class PiperTTS:
             self.is_speaking = True
             self.last_spoken_text = text.strip()
             self.last_spoken_time = time.monotonic()
+
             try:
                 upper = text.strip().upper()
                 if upper in self._cache:
                     audio, sr = self._cache[upper]
                 else:
-                    buf = io.BytesIO()
-                    with wave.open(buf, "wb") as wf:
-                        self._voice.synthesize(text, wf)
-                    buf.seek(0)
-                    with wave.open(buf, "rb") as wf:
-                        sr = wf.getframerate()
-                        n = wf.getnframes()
-                        raw = wf.readframes(n)
-                        audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+                    res = self._synthesize_audio(text.strip())
+                    if res is None:
+                        continue
+                    audio, sr = res
+                    # Cache short words and characters for instant repeat playback
+                    if len(upper) <= 16 and len(self._cache) < 256:
+                        self._cache[upper] = (audio, sr)
 
                 sd.play(audio, samplerate=sr)
                 sd.wait()
