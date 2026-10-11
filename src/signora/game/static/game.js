@@ -694,8 +694,16 @@
     panel.classList.toggle("show");
   });
 
+  const sMode = document.getElementById("s-mode");
+  if (sMode) {
+    sMode.addEventListener("change", async () => {
+      await post("/api/settings", { mode: sMode.value });
+    });
+  }
+
   document.getElementById("apply-btn").addEventListener("click", async () => {
     await post("/api/settings", {
+      mode: sMode ? sMode.value : "asl",
       ready_ms: +document.getElementById("s-ready").value,
       answer_ms: +document.getElementById("s-answer").value,
       hold_ms: +document.getElementById("s-hold").value,
@@ -712,6 +720,9 @@
 
   function syncSliders(cfg) {
     if (!cfg) return;
+    if (cfg.mode && sMode && document.activeElement !== sMode && sMode.value !== cfg.mode) {
+      sMode.value = cfg.mode;
+    }
     for (const [sid, vid, key, fmt] of sliders) {
       const el = document.getElementById(sid);
       const lab = document.getElementById(vid);

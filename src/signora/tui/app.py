@@ -122,11 +122,11 @@ class SignoraTUI:
         tts_state = _check_piper_status()
         backend_name = "DirectShow" if is_windows() else "V4L2 (0-Copy Kernel)"
 
-        info_table = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2), expand=True)
-        info_table.add_column("Key1", style="bold dim cyan", width=16)
-        info_table.add_column("Val1", style="bold white", width=24)
-        info_table.add_column("Key2", style="bold dim magenta", width=16)
-        info_table.add_column("Val2", style="bold white", width=26)
+        info_table = Table(box=None, show_header=False, pad_edge=False, padding=(0, 1), expand=True)
+        info_table.add_column("Key1", style="bold dim cyan", no_wrap=True)
+        info_table.add_column("Val1", style="bold white", no_wrap=True)
+        info_table.add_column("Key2", style="bold dim magenta", no_wrap=True)
+        info_table.add_column("Val2", style="bold white", no_wrap=True)
 
         info_table.add_row(
             "Version:",
@@ -148,9 +148,9 @@ class SignoraTUI:
         )
         info_table.add_row(
             "Neural Engine:",
-            "PyTorch / NumPy CPU",
-            "Piper TTS Voice:",
-            f"{tts_state}",
+            "PyTorch CPU",
+            "Piper Voice:",
+            "Active (en_US)" if "Active" in tts_state else "Fallback Audio",
         )
 
         audio_sub = "MUTED" if self.settings["no_tts"] else "Active (Piper)"
@@ -477,16 +477,24 @@ class SignoraTUI:
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
     def run_game_flow(self) -> None:
+        self.console.print("\n[bold cyan]=== Sign Dino Gesture Runner Setup ===[/bold cyan]")
+        mode_choice = Prompt.ask(
+            "Select sign language gesture set:\n  [1] ASL Fingerspelling (Single-Handed)\n  [2] ISL Dual-Handed (Indian Sign Language)\nChoice",
+            choices=["1", "2"],
+            default="1",
+            console=self.console,
+        )
+        sign_mode = "isl" if mode_choice == "2" else "asl"
         kiosk = Confirm.ask(
             "Launch in fullscreen browser kiosk mode?", default=False, console=self.console
         )
         self.console.print(
-            "\n[bold cyan]=== Starting Shadow-Play Dino Runner Server ===[/bold cyan]"
+            f"\n[bold cyan]=== Starting Shadow-Play Dino Runner Server ({sign_mode.upper()} Mode) ===[/bold cyan]"
         )
         from signora.game.server import serve
 
         try:
-            serve(host="127.0.0.1", port=8000, kiosk=kiosk)
+            serve(host="127.0.0.1", port=8000, kiosk=kiosk, mode=sign_mode)
         except Exception as exc:
             self.console.print(f"[bold red]Error running game mode: {exc}[/bold red]")
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)

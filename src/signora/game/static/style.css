@@ -206,6 +206,20 @@ h1 .lit { color: var(--amber); }
 }
 
 #panel input[type="range"] { width: 96px; accent-color: var(--amber); }
+#panel select {
+  font: inherit;
+  font-size: 11px;
+  background: #14121c;
+  color: var(--paper);
+  border: 1px solid rgba(205,184,148,.28);
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  outline: none;
+}
+#panel select:focus {
+  border-color: var(--amber);
+}
 #panel .val { color: var(--paper); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
 
 #settings-btn {

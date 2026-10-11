@@ -9,7 +9,8 @@ import numpy as np
 
 from signora.asl.model import Predictor
 from signora.core.features import landmark_features, normalize_hand
-from signora.core.hands import HandPipeline, draw_landmarks
+from signora.core.hands import HandPipeline
+from signora.core.hud import draw_cyber_hands
 
 PREVIEW_WIDTH = 320
 
@@ -92,7 +93,9 @@ class LetterReader:
                     self._predictor = Predictor()
 
         num_hands = 2 if self.mode == "isl" else 1
-        self._pipeline = HandPipeline(source=self.source, num_hands=num_hands, use_fake=self.use_fake)
+        self._pipeline = HandPipeline(
+            source=self.source, num_hands=num_hands, use_fake=self.use_fake
+        )
         self._pipeline.started.wait(timeout=15)
         if self._pipeline.error:
             self._error = self._pipeline.error
@@ -202,11 +205,7 @@ class LetterReader:
                     )
                     else landmarks
                 )
-                hnd = (
-                    handedness[0]
-                    if (isinstance(handedness, list) and handedness)
-                    else handedness
-                )
+                hnd = handedness[0] if (isinstance(handedness, list) and handedness) else handedness
                 pts = normalize_hand([(lm.x, lm.y, lm.z) for lm in lms], hnd)
                 feats = landmark_features(pts)
                 probs = self._predictor.probs(feats)
