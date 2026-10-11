@@ -104,7 +104,7 @@ def run_asl_live(
 
     if not headless:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
-        cv2.resizeWindow(WINDOW_NAME, 960, 540)
+        cv2.resizeWindow(WINDOW_NAME, 960, 720)
 
     frame_count = 0
     t0 = time.monotonic()
@@ -172,19 +172,20 @@ def run_asl_live(
                 cv2.imshow(WINDOW_NAME, shown)
 
                 k = cv2.waitKey(1) & 0xFF
-                if k in (ord("q"), ord("Q"), 27):
-                    break
-                elif k in (ord("c"), ord("C")):
-                    engine.clear()
-                elif k in (32, 10, 13, ord("r"), ord("R"), ord("s"), ord("S")):
-                    if tts.is_ready and engine.buffer:
-                        tts.speak_async(engine.buffer)
-                elif k in (8, 127, 255):  # Backspace & Delete
-                    engine.backspace()
-                elif k in (ord("f"), ord("F")):
-                    fullscreen = not fullscreen
-                    prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
-                    cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, prop)
+                if k != 255:
+                    if k in (ord("q"), ord("Q"), 27):
+                        break
+                    elif k in (ord("c"), ord("C")):
+                        engine.clear()
+                    elif k in (32, 10, 13, ord("r"), ord("R"), ord("s"), ord("S")):
+                        if tts.is_ready and engine.buffer:
+                            tts.speak_async(engine.buffer)
+                    elif k in (8, 127):  # Backspace & Delete (8=Win Bksp, 127=Linux Bksp)
+                        engine.backspace()
+                    elif k in (ord("f"), ord("F")):
+                        fullscreen = not fullscreen
+                        prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
+                        cv2.setWindowProperty(WINDOW_NAME, cv2.WND_PROP_FULLSCREEN, prop)
 
             if max_frames and frame_count >= max_frames:
                 break

@@ -59,3 +59,23 @@ def test_debounce_default_monotonic_clock():
     st = engine.update("B", 0.95)
     assert st["candidate"] == "B"
     assert st["confirmed"] is None
+
+
+def test_debounce_holds_transcript_across_updates():
+    """Ensure that once confirmed, letters remain in buffer across frames."""
+    engine = DebounceEngine(dwell_ms=100, smooth_ms=50, threshold=0.5)
+
+    # Dwell confirm 'A'
+    engine.update("A", 0.9, now_ms=1000)
+    st = engine.update("A", 0.9, now_ms=1150)
+    assert st["confirmed"] == "A"
+    assert engine.buffer == "A"
+
+    # Subsequent frames (resting or transitioning) must hold 'A' in buffer
+    st2 = engine.update(None, 0.0, now_ms=1200)
+    assert engine.buffer == "A"
+    assert st2["transcript"] == "A"
+
+    st3 = engine.update(None, 0.0, now_ms=1500)
+    assert engine.buffer == "A"
+    assert st3["transcript"] == "A"

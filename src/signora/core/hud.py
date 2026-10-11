@@ -271,12 +271,16 @@ def prepare_window_canvas(
         rect = cv2.getWindowImageRect(window_name)
         if not rect or len(rect) < 4:
             return frame
-        win_w, win_h = int(rect[2]), int(rect[3])
+        rx, ry, rw, rh = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
     except Exception:
         return frame
 
     fh, fw = frame.shape[:2]
-    if win_w <= 120 or win_h <= 120 or (win_w == fw and win_h == fh):
+    # In OpenCV Qt, (rx, ry) represents the letterbox margin offset of the image inside the viewport.
+    win_w = rw + max(0, rx) * 2 if rx > 0 else rw
+    win_h = rh + max(0, ry) * 2 if ry > 0 else rh
+
+    if win_w <= 120 or win_h <= 120 or (win_w == fw and win_h == fh and rx == 0 and ry == 0):
         return frame
 
     # Scale camera frame to fit window while preserving aspect ratio

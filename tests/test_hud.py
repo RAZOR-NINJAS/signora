@@ -108,6 +108,10 @@ def test_render_flagship_hud():
 
 def test_prepare_window_canvas():
     """Verify window canvas scaling and letterboxing."""
+    from unittest.mock import patch
+
+    import cv2
+
     from signora.core.hud import prepare_window_canvas
 
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -117,3 +121,8 @@ def test_prepare_window_canvas():
 
     # When window_name is non-existent, gracefully returns frame
     assert prepare_window_canvas(frame, "non_existent_window_12345") is frame
+
+    # When window has letterbox margins (e.g. tiling window manager), expands to dark canvas
+    with patch.object(cv2, "getWindowImageRect", return_value=(365, 157, 640, 480)):
+        canvas = prepare_window_canvas(frame, "tiled_window")
+        assert canvas.shape == (794, 1370, 3)

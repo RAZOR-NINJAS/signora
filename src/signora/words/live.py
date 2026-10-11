@@ -729,21 +729,22 @@ def run_live(
             if not headless and display:
                 cv2.imshow(WINDOW_TITLE, frame)
                 k = cv2.waitKey(1) & 0xFF
-                if k in (ord("q"), ord("Q"), 27):
-                    break
-                elif k in (ord("c"), ord("C")):
-                    transcript.clear()
-                    last_word = None
-                    last_conf = 0.0
-                    last_details = {}
-                elif k in (32, 10, 13):
-                    if tts.is_ready and transcript:
-                        tts.speak_async(" ".join(transcript))
-                elif k in (8, 127, 255):
-                    if transcript:
-                        transcript.pop()
-                elif k in (ord("d"), ord("D")):
-                    show_debug = not show_debug
+                if k != 255:
+                    if k in (ord("q"), ord("Q"), 27):
+                        break
+                    elif k in (ord("c"), ord("C")):
+                        transcript.clear()
+                        last_word = None
+                        last_conf = 0.0
+                        last_details = {}
+                    elif k in (32, 10, 13):
+                        if tts.is_ready and transcript:
+                            tts.speak_async(" ".join(transcript))
+                    elif k in (8, 127):
+                        if transcript:
+                            transcript.pop()
+                    elif k in (ord("d"), ord("D")):
+                        show_debug = not show_debug
 
             if max_frames is not None and frame_count >= max_frames:
                 break
