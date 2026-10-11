@@ -15,6 +15,8 @@ from typing import Any, Deque, Dict, List, Optional
 import cv2
 import numpy as np
 
+from signora.core.hud import draw_glass_card
+
 from .classifier import DTWKNNClassifier
 from .config import (
     CONFIDENCE_THRESHOLD,
@@ -45,7 +47,7 @@ from .normalize import (
     normalize_sequence,
 )
 
-WINDOW_TITLE = "SignLang Words - Live Recognition"
+WINDOW_TITLE = "Signora Words - Live Recognition"
 
 
 def _warn_if_synthetic_heavy() -> None:
@@ -225,11 +227,10 @@ def draw_hud(
     ROSE = (68, 68, 235)  # red in BGR
 
     # 1. Top bar
-    cv2.rectangle(frame, (0, 0), (w, 56), PANEL, -1)
-    cv2.line(frame, (0, 56), (w, 56), EDGE, 1)
+    draw_glass_card(frame, 12, 10, w - 24, 44, alpha=0.82, radius=12)
 
-    cv2.putText(frame, "SIGNORA", (16, 26), cv2.FONT_HERSHEY_DUPLEX, 0.65, INK, 1, cv2.LINE_AA)
-    cv2.putText(frame, "WORDS", (122, 26), cv2.FONT_HERSHEY_DUPLEX, 0.65, SKY, 1, cv2.LINE_AA)
+    cv2.putText(frame, "SIGNORA", (26, 38), cv2.FONT_HERSHEY_DUPLEX, 0.65, INK, 1, cv2.LINE_AA)
+    cv2.putText(frame, "WORDS", (132, 38), cv2.FONT_HERSHEY_DUPLEX, 0.65, SKY, 1, cv2.LINE_AA)
 
     if status == "SIGNING":
         badge_col, badge_txt = SKY, "SIGNING..."
@@ -241,7 +242,7 @@ def draw_hud(
     cv2.putText(
         frame,
         f"[{badge_txt}]",
-        (220, 26),
+        (230, 38),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.55,
         badge_col,
@@ -251,23 +252,22 @@ def draw_hud(
 
     # Energy meter with an explicit threshold tick, so the trigger level is visible.
     energy_norm = min(1.0, energy / (ENERGY_ACTIVE_THRESHOLD * 2.5))
-    bar_w, bar_x = 120, w - 145
-    cv2.rectangle(frame, (bar_x, 14), (bar_x + bar_w, 26), EDGE, -1)
+    bar_w, bar_x = 120, w - 155
+    cv2.rectangle(frame, (bar_x, 24), (bar_x + bar_w, 36), EDGE, -1)
     fill_col = EMERALD if energy < ENERGY_ACTIVE_THRESHOLD else AMBER
-    cv2.rectangle(frame, (bar_x, 14), (bar_x + int(bar_w * energy_norm), 26), fill_col, -1)
+    cv2.rectangle(frame, (bar_x, 24), (bar_x + int(bar_w * energy_norm), 36), fill_col, -1)
     tick_x = bar_x + int(bar_w / 2.5)
-    cv2.line(frame, (tick_x, 11), (tick_x, 29), INK, 1)
+    cv2.line(frame, (tick_x, 21), (tick_x, 39), INK, 1)
     cv2.putText(
-        frame, "MOTION", (bar_x - 55, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.40, MUTED, 1, cv2.LINE_AA
+        frame, "MOTION", (bar_x - 55, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.40, MUTED, 1, cv2.LINE_AA
     )
 
     # 2. Reading card
     if last_word:
         gloss = WORD_GLOSS.get(last_word, last_word.lower())
         card_w, card_h = 240, 75
-        card_x, card_y = 16, 70
-        cv2.rectangle(frame, (card_x, card_y), (card_x + card_w, card_y + card_h), PANEL, -1)
-        cv2.rectangle(frame, (card_x, card_y), (card_x + card_w, card_y + card_h), EDGE, 1)
+        card_x, card_y = 16, 68
+        draw_glass_card(frame, card_x, card_y, card_w, card_h, alpha=0.88, radius=12)
 
         cv2.putText(
             frame,
@@ -366,38 +366,38 @@ def draw_hud(
                 cv2.LINE_AA,
             )
 
-    # 4. Bottom panel
-    bot_h = 60
-    cv2.rectangle(frame, (0, h - bot_h), (w, h), PANEL, -1)
-    cv2.line(frame, (0, h - bot_h), (w, h - bot_h), EDGE, 1)
+    # 4. Bottom panel (Floating glass pill)
+    bot_h = 58
+    by = h - bot_h - 10
+    draw_glass_card(frame, 12, by, w - 24, bot_h, alpha=0.86, radius=14)
 
     trans_text = " ".join(transcript[-8:]) if transcript else "(start signing to form a sentence)"
-    trans_col = INK if transcript else MUTED
+    trans_col = EMERALD if transcript else MUTED
     cv2.putText(
         frame,
         f"TRANSCRIPT: {trans_text}",
-        (16, h - 34),
+        (26, by + 26),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.55,
+        0.58,
         trans_col,
-        1,
+        2 if transcript else 1,
         cv2.LINE_AA,
     )
 
     cv2.putText(
         frame,
         f"{fps:.1f} FPS",
-        (w - 75, h - 12),
+        (w - 95, by + 45),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.45,
+        0.42,
         MUTED,
         1,
         cv2.LINE_AA,
     )
     cv2.putText(
         frame,
-        "Controls: [Q] Quit  [C] Clear  [D] Diagnostics",
-        (16, h - 12),
+        "Controls: [Q] Quit   [C] Clear   [D] Diagnostics",
+        (26, by + 46),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.42,
         MUTED,

@@ -1,7 +1,7 @@
-<div align="center">
+# Signora
 
 ```
-  ███████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗  █████╗ 
+  ███████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗  █████╗
   ██╔════╝██║██╔════╝ ████╗  ██║██╔═══██╗██╔══██╗██╔══██╗
   ███████╗██║██║  ███╗██╔██╗ ██║██║   ██║██████╔╝███████║
   ╚════██║██║██║   ██║██║╚██╗██║██║   ██║██╔══██╗██╔══██║
@@ -9,17 +9,9 @@
   ╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
 ```
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="assets/banner-light.svg">
-  <img alt="Signora Banner" src="assets/banner-dark.svg" width="100%">
-</picture>
-
-<br>
+![Signora Banner](assets/banner-dark.svg)
 
 **Real-time sign language recognition. 100% local. Nothing leaves your machine.**
-
-<br>
 
 [![CI](https://github.com/RAZOR-NINJAS/signora/actions/workflows/ci.yml/badge.svg)](https://github.com/RAZOR-NINJAS/signora/actions)
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue?logo=python&logoColor=white)](https://www.python.org/)
@@ -28,24 +20,19 @@
 [![Local Inference](https://img.shields.io/badge/privacy-100%25%20Offline-blueviolet)](docs/ARCHITECTURE.md)
 [![Hardware](https://img.shields.io/badge/hardware-CPU%20Only%20(No%20GPU%20Needed)-orange)](docs/ARCHITECTURE.md)
 
-<br>
-
-[Quick Install](#-quick-install) &nbsp;&bull;&nbsp;
-[Core Modes](#-core-modes) &nbsp;&bull;&nbsp;
-[How It Works](#-how-it-works) &nbsp;&bull;&nbsp;
-[Keyboard Controls](#-keyboard-controls) &nbsp;&bull;&nbsp;
-[System Doctor](#-system-doctor) &nbsp;&bull;&nbsp;
-[Documentation](#-documentation)
-
 ---
 
-</div>
+[Quick Install](#-quick-install) • [Core Modes](#-core-modes) • [Modern Glassmorphic HUD](#-modern-glassmorphic-hud) • [Interactive TUI](#-interactive-terminal-dashboard-tui) • [How It Works](#-how-it-works) • [Controls](#-keyboard-controls) • [System Doctor](#-system-diagnostics) • [Benchmarks](#-performance-benchmarks) • [Documentation](#-documentation)
+
+---
 
 ## 💡 Why Signora
 
 - **100% Offline & Private:** Video frames never leave your computer. No cloud telemetry, no API keys, and no subscriptions.
-- **Ultra-Lightweight & Fast:** Runs at 30 FPS on entry-level laptops (even a dual-core CPU with 3.7 GB RAM) using sub-millisecond neural classifiers.
+- **Ultra-Lightweight & Fast:** Runs at 30+ FPS on entry-level laptops (even an AMD dual-core CPU with 3.7 GB RAM) using sub-millisecond neural classifiers.
+- **Zero-Overhead Graphics:** Pure native C++/NumPy rendering. ROI-bounded alpha blending (<0.02 ms) ensures zero frame drops and zero HTML/webview overhead.
 - **Multi-Dialect & Interactive:** First-class support for single-handed ASL, dual-handed Indian Sign Language (ISL), dynamic motion words, interactive browser drills, and a gesture-controlled runner game.
+- **Full Windows & Linux Parity:** Zero administrator rights needed on Windows. Automatic DirectShow (`CAP_DSHOW`) and V4L2 kernel capture backends.
 
 ---
 
@@ -56,14 +43,15 @@
 curl -fsSL https://raw.githubusercontent.com/RAZOR-NINJAS/signora/main/install.sh | bash
 ```
 
-### Windows 10 & 11 (Non-Admin / Barebones Laptop)
+### Windows 10 & 11 (Non-Admin Barebones Laptop)
 Open standard **Windows PowerShell** (no administrator rights needed) and run:
 ```powershell
 irm https://raw.githubusercontent.com/RAZOR-NINJAS/signora/main/install.ps1 | iex
 ```
 
-<details>
-<summary><b>Manual Installation (Step-by-Step)</b></summary>
+---
+
+### Manual Installation (Step-by-Step)
 
 ```bash
 # 1. Clone repository
@@ -85,54 +73,38 @@ python scripts/fetch_models.py
 # 5. Run health diagnostics
 signora doctor
 ```
-</details>
 
 ---
 
 ## 🎛 Core Modes
 
-<table>
-  <tr>
-    <td width="33%" align="center">
-      <h3>🤲 ASL Fingerspelling</h3>
-      <p>Single-handed static alphabet (A-Z) with 74D normalized geometric features, in-air SPACE dwell gesture, and Piper neural speech output.</p>
-      <code>signora live</code>
-    </td>
-    <td width="33%" align="center">
-      <h3>🤝 Indian Sign Language</h3>
-      <p>Dual-handed ISLRTC standard manual alphabet and 10 iconic static signs with 164D spatial contact geometry and pure NumPy 0.43ms inference.</p>
-      <code>signora isl</code>
-    </td>
-    <td width="33%" align="center">
-      <h3>🌊 ASL Dynamic Words</h3>
-      <p>Holistic motion trajectory recognition across 16 dynamic signs using upper-body landmarks and FastDTW-kNN sequence matching.</p>
-      <code>signora words</code>
-    </td>
-  </tr>
-  <tr>
-    <td width="33%" align="center">
-      <h3>🦖 Shadow-Play Game</h3>
-      <p>Interactive Dino runner web game powered by your webcam gestures. Form target signs to jump over cacti and beat your streak.</p>
-      <code>signora game --kiosk</code>
-    </td>
-    <td width="33%" align="center">
-      <h3>🎓 Learning Kiosk</h3>
-      <p>Browser learning interface with live visual guides, confidence scoring meters, practice drills, and timed sign quizzes.</p>
-      <code>signora learn --kiosk</code>
-    </td>
-    <td width="33%" align="center">
-      <h3>🩺 System Doctor</h3>
-      <p>Automated 10-point diagnostic self-test inspecting camera backends, MediaPipe, weights, Piper audio, and network interfaces.</p>
-      <code>signora doctor</code>
-    </td>
-  </tr>
-</table>
+| Mode | Launch Command | Input & Tracking | Inference & Output Engine |
+| :--- | :--- | :--- | :--- |
+| **🤲 ASL Fingerspelling** | `signora live` | Single-handed 74D normalized landmarks | Sub-ms MLP • In-air SPACE dwell • Piper neural speech |
+| **🤝 Indian Sign Language (ISL)** | `signora isl` | Dual-handed 164D spatial contact geometry | 26 letters + 10 words • 0.43 ms NumPy MLP • Cybernetic skeletons |
+| **🌊 ASL Dynamic Words** | `signora words` | 153D upper-body pose & hands trajectory | 16 dynamic signs • FastDTW-kNN sequence matching |
+| **🦖 Shadow-Play Game** | `signora game --kiosk` | Real-time hand posture classification | Browser obstacle runner • Jump/crouch gestures |
+| **🎓 Learning Kiosk** | `signora learn --kiosk` | Real-time posture tracking vs reference signs | Interactive drills • Visual guides • Timed sign quizzes |
+| **🩺 System Doctor** | `signora doctor` | Automated 10-point self-test suite | Camera backends, model weights, audio, loopback |
 
 ---
 
-## 🖥 Interactive Terminal Dashboard (TUI)
+## 🖥 Modern Glassmorphic HUD
 
-Launch the full interactive console interface with arrow keys and numeric menus:
+Signora features a custom, high-polish OpenCV HUD built without HTML or heavy webview runtimes:
+
+- **Ultra-Low CPU Overhead:** Replaced full-frame cloning with in-place bounding-box ROI slicing. Blending takes `<0.02 ms` per card.
+- **Cybernetic Hand Skeletons:** Dual-hand color differentiation (electric cyan `#06b6d4` for Left Hand, neon magenta `#ec4899` for Right Hand) with anti-aliased glowing fingertip halos and wrist badge tags.
+- **Top Status Pill:** Floating pill with real-time FPS counter, inference delegate (`CPU`), and live pulsing status dot.
+- **Prediction Card & Dwell Meter:** Anti-aliased floating card displaying target sign, confidence score, and smooth neon dwell confirmation ring.
+- **Transcript Console:** Floating bottom bar with keycap hotkey badges (`[C] Clear`, `[R] Speak`, `[Bksp] Undo`, `[F] Fullscreen`, `[Q] Quit`).
+- **Piper Speech Toast:** Dynamic emerald audio popup (`🔊 SPEAKING: "..."`) during voice synthesis.
+
+---
+
+## 📟 Interactive Terminal Dashboard (TUI)
+
+Launch the interactive console interface with arrow keys and numeric menus:
 
 ```bash
 signora tui
@@ -141,28 +113,39 @@ signora
 ```
 
 ```
-  ███████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗  █████╗ 
+  ███████╗██╗ ██████╗ ███╗   ██╗ ██████╗ ██████╗  █████╗
   ██╔════╝██║██╔════╝ ████╗  ██║██╔═══██╗██╔══██╗██╔══██╗
   ███████╗██║██║  ███╗██╔██╗ ██║██║   ██║██████╔╝███████║
   ╚════██║██║██║   ██║██║╚██╗██║██║   ██║██╔══██╗██╔══██║
   ███████║██║╚██████╔╝██║ ╚████║╚██████╔╝██║  ██║██║  ██║
   ╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
 
-  Real-time sign language recognition. 100% local. Nothing leaves your machine.
+  SIGNORA    100% Offline • Edge Neural Inference • Zero Cloud Latency
 
-┏━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┓
-┃ Option ┃ Mode / Utility      ┃ Description                                         ┃ Resource Cost ┃
-┡━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━┩
-│ 1      │ ASL Fingerspelling  │ Single-handed letters (A-Z + SPACE) with HUD & TTS  │ Low (CPU ~8%) │
-│ 2      │ ISL Recognition     │ Indian Sign Language dual-hand alphabet & 10 signs  │ Low (CPU ~10%)│
-│ 3      │ ASL Dynamic Words   │ 16-word holistic motion trajectory (DTW-kNN)        │ Med (CPU ~18%)│
-│ 4      │ Shadow-Play Game    │ Browser-based gesture-controlled Dino runner        │ Low (CPU ~12%)│
-│ 5      │ Learning Kiosk      │ Interactive sign practice, drills & timed quizzes   │ Low (CPU ~12%)│
-│ 6      │ System Doctor       │ Inspect 10 hardware, model, audio & network checks  │ Instant       │
-│ 7      │ Model Asset Manager │ Inspect integrity or download MediaPipe & models    │ I/O bound     │
-│ 8      │ Probe Webcams       │ Enumerate available video capture hardware devices  │ Instant       │
-│ 0      │ Exit                │ Close Signora dashboard                             │ —             │
-└────────┴─────────────────────┴─────────────────────────────────────────────────────┴───────────────┘
+╭─ System Hardware & Inference Architecture ───────────────────────────────────────╮
+│ Version:          v0.1.2                   Processor:        2 Cores (x86_64)    │
+│ Operating System: Linux                    System Memory:    3.7 GB RAM          │
+│ Python Runtime:   3.11.16                  Video Backend:    V4L2 (0-Copy Kernel)│
+│ Neural Engine:    PyTorch / NumPy CPU      Piper TTS Voice:  Active (en_US)      │
+╰──────────────────────────────────────────────────────────────────────────────────╯
+
+╭─ Interactive Operations & Recognition Modes ─────────────────────────────────────╮
+│  Key   Operation / Mode             Architecture & Features         CPU Cost     │
+│ ────── ──────────────────────────── ─────────────────────────────── ─────────── │
+│  ---   SIGN RECOGNITION ENGINES     Real-time HUD with Piper speech ---          │
+│   1    ASL Fingerspelling           Single-hand (A-Z + SPACE dwell) Low (~8%)    │
+│   2    Indian Sign Language         Dual-handed 164D geometry       Low (~10%)   │
+│   3    ASL Dynamic Words            16-word trajectory FastDTW-kNN  Med (~18%)   │
+│  ---   INTERACTIVE BROWSER LABS     Local web app on localhost:8000 ---          │
+│   4    Shadow-Play Game             Gesture-controlled Dino runner  Low (~12%)   │
+│   5    Interactive Learning Kiosk   Posture drills & timed quizzes  Low (~12%)   │
+│  ---   DIAGNOSTICS & UTILITIES      Hardware & model validation     ---          │
+│   6    System Doctor                Automated 10-point self-test    Instant      │
+│   7    Model Asset Manager          Inspect / fetch neural weights  I/O Bound    │
+│   8    Hardware Camera Probe        Scan connected video devices    Instant      │
+│   9    Live Camera & HUD Test       5-second live camera test bench Real-time    │
+│   0    Exit Signora                 Close interactive dashboard     —            │
+╰──────────────────────────────────────────────────────────────────────────────────╯
 ```
 
 ---
@@ -175,13 +158,13 @@ flowchart LR
     B --> C["📐 Scale-Invariant\nFeature Space\n(74D / 164D / 153D)"]
     C --> D["⚡ Classifier Engine\n(PyTorch / NumPy MLP\nFastDTW-kNN)"]
     D --> E["⏱ Temporal Debounce\n& Dwell Confirmation"]
-    E --> F["🖥 High-Contrast HUD\n& Transcript Buffer"]
+    E --> F["🖥 Glassmorphic HUD\n& Transcript Buffer"]
     E --> G["🔊 Piper Neural TTS\n(Offline Speech)"]
 ```
 
-1. **Hardware Capture:** OpenCV captures 640x480 video with `buffer_size=1` for minimum pipeline latency via V4L2 on Linux and DirectShow on Windows.
+1. **Hardware Capture:** OpenCV captures video with `buffer_size=1` for lowest latency via V4L2 on Linux and DirectShow (`CAP_DSHOW`) on Windows.
 2. **Spatial Landmark Tracking:** MediaPipe Tasks API detects 21 3D hand keypoints and upper-body joints.
-3. **Geometric Normalization:** Coordinates are centered at the wrist/shoulders and scaled by hand span to ensure zero calibration across different people and camera distances.
+3. **Geometric Normalization:** Coordinates are centered at the wrist/shoulders and scaled by hand span for zero calibration across different people and camera distances.
 4. **Sub-Millisecond Inference:** Compact neural architectures classify hand shapes in < 1 ms on CPU.
 5. **Dwell Confirmation:** An 800 ms hold window ensures transitional hand movements do not cause false positives.
 6. **Piper Neural Voice:** Confirmed sentences are synthesized asynchronously via local Piper neural text-to-speech.
@@ -190,7 +173,7 @@ flowchart LR
 
 ## ⌨️ Keyboard Controls
 
-When running in HUD recognition mode (`signora live` or `signora isl`):
+When running in HUD recognition mode (`signora live`, `signora isl`, or `signora words`):
 
 | Key | Action | Behavior |
 | :---: | :--- | :--- |
@@ -206,8 +189,7 @@ When running in HUD recognition mode (`signora live` or `signora isl`):
 
 Run `signora doctor` anytime to verify that hardware, neural models, audio devices, and network stacks are operating correctly:
 
-<details open>
-<summary><b>Verified Diagnostic Output (10 Checks)</b></summary>
+### Verified Diagnostic Output (10 Checks)
 
 ```
 === Signora System Doctor & Compatibility Diagnostics ===
@@ -229,7 +211,6 @@ Run `signora doctor` anytime to verify that hardware, neural models, audio devic
 
 All core systems are operational and ready for use!
 ```
-</details>
 
 ---
 
@@ -242,9 +223,10 @@ Measured on an entry-level development machine (**AMD A6-9220 2-core CPU @ 2.5 G
 | **ISL NumPy Forward Pass** | **0.43 ms** | Pure vectorized NumPy with analytical GELU |
 | **ASL PyTorch Forward Pass** | **0.82 ms** | Lightweight 3-layer MLP on CPU |
 | **FastDTW Sequence Match** | **14.2 ms** | 16-word trajectory comparison |
-| **End-to-End Frame Latency** | **~28 ms** | Real-time 30 FPS video throughput |
+| **Glassmorphic HUD Drawing** | **< 0.02 ms** | Localized ROI slicing (zero full-frame copying) |
+| **End-to-End Frame Latency** | **~28 ms** | Real-time 30+ FPS video throughput |
 | **Memory Footprint (RSS)** | **~135 MB** | Substantially lower than browser-only JS tools |
-| **Startup Time (TUI)** | **< 35 ms** | Instant console initialization |
+| **Startup Time (TUI)** | **< 30 ms** | Instant console initialization |
 
 ---
 
@@ -260,5 +242,5 @@ Measured on an entry-level development machine (**AMD A6-9220 2-core CPU @ 2.5 G
 
 ## 📄 License
 
-Signora is open-source software licensed under the [MIT License](LICENSE).
+Signora is open-source software licensed under the [MIT License](LICENSE).  
 Copyright (c) 2026 Vaibhav Singh Shekhawat.

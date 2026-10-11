@@ -1,0 +1,486 @@
+"""Modern, glassmorphic HUD rendering and glowing cybernetic hand landmarks for OpenCV.
+
+Provides anti-aliased floating glass cards, dual-hand color differentiation,
+smooth dwell progress animations, audio speech indicators, and sleek keyboard toolbars.
+"""
+
+import time
+from typing import Any, Tuple
+
+import cv2
+import numpy as np
+
+# ==============================================================================
+# Cyberpunk & Glassmorphic Color Palette (BGR for OpenCV)
+# ==============================================================================
+COLOR_BG_GLASS = (30, 20, 15)  # Slate 950 deep navy (#0f172a)
+COLOR_BORDER_GLASS = (85, 65, 51)  # Slate 700 (#334155)
+COLOR_CYAN_NEON = (248, 189, 56)  # Sky 400 (#38bdf8)
+COLOR_CYAN_GLOW = (212, 182, 6)  # Cyan 500 (#06b6d4)
+COLOR_MAGENTA_NEON = (236, 72, 153)  # Pink/Magenta (#ec4899)
+COLOR_MAGENTA_GLOW = (192, 132, 252)  # Purple 400 (#c084fc)
+COLOR_EMERALD = (153, 211, 52)  # Emerald 400 (#34d399)
+COLOR_AMBER = (36, 191, 251)  # Amber 400 (#fbbf24)
+COLOR_WHITE = (255, 255, 255)
+COLOR_TEXT_DIM = (184, 163, 148)  # Slate 400 (#94a3b8)
+COLOR_KEYCAP_BG = (51, 35, 25)  # Slate 800 (#1e293b)
+COLOR_KEYCAP_BORDER = (100, 80, 60)  # Slate 600 (#475569)
+
+# Standard MediaPipe 21-landmark 3D hand topology connections
+HAND_CONNECTIONS = (
+    (0, 1),
+    (1, 2),
+    (2, 3),
+    (3, 4),  # Thumb
+    (0, 5),
+    (5, 6),
+    (6, 7),
+    (7, 8),  # Index
+    (5, 9),
+    (9, 10),
+    (10, 11),
+    (11, 12),  # Middle
+    (9, 13),
+    (13, 14),
+    (14, 15),
+    (15, 16),  # Ring
+    (13, 17),
+    (17, 18),
+    (18, 19),
+    (19, 20),  # Pinky
+    (0, 17),  # Palm base
+)
+
+FINGERTIP_INDICES = {4, 8, 12, 16, 20}
+
+
+def draw_rounded_rectangle(
+    img: np.ndarray,
+    pt1: Tuple[int, int],
+    pt2: Tuple[int, int],
+    color: Tuple[int, int, int],
+    radius: int = 12,
+    thickness: int = -1,
+    alpha: float = 1.0,
+) -> None:
+    """Draw a smooth anti-aliased rounded rectangle with optional transparency."""
+    x1, y1 = min(pt1[0], pt2[0]), min(pt1[1], pt2[1])
+    x2, y2 = max(pt1[0], pt2[0]), max(pt1[1], pt2[1])
+
+    # Clamp bounds to image dimensions
+    h, w = img.shape[:2]
+    if x1 >= w or y1 >= h or x2 <= 0 or y2 <= 0:
+        return
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(w, x2), min(h, y2)
+
+    width = x2 - x1
+    height = y2 - y1
+    if width <= 0 or height <= 0:
+        return
+
+    r = min(radius, width // 2, height // 2)
+    if r < 1:
+        r = 1
+
+    roi = img[y1:y2, x1:x2]
+
+    if alpha < 1.0 and thickness < 0:
+        sub = roi.copy()
+        cv2.rectangle(sub, (r, 0), (width - r, height), color, -1)
+        cv2.rectangle(sub, (0, r), (width, height - r), color, -1)
+        cv2.circle(sub, (r, r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(sub, (width - r, r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(sub, (r, height - r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(sub, (width - r, height - r), r, color, -1, cv2.LINE_AA)
+        cv2.addWeighted(sub, alpha, roi, 1.0 - alpha, 0, roi)
+    elif thickness < 0:
+        cv2.rectangle(roi, (r, 0), (width - r, height), color, -1)
+        cv2.rectangle(roi, (0, r), (width, height - r), color, -1)
+        cv2.circle(roi, (r, r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(roi, (width - r, r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(roi, (r, height - r), r, color, -1, cv2.LINE_AA)
+        cv2.circle(roi, (width - r, height - r), r, color, -1, cv2.LINE_AA)
+    else:
+        cv2.line(roi, (r, 0), (width - r, 0), color, thickness, cv2.LINE_AA)
+        cv2.line(roi, (r, height - 1), (width - r, height - 1), color, thickness, cv2.LINE_AA)
+        cv2.line(roi, (0, r), (0, height - r), color, thickness, cv2.LINE_AA)
+        cv2.line(roi, (width - 1, r), (width - 1, height - r), color, thickness, cv2.LINE_AA)
+        cv2.ellipse(roi, (r, r), (r, r), 180, 0, 90, color, thickness, cv2.LINE_AA)
+        cv2.ellipse(roi, (width - r - 1, r), (r, r), 270, 0, 90, color, thickness, cv2.LINE_AA)
+        cv2.ellipse(
+            roi, (width - r - 1, height - r - 1), (r, r), 0, 0, 90, color, thickness, cv2.LINE_AA
+        )
+        cv2.ellipse(roi, (r, height - r - 1), (r, r), 90, 0, 90, color, thickness, cv2.LINE_AA)
+
+
+def draw_glass_card(
+    img: np.ndarray,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    bg_color: Tuple[int, int, int] = COLOR_BG_GLASS,
+    border_color: Tuple[int, int, int] = COLOR_BORDER_GLASS,
+    alpha: float = 0.82,
+    radius: int = 14,
+) -> None:
+    """Draw a frosted floating glass card with smooth drop outline."""
+    draw_rounded_rectangle(
+        img, (x, y), (x + w, y + h), bg_color, radius=radius, thickness=-1, alpha=alpha
+    )
+    draw_rounded_rectangle(
+        img, (x, y), (x + w, y + h), border_color, radius=radius, thickness=1, alpha=1.0
+    )
+
+
+def draw_cyber_hands(
+    img: np.ndarray,
+    landmarks_list: Any,
+    handedness_list: Any = None,
+) -> np.ndarray:
+    """Draw glowing cybernetic skeleton hand landmarks with dual-hand color distinction."""
+    if not landmarks_list:
+        return img
+
+    h, w = img.shape[:2]
+
+    # Normalize structure to list of hands
+    if isinstance(landmarks_list, (list, tuple)) and landmarks_list:
+        if isinstance(landmarks_list[0], (list, tuple)):
+            hands = landmarks_list
+            hands_meta = handedness_list if isinstance(handedness_list, (list, tuple)) else []
+        else:
+            hands = [landmarks_list]
+            hands_meta = [handedness_list] if handedness_list else []
+    else:
+        hands = [landmarks_list]
+        hands_meta = []
+
+    for idx, lms in enumerate(hands):
+        # Determine hand label & themed colors
+        label = "Right"
+        if idx < len(hands_meta) and hands_meta[idx]:
+            label = str(hands_meta[idx])
+        elif idx == 0 and len(hands) > 1:
+            label = "Left"
+
+        if "left" in label.lower():
+            bone_color = COLOR_CYAN_NEON
+            glow_color = COLOR_CYAN_GLOW
+            tag_text = "LEFT"
+        else:
+            bone_color = COLOR_MAGENTA_NEON
+            glow_color = COLOR_MAGENTA_GLOW
+            tag_text = "RIGHT"
+
+        coords = [(int(lm.x * w), int(lm.y * h)) for lm in lms]
+
+        # 1. Outer bone glow lines (thicker)
+        for a, b in HAND_CONNECTIONS:
+            cv2.line(img, coords[a], coords[b], glow_color, 4, cv2.LINE_AA)
+
+        # 2. Inner crisp bone lines
+        for a, b in HAND_CONNECTIONS:
+            cv2.line(img, coords[a], coords[b], COLOR_WHITE, 1, cv2.LINE_AA)
+
+        # 3. Draw joint halos and centers
+        for i, pt in enumerate(coords):
+            if i in FINGERTIP_INDICES:
+                # Glowing fingertip halo
+                cv2.circle(img, pt, 7, glow_color, 2, cv2.LINE_AA)
+                cv2.circle(img, pt, 4, bone_color, -1, cv2.LINE_AA)
+                cv2.circle(img, pt, 2, COLOR_WHITE, -1, cv2.LINE_AA)
+            else:
+                cv2.circle(img, pt, 4, bone_color, -1, cv2.LINE_AA)
+                cv2.circle(img, pt, 1, COLOR_WHITE, -1, cv2.LINE_AA)
+
+        # 4. Wrist label badge
+        wrist = coords[0]
+        bx, by = max(10, wrist[0] - 28), max(30, wrist[1] + 20)
+        draw_rounded_rectangle(
+            img, (bx, by), (bx + 56, by + 18), COLOR_BG_GLASS, radius=6, thickness=-1, alpha=0.85
+        )
+        draw_rounded_rectangle(img, (bx, by), (bx + 56, by + 18), bone_color, radius=6, thickness=1)
+        cv2.putText(
+            img,
+            tag_text,
+            (bx + 8, by + 13),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            bone_color,
+            1,
+            cv2.LINE_AA,
+        )
+
+    return img
+
+
+def draw_keycap(
+    img: np.ndarray,
+    x: int,
+    y: int,
+    key_char: str,
+    action_text: str,
+) -> int:
+    """Draw stylish tactile keycap badge and action label. Returns total width."""
+    # Keycap badge
+    kw = 24 if len(key_char) <= 2 else 32
+    kh = 20
+    draw_rounded_rectangle(
+        img, (x, y), (x + kw, y + kh), COLOR_KEYCAP_BG, radius=5, thickness=-1, alpha=0.9
+    )
+    draw_rounded_rectangle(
+        img, (x, y), (x + kw, y + kh), COLOR_KEYCAP_BORDER, radius=5, thickness=1
+    )
+
+    tx = x + (7 if len(key_char) == 1 else 3)
+    cv2.putText(
+        img, key_char, (tx, y + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.42, COLOR_CYAN_NEON, 1, cv2.LINE_AA
+    )
+
+    # Action label
+    cv2.putText(
+        img,
+        action_text,
+        (x + kw + 6, y + 14),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.40,
+        COLOR_TEXT_DIM,
+        1,
+        cv2.LINE_AA,
+    )
+
+    label_w = int(len(action_text) * 7.5)
+    return kw + 6 + label_w + 14
+
+
+def render_flagship_hud(
+    frame: np.ndarray,
+    mode_name: str,
+    st: dict,
+    transcript: str,
+    fps: float,
+    delegate: str = "CPU",
+    tts_speaking: bool = False,
+    last_spoken: str = "",
+    last_spoken_time: float = 0.0,
+) -> np.ndarray:
+    """Render high-polish cyberpunk glassmorphic HUD over camera frame."""
+    h, w = frame.shape[:2]
+    now = time.monotonic()
+
+    # --------------------------------------------------------------------------
+    # 1. Top Status Pill
+    # --------------------------------------------------------------------------
+    header_w = min(w - 32, 680)
+    hx = (w - header_w) // 2
+    draw_glass_card(frame, hx, 14, header_w, 42, alpha=0.80, radius=12)
+
+    # Live indicator dot (blinks every second)
+    dot_color = COLOR_EMERALD if int(now * 2) % 2 == 0 else COLOR_CYAN_NEON
+    cv2.circle(frame, (hx + 20, 35), 5, dot_color, -1, cv2.LINE_AA)
+
+    # Brand & Mode Name
+    cv2.putText(
+        frame, "SIGNORA", (hx + 34, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.58, COLOR_WHITE, 2, cv2.LINE_AA
+    )
+    cv2.putText(
+        frame,
+        f"//  {mode_name.upper()}",
+        (hx + 130, 38),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.50,
+        COLOR_CYAN_NEON,
+        1,
+        cv2.LINE_AA,
+    )
+
+    # Metrics on the right
+    fps_color = (
+        COLOR_EMERALD if fps >= 20.0 else (COLOR_AMBER if fps >= 10.0 else COLOR_MAGENTA_NEON)
+    )
+    metrics_str = f"{fps:4.1f} FPS   |   {delegate.upper()}   |   LOCAL"
+    cv2.putText(
+        frame,
+        metrics_str,
+        (hx + header_w - 240, 38),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.44,
+        fps_color,
+        1,
+        cv2.LINE_AA,
+    )
+
+    # --------------------------------------------------------------------------
+    # 2. Right Floating Candidate Prediction Card
+    # --------------------------------------------------------------------------
+    cand = st.get("candidate")
+    dwell = float(st.get("dwell_progress", 0.0))
+
+    if cand:
+        cw, ch = 200, 115
+        cx = w - cw - 20
+        cy = 68
+
+        draw_glass_card(frame, cx, cy, cw, ch, border_color=COLOR_CYAN_NEON, alpha=0.88, radius=14)
+
+        # Card Title
+        cv2.putText(
+            frame,
+            "DETECTED SIGN",
+            (cx + 16, cy + 24),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.40,
+            COLOR_TEXT_DIM,
+            1,
+            cv2.LINE_AA,
+        )
+
+        # Active Sign Display
+        disp_cand = "[SPACE]" if cand == "SPACE" else cand
+        font_scale = 1.3 if len(disp_cand) <= 2 else 0.8
+        cv2.putText(
+            frame,
+            disp_cand,
+            (cx + 18, cy + 68),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_scale,
+            COLOR_WHITE,
+            2,
+            cv2.LINE_AA,
+        )
+
+        # Smooth Neon Dwell Progress Bar
+        bar_x, bar_y, bar_w, bar_h = cx + 16, cy + 86, cw - 32, 10
+        draw_rounded_rectangle(
+            frame,
+            (bar_x, bar_y),
+            (bar_x + bar_w, bar_y + bar_h),
+            COLOR_KEYCAP_BG,
+            radius=4,
+            thickness=-1,
+        )
+
+        fill_w = int(bar_w * max(0.0, min(1.0, dwell)))
+        if fill_w > 4:
+            bar_color = COLOR_EMERALD if dwell >= 0.95 else COLOR_CYAN_NEON
+            draw_rounded_rectangle(
+                frame,
+                (bar_x, bar_y),
+                (bar_x + fill_w, bar_y + bar_h),
+                bar_color,
+                radius=4,
+                thickness=-1,
+            )
+
+        # Percentage text
+        pct_text = f"{int(dwell * 100)}%"
+        cv2.putText(
+            frame,
+            pct_text,
+            (cx + cw - 48, cy + 24),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.40,
+            COLOR_CYAN_NEON,
+            1,
+            cv2.LINE_AA,
+        )
+
+    # --------------------------------------------------------------------------
+    # 3. Audio TTS Speaking Banner (Floating Center Popup)
+    # --------------------------------------------------------------------------
+    speech_active = tts_speaking or (now - last_spoken_time < 2.2 and bool(last_spoken))
+    if speech_active and last_spoken:
+        tw, th = min(w - 40, 520), 40
+        tx = (w - tw) // 2
+        ty = 68
+        draw_glass_card(frame, tx, ty, tw, th, border_color=COLOR_EMERALD, alpha=0.92, radius=12)
+
+        # Glowing audio soundwave icon
+        cv2.circle(frame, (tx + 22, ty + 20), 6, COLOR_EMERALD, -1, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            "SPEAKING:",
+            (tx + 36, ty + 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            COLOR_EMERALD,
+            2,
+            cv2.LINE_AA,
+        )
+
+        clean_spoken = last_spoken[:38] + ("..." if len(last_spoken) > 38 else "")
+        cv2.putText(
+            frame,
+            f'"{clean_spoken}"',
+            (tx + 130, ty + 25),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.52,
+            COLOR_WHITE,
+            1,
+            cv2.LINE_AA,
+        )
+
+    # --------------------------------------------------------------------------
+    # 4. Bottom Floating Transcript Console
+    # --------------------------------------------------------------------------
+    card_w = min(w - 32, 880)
+    card_h = 105
+    bx = (w - card_w) // 2
+    by = h - card_h - 14
+
+    draw_glass_card(frame, bx, by, card_w, card_h, alpha=0.86, radius=16)
+
+    # Transcript Header with Status Dot
+    cv2.circle(frame, (bx + 20, by + 24), 4, COLOR_EMERALD, -1, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        "LIVE TRANSCRIPT",
+        (bx + 32, by + 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.42,
+        COLOR_TEXT_DIM,
+        1,
+        cv2.LINE_AA,
+    )
+
+    # Transcript Text with glowing cursor
+    char_count = len(transcript)
+    if char_count > 0:
+        disp_txt = transcript[-45:] if char_count > 45 else transcript
+        cursor = "_" if int(now * 2.5) % 2 == 0 else ""
+        cv2.putText(
+            frame,
+            f"{disp_txt}{cursor}",
+            (bx + 20, by + 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.85,
+            COLOR_EMERALD,
+            2,
+            cv2.LINE_AA,
+        )
+    else:
+        cursor = "_" if int(now * 2) % 2 == 0 else ""
+        hint = f"Perform sign gestures to build transcript{cursor}"
+        cv2.putText(
+            frame,
+            hint,
+            (bx + 20, by + 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.60,
+            COLOR_BORDER_GLASS,
+            1,
+            cv2.LINE_AA,
+        )
+
+    # Hotkey Badges in Footer Row
+    ky = by + 74
+    kx = bx + 20
+    kx += draw_keycap(frame, kx, ky, "C", "Clear")
+    kx += draw_keycap(frame, kx, ky, "R", "Speak")
+    kx += draw_keycap(frame, kx, ky, "Bksp", "Undo")
+    kx += draw_keycap(frame, kx, ky, "F", "Fullscreen")
+    kx += draw_keycap(frame, kx, ky, "Q", "Quit")
+
+    return frame

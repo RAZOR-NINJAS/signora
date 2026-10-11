@@ -4,6 +4,7 @@ import atexit
 import io
 import queue
 import threading
+import time
 import wave
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -35,6 +36,8 @@ class PiperTTS:
         self._cache: Dict[str, Tuple[np.ndarray, int]] = {}
         self.is_speaking = False
         self.is_ready = False
+        self.last_spoken_text = ""
+        self.last_spoken_time = 0.0
 
         if not self.enabled:
             return
@@ -86,6 +89,8 @@ class PiperTTS:
                 continue
 
             self.is_speaking = True
+            self.last_spoken_text = text.strip()
+            self.last_spoken_time = time.monotonic()
             try:
                 upper = text.strip().upper()
                 if upper in self._cache:
@@ -112,6 +117,8 @@ class PiperTTS:
         """Enqueue text for non-blocking speech playback."""
         if not self.is_ready or not text.strip():
             return
+        self.last_spoken_text = text.strip()
+        self.last_spoken_time = time.monotonic()
         try:
             self._queue.put_nowait(text.strip())
         except queue.Full:
