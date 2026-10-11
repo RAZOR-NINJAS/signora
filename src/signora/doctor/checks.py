@@ -308,7 +308,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                     else "[bold yellow]INFO[/bold yellow]"
                 )
                 console.print(
-                    f"  • {tag} [bold white]{issue.name}[/bold white]: {issue.remediation}"
+                    f"  * {tag} [bold white]{issue.name}[/bold white]: {issue.remediation}"
                 )
             console.print()
 

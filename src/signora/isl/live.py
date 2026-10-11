@@ -103,7 +103,7 @@ def run_isl_live(
 ) -> int:
     """Run real-time ISL recognition loop."""
     print("=" * 60)
-    print("  SIGNORA — Indian Sign Language (ISL) Two-Handed Mode")
+    print("  SIGNORA -- Indian Sign Language (ISL) Two-Handed Mode")
     print("=" * 60)
 
     try:

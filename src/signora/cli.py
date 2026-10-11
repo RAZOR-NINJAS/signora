@@ -8,6 +8,18 @@ import argparse
 import sys
 from typing import List, Optional
 
+# Ensure safe console encoding on Windows CP1252 / legacy shells
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from signora import __version__
 
 
@@ -236,7 +248,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 p = models_dir / info["filename"]
                 status = "INSTALLED" if p.exists() else "MISSING"
                 print(
-                    f"  • {k:16s} [{status:9s}] {info['filename']} ({info.get('description', '')})"
+                    f"  * {k:16s} [{status:9s}] {info['filename']} ({info.get('description', '')})"
                 )
             return 0
 

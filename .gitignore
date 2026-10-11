@@ -21,6 +21,7 @@ build/
 .ruff_cache/
 .coverage
 htmlcov/
+uv.lock
 
 # Neural model weights and audio binaries (downloaded via scripts/fetch_models.py)
 models/*.task

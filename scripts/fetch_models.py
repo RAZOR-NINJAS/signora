@@ -15,6 +15,18 @@ import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# Ensure safe console encoding on Windows CP1252 / legacy shells
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Locate models.json relative to repository layout
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MANIFEST = REPO_ROOT / "src" / "signora" / "models" / "models.json"
@@ -141,19 +153,19 @@ def fetch_models(
         expected_size = item.get("size_bytes", 0)
         desc = item.get("description", key)
 
-        print(f"• [{key}] {filename} ({format_bytes(expected_size)})")
+        print(f"* [{key}] {filename} ({format_bytes(expected_size)})")
         print(f"  Description: {desc}")
 
         if dest.exists() and dest.stat().st_size > 0:
             actual_sha = compute_sha256(dest)
             if actual_sha.lower() == expected_sha.lower():
-                print("  ✓ Present & verified (SHA-256 match)")
+                print("  [OK] Present & verified (SHA-256 match)")
                 continue
             else:
-                print("  ⚠ Existing file corrupt or outdated. Checksum mismatch.")
+                print("  [WARN] Existing file corrupt or outdated. Checksum mismatch.")
 
         if verify_only:
-            print("  ✗ MISSING or corrupt (verification mode)")
+            print("  [FAIL] MISSING or corrupt (verification mode)")
             all_passed = False
             continue
 
@@ -163,21 +175,21 @@ def fetch_models(
         for url in urls:
             print(f"  Downloading from: {url}")
             if download_file_with_progress(url, dest, expected_sha, expected_size):
-                print(f"  ✓ Successfully downloaded and verified {filename}")
+                print(f"  [OK] Successfully downloaded and verified {filename}")
                 success = True
                 break
             else:
                 print("  Trying next mirror...")
 
         if not success:
-            print(f"  ✗ Failed to download {filename} from all mirrors.")
+            print(f"  [FAIL] Failed to download {filename} from all mirrors.")
             all_passed = False
 
     print("\n" + ("=" * 40))
     if all_passed:
-        print("✓ All requested models verified.")
+        print("[OK] All requested models verified.")
     else:
-        print("✗ One or more models failed verification.")
+        print("[FAIL] One or more models failed verification.")
     print("=" * 40 + "\n")
 
     return all_passed

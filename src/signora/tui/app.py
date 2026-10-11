@@ -135,7 +135,7 @@ class SignoraTUI:
         table.add_row(
             "8", "Probe Webcams", "Enumerate available video capture hardware devices", "Instant"
         )
-        table.add_row("0", "Exit", "Close Signora dashboard", "—")
+        table.add_row("0", "Exit", "Close Signora dashboard", "-")
 
         self.console.print(table)
         self.console.print()
@@ -149,7 +149,7 @@ class SignoraTUI:
 
     def run_asl_flow(self) -> None:
         self.console.print(
-            "\n[bold cyan]═══ Launching ASL Fingerspelling Recognition ═══[/bold cyan]"
+            "\n[bold cyan]=== Launching ASL Fingerspelling Recognition ===[/bold cyan]"
         )
         self.console.print(
             "[dim]Hotkeys in recognition window: [ESC/Q] Quit | [SPACE] Speak | [C] Clear | [BACKSPACE] Undo[/dim]\n"
@@ -164,7 +164,7 @@ class SignoraTUI:
 
     def run_isl_flow(self) -> None:
         self.console.print(
-            "\n[bold cyan]═══ Launching Indian Sign Language (ISL) Recognition ═══[/bold cyan]"
+            "\n[bold cyan]=== Launching Indian Sign Language (ISL) Recognition ===[/bold cyan]"
         )
         self.console.print("[dim]Dual-handed 164D normalized spatial geometry engine.[/dim]\n")
         from signora.isl.live import run_isl_live
@@ -177,7 +177,7 @@ class SignoraTUI:
 
     def run_words_flow(self) -> None:
         self.console.print(
-            "\n[bold cyan]═══ Launching ASL Dynamic Words Recognition ═══[/bold cyan]"
+            "\n[bold cyan]=== Launching ASL Dynamic Words Recognition ===[/bold cyan]"
         )
         self.console.print("[dim]Holistic trajectory sequence classifier (DTW-kNN).[/dim]\n")
         from signora.words.live import run_live
@@ -193,7 +193,7 @@ class SignoraTUI:
             "Launch in fullscreen browser kiosk mode?", default=False, console=self.console
         )
         self.console.print(
-            "\n[bold cyan]═══ Starting Shadow-Play Dino Runner Server ═══[/bold cyan]"
+            "\n[bold cyan]=== Starting Shadow-Play Dino Runner Server ===[/bold cyan]"
         )
         from signora.game.server import serve
 
@@ -208,7 +208,7 @@ class SignoraTUI:
             "Launch in fullscreen browser kiosk mode?", default=False, console=self.console
         )
         self.console.print(
-            "\n[bold cyan]═══ Starting Interactive Learning Kiosk Server ═══[/bold cyan]"
+            "\n[bold cyan]=== Starting Interactive Learning Kiosk Server ===[/bold cyan]"
         )
         from signora.learn.server import serve
 
@@ -220,7 +220,7 @@ class SignoraTUI:
 
     def run_doctor_flow(self) -> None:
         self.console.print(
-            "\n[bold cyan]═══ Running Signora Diagnostics (10 Checks) ═══[/bold cyan]\n"
+            "\n[bold cyan]=== Running Signora Diagnostics (10 Checks) ===[/bold cyan]\n"
         )
         checks = run_all_checks()
 
@@ -244,7 +244,7 @@ class SignoraTUI:
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
     def run_models_flow(self) -> None:
-        self.console.print("\n[bold cyan]═══ Model Asset Manager ═══[/bold cyan]")
+        self.console.print("\n[bold cyan]=== Model Asset Manager ===[/bold cyan]")
         self.console.print(f"Directory: [bold white]{self.models_dir}[/bold white]\n")
 
         manifest = load_manifest()
@@ -279,7 +279,7 @@ class SignoraTUI:
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
     def run_camera_probe_flow(self) -> None:
-        self.console.print("\n[bold cyan]═══ Hardware Camera Probe ═══[/bold cyan]\n")
+        self.console.print("\n[bold cyan]=== Hardware Camera Probe ===[/bold cyan]\n")
         cams = probe_cameras(max_probe=4)
         if not cams:
             self.console.print(

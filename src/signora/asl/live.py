@@ -105,7 +105,7 @@ def run_asl_live(
 ) -> int:
     """Run real-time ASL fingerspelling recognition loop."""
     print("=" * 60)
-    print("  SIGNORA — American Sign Language (ASL) Fingerspelling")
+    print("  SIGNORA -- American Sign Language (ASL) Fingerspelling")
     print("=" * 60)
 
     try:
