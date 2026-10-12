@@ -37,6 +37,8 @@ models/*.npz
 # Logs & temporary files
 *.log
 *.part
+*.bak
+data/
 scratch/
 temp/
 
