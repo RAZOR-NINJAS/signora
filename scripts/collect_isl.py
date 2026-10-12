@@ -40,6 +40,105 @@ from signora.isl.features import extract_features
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "isl"
 
+ISL_GUIDES = {
+    "A": (
+        "ISL 'A': Open left hand palm facing you. Right index touches left THUMB tip.",
+        "Vowel 1 of 5 (Thumb = A, Index = E, Middle = I, Ring = O, Pinky = U).",
+    ),
+    "B": (
+        "ISL 'B': Bring both hands together forming two circles (like binoculars or '8').",
+        "Both index and thumbs meet to form two adjacent loops of 'B'.",
+    ),
+    "C": (
+        "ISL 'C': Right hand curved in a 'C' shape in front of chest (1-handed).",
+        "Open curved arc with thumb and fingers.",
+    ),
+    "D": (
+        "ISL 'D': Left index points UP (stem). Right thumb & index curve into 'C'",
+        "touching left index tip and base to complete the capital 'D' loop.",
+    ),
+    "E": (
+        "ISL 'E': Open left hand palm facing you. Right index touches left INDEX fingertip.",
+        "Vowel 2 of 5 (Thumb = A, Index = E, Middle = I, Ring = O, Pinky = U).",
+    ),
+    "F": (
+        "ISL 'F': Right index and middle fingers cross horizontally over left index and middle.",
+        "Forms a 2-finger cross / hashtag shape.",
+    ),
+    "G": (
+        "ISL 'G': Both hands formed into fists, one fist resting on top of the other.",
+        "Right fist placed directly above left fist.",
+    ),
+    "H": (
+        "ISL 'H': Open left flat palm facing up. Right flat hand brushes across left palm.",
+        "Straight sweeping motion from wrist to fingertips across palm.",
+    ),
+    "I": (
+        "ISL 'I': Open left hand palm facing you. Right index touches left MIDDLE fingertip.",
+        "Vowel 3 of 5 (Thumb = A, Index = E, Middle = I, Ring = O, Pinky = U).",
+    ),
+    "K": (
+        "ISL 'K': Left index points UP. Right index hooks against left index knuckle.",
+        "Right index bent like a hook touching left vertical stem.",
+    ),
+    "L": (
+        "ISL 'L': Single hand forming an 'L' shape with thumb and index finger extended.",
+        "Other 3 fingers folded into palm (1-handed).",
+    ),
+    "M": (
+        "ISL 'M': Left open flat palm facing up. Right hand places 3 fingers (index, mid, ring) on palm.",
+        "Represents 3 downward strokes of letter 'M'.",
+    ),
+    "N": (
+        "ISL 'N': Left open flat palm facing up. Right hand places 2 fingers (index, middle) on palm.",
+        "Represents 2 downward strokes of letter 'N'.",
+    ),
+    "O": (
+        "ISL 'O': Open left hand palm facing you. Right index touches left RING fingertip.",
+        "Vowel 4 of 5 (Thumb = A, Index = E, Middle = I, Ring = O, Pinky = U).",
+    ),
+    "P": (
+        "ISL 'P': Left index points UP. Right index & thumb form a circle touching left index tip.",
+        "Forms the upper loop of letter 'P'.",
+    ),
+    "Q": (
+        "ISL 'Q': Left hand forms an 'O' circle. Right index hooks into the bottom of the circle.",
+        "Forms the tail of letter 'Q'.",
+    ),
+    "R": (
+        "ISL 'R': Right index finger hooked/curved resting on top of left open flat palm.",
+        "Forms the rounded arc of letter 'R'.",
+    ),
+    "S": (
+        "ISL 'S': Left pinky extended. Right pinky hooked with left pinky.",
+        "Both pinky fingers interlocked like an 'S'.",
+    ),
+    "T": (
+        "ISL 'T': Left open flat palm vertical. Right index points horizontally at left palm edge.",
+        "Forms a 'T' shape intersection.",
+    ),
+    "U": (
+        "ISL 'U': Open left hand palm facing you. Right index touches left PINKY fingertip.",
+        "Vowel 5 of 5 (Thumb = A, Index = E, Middle = I, Ring = O, Pinky = U).",
+    ),
+    "V": (
+        "ISL 'V': Form a 'V' peace sign with index and middle fingers (1-handed).",
+        "Index and middle fingers spread apart.",
+    ),
+    "W": (
+        "ISL 'W': Interlock fingers of both hands together pointing upwards.",
+        "Forms 3 or 4 points of a 'W'.",
+    ),
+    "X": (
+        "ISL 'X': Cross both extended index fingers to form an 'X'.",
+        "Left index and right index crossed at mid-finger.",
+    ),
+    "Y": (
+        "ISL 'Y': Left index extended pointing up. Right index points into V-crotch of left thumb & index.",
+        "Forms a 'Y' junction.",
+    ),
+}
+
 
 def draw_hud(
     frame: np.ndarray,
@@ -141,13 +240,14 @@ def draw_hud(
             cv2.LINE_AA,
         )
 
-    # ISL Letter D Gesture Guide Box (Bottom Left)
-    if sign.upper() == "D":
+    # Dynamic ISL Posture Guide Box
+    guide = ISL_GUIDES.get(sign.upper())
+    if guide:
         cv2.rectangle(frame, (12, h - 75), (w - 12, h - 12), (20, 20, 20), -1)
         cv2.rectangle(frame, (12, h - 75), (w - 12, h - 12), (99, 102, 241), 1)
         cv2.putText(
             frame,
-            "ISL 'D' GUIDE: Left index points UP (stem). Right thumb & index curve into 'C'",
+            guide[0],
             (20, h - 48),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
@@ -157,7 +257,7 @@ def draw_hud(
         )
         cv2.putText(
             frame,
-            "touching left index tip and base to complete the capital 'D' loop.",
+            guide[1],
             (20, h - 26),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.45,
