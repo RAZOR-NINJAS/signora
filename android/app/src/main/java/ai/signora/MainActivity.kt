@@ -42,8 +42,13 @@ class MainActivity : ComponentActivity() {
     private var assetStatus by mutableStateOf(AutoAssetManager.AssetStatus(isReady = false, message = "Initializing..."))
     private var currentMode by mutableStateOf(RecognitionMode.ASL)
     private var dwellProfile by mutableStateOf(DwellProfile.STANDARD)
+    private var customDwellMs by mutableStateOf(1000L)
+    private var confidenceThreshold by mutableStateOf(0.70f)
+    private var minMargin by mutableStateOf(0.10f)
     private var isMuted by mutableStateOf(false)
     private var isFrontCamera by mutableStateOf(true)
+    private var isTorchOn by mutableStateOf(false)
+    private var isPaused by mutableStateOf(false)
     private var themeMode by mutableStateOf(AppThemeMode.DARK)
     private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
@@ -51,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
     private var frameCount = 0
     private var lastFpsTimestamp = System.currentTimeMillis()
-    private var currentFps = 30f
+    private var currentFps by mutableStateOf(30f)
 
     private lateinit var previewView: PreviewView
 
@@ -91,11 +96,33 @@ class MainActivity : ComponentActivity() {
                     dwellProfile = dwellProfile,
                     isMuted = isMuted,
                     isFrontCamera = isFrontCamera,
+                    isTorchOn = isTorchOn,
+                    isPaused = isPaused,
+                    fps = currentFps,
+                    isDark = themeMode == AppThemeMode.DARK,
+                    themeMode = themeMode,
+                    dynamicColor = dynamicColorEnabled,
+                    customDwellMs = customDwellMs,
+                    confidenceThreshold = confidenceThreshold,
+                    minMargin = minMargin,
                     assetStatus = assetStatus,
                     onModeChange = { newMode -> currentMode = newMode },
                     onDwellProfileChange = { newProfile ->
                         dwellProfile = newProfile
+                        customDwellMs = newProfile.dwellMs
                         debounceEngine.dwellMs = newProfile.dwellMs
+                    },
+                    onCustomDwellChange = { ms ->
+                        customDwellMs = ms
+                        debounceEngine.dwellMs = ms
+                    },
+                    onConfidenceThresholdChange = { conf ->
+                        confidenceThreshold = conf
+                        debounceEngine.confidenceThreshold = conf
+                    },
+                    onMinMarginChange = { margin ->
+                        minMargin = margin
+                        debounceEngine.minMargin = margin
                     },
                     onToggleMute = {
                         isMuted = !isMuted
@@ -104,6 +131,22 @@ class MainActivity : ComponentActivity() {
                     onToggleCamera = {
                         cameraManager?.toggleCamera()
                         isFrontCamera = cameraManager?.isFrontCamera ?: true
+                        isTorchOn = false
+                    },
+                    onToggleTorch = {
+                        isTorchOn = cameraManager?.toggleTorch() ?: false
+                    },
+                    onTogglePause = {
+                        isPaused = !isPaused
+                        cameraManager?.isPaused = isPaused
+                    },
+                    onToggleTheme = {
+                        themeMode = if (themeMode == AppThemeMode.DARK) AppThemeMode.LIGHT else AppThemeMode.DARK
+                    },
+                    onThemeModeChange = { themeMode = it },
+                    onDynamicColorChange = { dynamicColorEnabled = it },
+                    onTestVoice = {
+                        speechManager.speak("Testing Unspoken Neural Voice synthesizer")
                     },
                     onBackspace = {
                         debounceEngine.backspace()
@@ -191,6 +234,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onHandsDetected(hands: List<HandLandmarks>, timestamp: Long) {
+        if (isPaused) return
+
         activeLandmarks = hands
 
         // Calculate real-time FPS

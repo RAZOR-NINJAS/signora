@@ -22,6 +22,9 @@ class DebounceEngine(
     private val maxDropoutMs: Long = 150L,
     private val spaceDwellMs: Long = 800L
 ) {
+    var confidenceThreshold: Float
+        get() = threshold
+        set(value) { threshold = value }
     // Sliding vote buffer of recent valid frame labels
     private val voteWindow = ArrayDeque<String>()
 

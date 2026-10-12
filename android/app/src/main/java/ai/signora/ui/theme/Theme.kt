@@ -161,7 +161,10 @@ data class SemanticColors(
     val handRightBone: Color,
     val handLeftBone: Color,
     val handJoint: Color
-)
+) {
+    val handRightJoint: Color get() = handJoint
+    val handLeftJoint: Color get() = handJoint
+}
 
 val LightSemanticColors = SemanticColors(
     success = Color(0xFF1A6C35),
