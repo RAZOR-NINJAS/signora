@@ -9,10 +9,10 @@ import ai.signora.models.RecognitionResult
  * Implements smoothing, dwell progress tracking, repeat cooldown, and transcript retention.
  */
 class DebounceEngine(
-    var dwellMs: Long = 600L,
+    var dwellMs: Long = 1000L,
     var threshold: Float = 0.52f,
     private val smoothMs: Long = 300L,
-    private val spaceDwellMs: Long = 500L,
+    private val spaceDwellMs: Long = 800L,
     private val repeatCooldownMs: Long = 550L
 ) {
     private data class HistoryEntry(val timestampMs: Long, val label: String, val confidence: Float)

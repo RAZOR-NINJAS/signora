@@ -2,6 +2,9 @@ package ai.signora.ui
 
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,14 +22,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import ai.signora.models.*
 import ai.signora.recovery.AutoAssetManager
+import java.util.Locale
 
 @Composable
 fun SignoraScreen(
@@ -70,14 +74,13 @@ fun SignoraScreen(
             val canvasW = size.width
             val canvasH = size.height
 
-            // Draw hand skeleton with Material 3 Expressive colors
             for (hand in handLandmarks) {
                 val pts = hand.points
                 if (pts.size < 21) continue
 
                 val isRight = hand.isRightHand
-                // Material 3 Expressive palette: Cyan/Mint for Right Hand, Coral/Amber for Left Hand
-                val boneColor = if (isRight) Cyan400.copy(alpha = 0.75f) else Magenta400.copy(alpha = 0.70f)
+                // Expressive dual-tone hand palette: Cyan/Mint for Right Hand, Magenta/Coral for Left Hand
+                val boneColor = if (isRight) Cyan400.copy(alpha = 0.80f) else Magenta400.copy(alpha = 0.75f)
                 val jointColor = if (isRight) Emerald400 else Amber400
 
                 val connections = listOf(
@@ -111,7 +114,7 @@ fun SignoraScreen(
                     )
                     drawCircle(
                         color = jointColor.copy(alpha = 0.35f),
-                        radius = 11f,
+                        radius = 12f,
                         center = center,
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f)
                     )
@@ -119,7 +122,7 @@ fun SignoraScreen(
             }
         }
 
-        // 3. Material 3 Expressive Top Bar
+        // 3. Material 3 Expressive Top App Bar & Pills
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -128,7 +131,7 @@ fun SignoraScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // App Name & Signora Engine Badge & Mode Switcher
+            // App Name & Codename Signora Badge & Mode Pill
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -151,7 +154,7 @@ fun SignoraScreen(
                             letterSpacing = 2.sp
                         )
 
-                        // Codename Signora chip
+                        // Codename: Signora Pill
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
@@ -169,7 +172,7 @@ fun SignoraScreen(
                     }
                 }
 
-                // Mode Switcher Pill (ASL / ISL)
+                // Recognition Mode Switcher Pill (ASL / ISL)
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = if (currentMode == RecognitionMode.ISL) ExpressiveSecondaryContainer else ExpressivePrimaryContainer,
@@ -183,11 +186,11 @@ fun SignoraScreen(
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(6.dp)
+                                .size(7.dp)
                                 .clip(CircleShape)
                                 .background(if (currentMode == RecognitionMode.ISL) ExpressiveSecondaryLight else ExpressivePrimaryLight)
                         )
@@ -201,12 +204,12 @@ fun SignoraScreen(
                 }
             }
 
-            // Right Utilities (FPS, Audio, Flip, Settings)
+            // Right Quick Actions & Status Cluster
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // FPS Pill
+                // Real-time FPS Pill
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = SurfaceContainer.copy(alpha = 0.92f),
@@ -232,7 +235,7 @@ fun SignoraScreen(
                     }
                 }
 
-                // Mute / Unmute
+                // Audio Mute / Unmute Pill Button
                 IconButton(
                     onClick = onToggleMute,
                     modifier = Modifier
@@ -249,7 +252,7 @@ fun SignoraScreen(
                     )
                 }
 
-                // Camera Flip
+                // Flip Camera Pill Button
                 IconButton(
                     onClick = onToggleCamera,
                     modifier = Modifier
@@ -266,7 +269,7 @@ fun SignoraScreen(
                     )
                 }
 
-                // Settings
+                // Settings Pill Button
                 IconButton(
                     onClick = { showSettings = true },
                     modifier = Modifier
@@ -276,7 +279,7 @@ fun SignoraScreen(
                         .border(1.dp, ExpressiveBorder, CircleShape)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Settings,
+                        imageVector = Icons.Default.Tune,
                         contentDescription = "Settings",
                         tint = Slate100,
                         modifier = Modifier.size(18.dp)
@@ -285,30 +288,73 @@ fun SignoraScreen(
             }
         }
 
-        // 4. Center Expressive Dwell Circle Target
-        if (debounceState.candidate.isNotBlank() && debounceState.dwellProgress > 0f) {
-            Box(
+        // 4. Center Material 3 Expressive Dwell HUD Target
+        AnimatedVisibility(
+            visible = debounceState.candidate.isNotBlank() && debounceState.dwellProgress > 0f,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = SurfaceDark.copy(alpha = 0.85f),
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(108.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceDark.copy(alpha = 0.70f))
-                    .border(2.dp, ExpressiveBorder, CircleShape),
-                contentAlignment = Alignment.Center
+                    .border(2.dp, ExpressivePrimary.copy(alpha = 0.40f), RoundedCornerShape(28.dp))
+                    .padding(4.dp)
             ) {
-                CircularProgressIndicator(
-                    progress = { debounceState.dwellProgress },
-                    modifier = Modifier.size(96.dp),
-                    color = ExpressivePrimary,
-                    strokeWidth = 5.dp,
-                    trackColor = ExpressivePrimary.copy(alpha = 0.15f)
-                )
-                Text(
-                    text = debounceState.candidate,
-                    color = PureWhite,
-                    fontSize = 36.sp,
-                    fontWeight = FontWeight.Black
-                )
+                Column(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier.size(116.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Background track
+                        CircularProgressIndicator(
+                            progress = { 1f },
+                            modifier = Modifier.size(116.dp),
+                            color = ExpressivePrimary.copy(alpha = 0.15f),
+                            strokeWidth = 6.dp
+                        )
+                        // Active Dwell Progress Arc
+                        CircularProgressIndicator(
+                            progress = { debounceState.dwellProgress },
+                            modifier = Modifier.size(116.dp),
+                            color = ExpressivePrimary,
+                            strokeWidth = 6.dp,
+                            strokeCap = StrokeCap.Round
+                        )
+                        // Candidate Letter
+                        Text(
+                            text = debounceState.candidate,
+                            color = PureWhite,
+                            fontSize = 42.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Live Dwell Countdown Pill Badge
+                    val elapsedSeconds = debounceState.dwellProgress * (dwellProfile.dwellMs / 1000f)
+                    val formattedElapsed = String.format(Locale.US, "%.2fs", elapsedSeconds)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = ExpressivePrimaryContainer.copy(alpha = 0.70f),
+                        modifier = Modifier.border(1.dp, ExpressiveBorder, RoundedCornerShape(12.dp))
+                    ) {
+                        Text(
+                            text = "$formattedElapsed / ${dwellProfile.label}",
+                            color = ExpressivePrimaryLight,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
             }
         }
 
@@ -335,13 +381,24 @@ fun SignoraScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(
-                                text = "ACTIVE SIGN",
-                                color = Slate400,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.5.sp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(if (debounceState.candidate.isNotBlank()) ExpressiveEmerald else Slate500)
+                                )
+                                Text(
+                                    text = "ACTIVE SIGN",
+                                    color = Slate400,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.5.sp
+                                )
+                            }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = if (debounceState.candidate.isNotBlank()) debounceState.candidate else "READY",
@@ -351,31 +408,69 @@ fun SignoraScreen(
                             )
                         }
 
-                        if (debounceState.candidate.isNotBlank()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (debounceState.candidate.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = ExpressivePrimaryContainer,
+                                    modifier = Modifier.border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
+                                ) {
+                                    Text(
+                                        text = "${(debounceState.confidence * 100).toInt()}% CONF",
+                                        color = ExpressivePrimaryLight,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+
+                            // Dwell Profile Badge Pill
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = ExpressivePrimaryContainer,
+                                color = SurfaceContainerHigh,
                                 modifier = Modifier.border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
                             ) {
                                 Text(
-                                    text = "${(debounceState.confidence * 100).toInt()}% CONF",
-                                    color = ExpressivePrimaryLight,
+                                    text = dwellProfile.label,
+                                    color = Slate100,
                                     fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
                             }
                         }
                     }
 
-                    // Smooth Dwell Progress Line
-                    Spacer(modifier = Modifier.height(12.dp))
+                    // Smooth Dwell Progress Bar with Timing Labels
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (debounceState.dwellProgress > 0f) "HOLDING..." else "DWELL TIMER",
+                            color = if (debounceState.dwellProgress > 0f) ExpressivePrimaryLight else Slate500,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "${(debounceState.dwellProgress * 100).toInt()}%",
+                            color = Slate400,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                     LinearProgressIndicator(
                         progress = { debounceState.dwellProgress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp)),
                         color = ExpressivePrimary,
                         trackColor = SurfaceContainerHigh
                     )
@@ -392,12 +487,12 @@ fun SignoraScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 48.dp)
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .heightIn(min = 50.dp)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             Text(
-                                text = if (debounceState.transcript.isNotBlank()) debounceState.transcript else "Hold sign gesture in camera view to transcribe...",
+                                text = if (debounceState.transcript.isNotBlank()) debounceState.transcript else "Hold sign gesture steadily to transcribe text...",
                                 color = if (debounceState.transcript.isNotBlank()) Slate100 else Slate500,
                                 fontSize = 16.sp,
                                 fontFamily = FontFamily.Monospace,
@@ -406,7 +501,7 @@ fun SignoraScreen(
                         }
                     }
 
-                    // Expressive Action Buttons
+                    // Expressive Action Buttons (Material 3 Expressive Rounded Pills)
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -416,9 +511,11 @@ fun SignoraScreen(
                             onClick = onSpace,
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate100),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ExpressiveBorder),
+                            border = BorderStroke(1.dp, ExpressiveBorder),
                             modifier = Modifier.weight(1f)
                         ) {
+                            Icon(Icons.Default.SpaceBar, contentDescription = "Space", modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("SPACE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
@@ -426,9 +523,11 @@ fun SignoraScreen(
                             onClick = onBackspace,
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate300),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ExpressiveBorder),
+                            border = BorderStroke(1.dp, ExpressiveBorder),
                             modifier = Modifier.weight(1f)
                         ) {
+                            Icon(Icons.Default.Backspace, contentDescription = "Delete", modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("DEL", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
@@ -436,9 +535,11 @@ fun SignoraScreen(
                             onClick = onClear,
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = ExpressiveTertiaryLight),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ExpressiveBorder),
+                            border = BorderStroke(1.dp, ExpressiveBorder),
                             modifier = Modifier.weight(1f)
                         ) {
+                            Icon(Icons.Default.DeleteOutline, contentDescription = "Clear", modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("CLEAR", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
@@ -452,7 +553,7 @@ fun SignoraScreen(
                             modifier = Modifier.weight(1.2f)
                         ) {
                             Icon(Icons.Filled.VolumeUp, contentDescription = "Speak", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text("SPEAK", fontSize = 11.sp, fontWeight = FontWeight.Black)
                         }
                     }
@@ -468,94 +569,236 @@ fun SignoraScreen(
                 shape = RoundedCornerShape(28.dp),
                 title = {
                     Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Tune,
+                                contentDescription = null,
+                                tint = ExpressivePrimaryLight,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                "Settings & Preferences",
+                                color = PureWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            "Unspoken Settings",
-                            color = PureWhite,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            "Codename: Signora • v0.2.0",
+                            "Unspoken • Material 3 Expressive UI",
                             color = ExpressivePrimaryLight,
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 },
                 text = {
-                    Column {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Text(
-                            "Dwell Hold Time Profile",
+                            "DWELL DURATION PROFILE",
                             color = Slate400,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Material 3 Expressive Selectable Cards for Dwell Profiles
                         DwellProfile.values().forEach { profile ->
-                            Row(
+                            val isSelected = dwellProfile == profile
+                            val profileTitle = when (profile) {
+                                DwellProfile.QUICK -> "Quick"
+                                DwellProfile.STANDARD -> "Standard"
+                                DwellProfile.STEADY -> "Steady"
+                            }
+                            val tagText = when (profile) {
+                                DwellProfile.QUICK -> "⚡ FAST"
+                                DwellProfile.STANDARD -> "★ RECOMMENDED"
+                                DwellProfile.STEADY -> "🛡 PRECISE"
+                            }
+
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) ExpressivePrimaryContainer.copy(alpha = 0.55f) else SurfaceContainer
+                                ),
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) ExpressivePrimary else ExpressiveBorder
+                                ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        onDwellProfileChange(profile)
-                                    }
-                                    .padding(vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .clickable { onDwellProfileChange(profile) }
                             ) {
-                                RadioButton(
-                                    selected = dwellProfile == profile,
-                                    onClick = { onDwellProfileChange(profile) },
-                                    colors = RadioButtonDefaults.colors(
-                                        selectedColor = ExpressivePrimary,
-                                        unselectedColor = Slate500
-                                    )
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(profile.label, color = PureWhite, fontSize = 14.sp)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        RadioButton(
+                                            selected = isSelected,
+                                            onClick = { onDwellProfileChange(profile) },
+                                            colors = RadioButtonDefaults.colors(
+                                                selectedColor = ExpressivePrimary,
+                                                unselectedColor = Slate500
+                                            )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    text = "$profileTitle (${profile.label})",
+                                                    color = PureWhite,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Text(
+                                                text = profile.subtitle,
+                                                color = Slate400,
+                                                fontSize = 11.sp,
+                                                lineHeight = 14.sp
+                                            )
+                                        }
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) ExpressivePrimary.copy(alpha = 0.30f) else SurfaceContainerHigh,
+                                        modifier = Modifier.padding(start = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = tagText,
+                                            color = if (isSelected) ExpressivePrimaryLight else Slate300,
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        HorizontalDivider(color = SurfaceContainerHigh, modifier = Modifier.padding(vertical = 12.dp))
+                        HorizontalDivider(
+                            color = SurfaceContainerHigh,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Neural Speech Synthesizer Toggle Row
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = SurfaceContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
                         ) {
-                            Text("Neural Speech Synthesizer", color = PureWhite, fontSize = 14.sp)
-                            Switch(
-                                checked = !isMuted,
-                                onCheckedChange = { onToggleMute() },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = PureWhite,
-                                    checkedTrackColor = ExpressivePrimary,
-                                    uncheckedThumbColor = Slate500,
-                                    uncheckedTrackColor = SurfaceContainerHigh
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (!isMuted) Icons.Filled.RecordVoiceOver else Icons.Filled.VoiceOverOff,
+                                        contentDescription = null,
+                                        tint = if (!isMuted) ExpressiveEmerald else Slate500,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column {
+                                        Text("Neural TTS Vocalizer", color = PureWhite, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(if (!isMuted) "Auto-speak confirmed signs" else "Audio playback muted", color = Slate400, fontSize = 11.sp)
+                                    }
+                                }
+                                Switch(
+                                    checked = !isMuted,
+                                    onCheckedChange = { onToggleMute() },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = PureWhite,
+                                        checkedTrackColor = ExpressivePrimary,
+                                        uncheckedThumbColor = Slate500,
+                                        uncheckedTrackColor = SurfaceContainerHigh
+                                    )
                                 )
-                            )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        // Active Camera Lens Switch Row
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = SurfaceContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
                         ) {
-                            Text("Active Camera Lens", color = PureWhite, fontSize = 14.sp)
-                            TextButton(onClick = onToggleCamera) {
-                                Text(
-                                    text = if (isFrontCamera) "Front (Selfie)" else "Back (Lens)",
-                                    color = ExpressivePrimaryLight,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.FlipCameraAndroid,
+                                        contentDescription = null,
+                                        tint = ExpressiveSecondaryLight,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column {
+                                        Text("Active Camera Lens", color = PureWhite, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(if (isFrontCamera) "Front (Selfie mirror)" else "Back (Rear lens)", color = Slate400, fontSize = 11.sp)
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = onToggleCamera,
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.dp, ExpressiveBorder),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = if (isFrontCamera) "FLIP TO BACK" else "FLIP TO FRONT",
+                                        color = ExpressivePrimaryLight,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { showSettings = false }) {
-                        Text("DONE", color = ExpressivePrimaryLight, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { showSettings = false },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ExpressivePrimary,
+                            contentColor = PureWhite
+                        ),
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    ) {
+                        Text("DONE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             )
@@ -599,7 +842,7 @@ fun SignoraScreen(
                                 text = "Unspoken requires camera access to recognize hand signs and gestures in real time.",
                                 color = Slate400,
                                 fontSize = 14.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(24.dp))
                             Button(
@@ -654,7 +897,7 @@ fun SignoraScreen(
                                 text = assetStatus.message,
                                 color = Slate400,
                                 fontSize = 14.sp,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                textAlign = TextAlign.Center
                             )
                         }
                     }

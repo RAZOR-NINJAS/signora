@@ -32,8 +32,8 @@ enum class RecognitionMode(val displayName: String, val description: String) {
     ISL("Indian Sign Language", "Dual-handed 164D spatial geometry & words")
 }
 
-enum class DwellProfile(val label: String, val dwellMs: Long) {
-    FAST("Fast (450ms)", 450L),
-    STANDARD("Standard (600ms)", 600L),
-    RELAXED("Relaxed (800ms)", 800L)
+enum class DwellProfile(val label: String, val subtitle: String, val dwellMs: Long) {
+    QUICK("0.750s", "Quick (750ms) - Rapid fingerspelling", 750L),
+    STANDARD("1.0s", "Standard (1000ms) - Balanced & reliable", 1000L),
+    STEADY("2.0s", "Steady (2000ms) - Maximum precision", 2000L)
 }
