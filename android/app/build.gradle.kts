@@ -70,7 +70,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.5.0-alpha01")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha01")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // CameraX
     val cameraVersion = "1.3.2"
