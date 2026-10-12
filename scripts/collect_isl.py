@@ -228,17 +228,30 @@ def draw_hud(
             3,
             cv2.LINE_AA,
         )
-    elif is_recording and not manual:
-        cv2.putText(
-            frame,
-            "● RECORDING...",
-            (w // 2 - 110, h // 2 - 140),
-            cv2.FONT_HERSHEY_DUPLEX,
-            0.8,
-            (239, 68, 68),
-            2,
-            cv2.LINE_AA,
-        )
+    elif countdown == 0.0:
+        expected = 1 if sign.upper() in ("C", "L", "V", "SPACE", "GOOD", "BAD", "PEACE", "OK", "LOVE", "STOP") else 2
+        if hands_detected < expected:
+            cv2.putText(
+                frame,
+                f"WAITING FOR {expected} HANDS...",
+                (w // 2 - 190, h // 2 - 140),
+                cv2.FONT_HERSHEY_DUPLEX,
+                0.75,
+                (245, 158, 11),
+                2,
+                cv2.LINE_AA,
+            )
+        elif is_recording and not manual:
+            cv2.putText(
+                frame,
+                "● RECORDING...",
+                (w // 2 - 110, h // 2 - 140),
+                cv2.FONT_HERSHEY_DUPLEX,
+                0.8,
+                (239, 68, 68),
+                2,
+                cv2.LINE_AA,
+            )
 
     # Dynamic ISL Posture Guide Box
     guide = ISL_GUIDES.get(sign.upper())
@@ -344,6 +357,8 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
             elif key in (ord("p"), ord("P")):
                 is_paused = not is_paused
 
+            expected_hands = 1 if sign.upper() in ("C", "L", "V", "SPACE", "GOOD", "BAD", "PEACE", "OK", "LOVE", "STOP") else 2
+
             should_capture = False
             if countdown == 0.0 and not is_paused:
                 if manual:
@@ -353,7 +368,7 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
                     if time.time() - last_sample_time >= delay:
                         should_capture = True
 
-            if should_capture and num_hands > 0:
+            if should_capture and num_hands >= expected_hands:
                 feats = extract_features(lms_list, hnds_list)
                 if np.all(np.isfinite(feats)):
                     collected.append(feats)
@@ -366,7 +381,7 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
                 sign=sign,
                 collected=len(collected),
                 target=count,
-                is_recording=(countdown == 0.0),
+                is_recording=(countdown == 0.0 and num_hands >= expected_hands),
                 countdown=countdown,
                 manual=manual,
                 is_paused=is_paused,
