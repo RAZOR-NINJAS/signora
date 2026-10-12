@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.*
@@ -18,7 +19,8 @@ import ai.signora.models.*
 import ai.signora.recovery.AutoAssetManager
 import ai.signora.tts.SpeechManager
 import ai.signora.ui.SignoraScreen
-import ai.signora.ui.SignoraTheme
+import ai.signora.ui.theme.AppThemeMode
+import ai.signora.ui.theme.SignoraTheme
 import ai.signora.vision.HandLandmarkerHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +44,8 @@ class MainActivity : ComponentActivity() {
     private var dwellProfile by mutableStateOf(DwellProfile.STANDARD)
     private var isMuted by mutableStateOf(false)
     private var isFrontCamera by mutableStateOf(true)
+    private var themeMode by mutableStateOf(AppThemeMode.DARK)
+    private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
     private var activeLandmarks by mutableStateOf<List<HandLandmarks>>(emptyList())
 
@@ -61,6 +65,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         assetManager = AutoAssetManager(this)
@@ -72,7 +77,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            SignoraTheme {
+            SignoraTheme(
+                themeMode = themeMode,
+                dynamicColor = dynamicColorEnabled
+            ) {
                 SignoraScreen(
                     previewView = previewView,
                     hasCameraPermission = hasCameraPermission,

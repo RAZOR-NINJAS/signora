@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import ai.signora.models.*
 import ai.signora.recovery.AutoAssetManager
+import ai.signora.ui.theme.*
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
