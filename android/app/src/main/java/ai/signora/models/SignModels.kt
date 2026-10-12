@@ -29,7 +29,8 @@ data class DebounceState(
 
 enum class RecognitionMode(val displayName: String, val description: String) {
     ASL("ASL Fingerspelling", "Single-hand static alphabet (A-Z + SPACE)"),
-    ISL("Indian Sign Language", "Dual-handed 164D spatial geometry & words")
+    ISL("Indian Sign Language", "Dual-handed 164D spatial geometry & words"),
+    FINGERSPELLING("Fingerspelling", "Continuous fingerspelling stream")
 }
 
 enum class DwellProfile(val label: String, val subtitle: String, val dwellMs: Long) {

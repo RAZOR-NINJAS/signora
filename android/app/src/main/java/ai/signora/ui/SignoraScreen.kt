@@ -13,8 +13,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ButtonGroup
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +46,7 @@ import ai.signora.models.*
 import ai.signora.recovery.AutoAssetManager
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SignoraScreen(
     previewView: PreviewView,
@@ -54,6 +69,7 @@ fun SignoraScreen(
     onSpeak: () -> Unit
 ) {
     var showSettings by remember { mutableStateOf(false) }
+    var showModeSelection by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -172,15 +188,14 @@ fun SignoraScreen(
                     }
                 }
 
-                // Recognition Mode Switcher Pill (ASL / ISL)
+                // Recognition Mode Switcher Pill (ASL / ISL / Fingerspelling)
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = if (currentMode == RecognitionMode.ISL) ExpressiveSecondaryContainer else ExpressivePrimaryContainer,
                     modifier = Modifier
                         .border(1.dp, ExpressiveBorder, RoundedCornerShape(20.dp))
                         .clickable {
-                            val nextMode = if (currentMode == RecognitionMode.ASL) RecognitionMode.ISL else RecognitionMode.ASL
-                            onModeChange(nextMode)
+                            showModeSelection = true
                         }
                 ) {
                     Row(
@@ -235,55 +250,40 @@ fun SignoraScreen(
                     }
                 }
 
-                // Audio Mute / Unmute Pill Button
-                IconButton(
-                    onClick = onToggleMute,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceContainer.copy(alpha = 0.92f))
-                        .border(1.dp, ExpressiveBorder, CircleShape)
+                // Material 3 Expressive HorizontalFloatingToolbar for Quick Actions
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors(
+                        toolbarContainerColor = SurfaceContainer.copy(alpha = 0.92f)
+                    ),
+                    modifier = Modifier.border(1.dp, ExpressiveBorder, CircleShape)
                 ) {
-                    Icon(
-                        imageVector = if (isMuted) Icons.Filled.VolumeOff else Icons.Filled.VolumeUp,
-                        contentDescription = "Toggle Audio",
-                        tint = if (isMuted) Slate500 else ExpressivePrimaryLight,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    IconButton(onClick = onToggleMute) {
+                        Icon(
+                            imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = "Toggle Audio",
+                            tint = if (isMuted) Slate500 else ExpressivePrimaryLight,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                // Flip Camera Pill Button
-                IconButton(
-                    onClick = onToggleCamera,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceContainer.copy(alpha = 0.92f))
-                        .border(1.dp, ExpressiveBorder, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.FlipCameraAndroid,
-                        contentDescription = "Flip Camera",
-                        tint = Slate100,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    IconButton(onClick = onToggleCamera) {
+                        Icon(
+                            imageVector = Icons.Default.FlipCameraAndroid,
+                            contentDescription = "Flip Camera",
+                            tint = Slate100,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                // Settings Pill Button
-                IconButton(
-                    onClick = { showSettings = true },
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(SurfaceContainer.copy(alpha = 0.92f))
-                        .border(1.dp, ExpressiveBorder, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Settings",
-                        tint = Slate100,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Tune,
+                            contentDescription = "Settings",
+                            tint = Slate100,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -311,20 +311,12 @@ fun SignoraScreen(
                         modifier = Modifier.size(116.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Background track
-                        CircularProgressIndicator(
-                            progress = { 1f },
-                            modifier = Modifier.size(116.dp),
-                            color = ExpressivePrimary.copy(alpha = 0.15f),
-                            strokeWidth = 6.dp
-                        )
-                        // Active Dwell Progress Arc
-                        CircularProgressIndicator(
+                        // Material 3 Expressive Circular Wavy Progress Indicator
+                        CircularWavyProgressIndicator(
                             progress = { debounceState.dwellProgress },
                             modifier = Modifier.size(116.dp),
                             color = ExpressivePrimary,
-                            strokeWidth = 6.dp,
-                            strokeCap = StrokeCap.Round
+                            trackColor = ExpressivePrimary.copy(alpha = 0.15f)
                         )
                         // Candidate Letter
                         Text(
@@ -465,12 +457,11 @@ fun SignoraScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         progress = { debounceState.dwellProgress },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp)),
+                            .height(8.dp),
                         color = ExpressivePrimary,
                         trackColor = SurfaceContainerHigh
                     )
@@ -501,17 +492,19 @@ fun SignoraScreen(
                         }
                     }
 
-                    // Expressive Action Buttons (Material 3 Expressive Rounded Pills)
+                    // Expressive Action Buttons (Material 3 Expressive Tonal Pills)
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = onSpace,
                             shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate100),
-                            border = BorderStroke(1.dp, ExpressiveBorder),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = SurfaceContainerHigh,
+                                contentColor = Slate100
+                            ),
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.SpaceBar, contentDescription = "Space", modifier = Modifier.size(15.dp))
@@ -519,23 +512,27 @@ fun SignoraScreen(
                             Text("SPACE", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = onBackspace,
                             shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Slate300),
-                            border = BorderStroke(1.dp, ExpressiveBorder),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = SurfaceContainerHigh,
+                                contentColor = Slate300
+                            ),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Backspace, contentDescription = "Delete", modifier = Modifier.size(15.dp))
+                            Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Delete", modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("DEL", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        OutlinedButton(
+                        FilledTonalButton(
                             onClick = onClear,
                             shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = ExpressiveTertiaryLight),
-                            border = BorderStroke(1.dp, ExpressiveBorder),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = ExpressiveTertiary.copy(alpha = 0.25f),
+                                contentColor = ExpressiveTertiaryLight
+                            ),
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.DeleteOutline, contentDescription = "Clear", modifier = Modifier.size(15.dp))
@@ -552,7 +549,7 @@ fun SignoraScreen(
                             ),
                             modifier = Modifier.weight(1.2f)
                         ) {
-                            Icon(Icons.Filled.VolumeUp, contentDescription = "Speak", modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Speak", modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(5.dp))
                             Text("SPEAK", fontSize = 11.sp, fontWeight = FontWeight.Black)
                         }
@@ -607,6 +604,29 @@ fun SignoraScreen(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.2.sp
                         )
+
+                        // Material 3 Expressive Segmented Buttons for quick Dwell switching
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            DwellProfile.values().forEachIndexed { index, profile ->
+                                SegmentedButton(
+                                    selected = dwellProfile == profile,
+                                    onClick = { onDwellProfileChange(profile) },
+                                    shape = SegmentedButtonDefaults.itemShape(
+                                        index = index,
+                                        count = DwellProfile.values().size
+                                    ),
+                                    label = {
+                                        Text(
+                                            profile.label,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                )
+                            }
+                        }
 
                         // Material 3 Expressive Selectable Cards for Dwell Profiles
                         DwellProfile.values().forEach { profile ->
@@ -864,7 +884,19 @@ fun SignoraScreen(
             }
         }
 
-        // 8. Self-Healing Model Downloader Banner
+        // 8. Material 3 Expressive Mode Selection Dialog / Screen
+        if (showModeSelection) {
+            ModeSelectionScreen(
+                currentMode = currentMode,
+                assetStatus = assetStatus,
+                onModeChange = { newMode ->
+                    onModeChange(newMode)
+                },
+                onDismiss = { showModeSelection = false }
+            )
+        }
+
+        // 9. Self-Healing Model Downloader Banner
         if (!assetStatus.isReady) {
             Surface(
                 modifier = Modifier
@@ -884,7 +916,10 @@ fun SignoraScreen(
                             modifier = Modifier.padding(28.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            CircularProgressIndicator(color = ExpressivePrimary)
+                            LoadingIndicator(
+                                color = ExpressivePrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
                             Spacer(modifier = Modifier.height(18.dp))
                             Text(
                                 text = "Verifying Neural Models",
@@ -905,4 +940,168 @@ fun SignoraScreen(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun ModeSelectionScreen(
+    currentMode: RecognitionMode,
+    assetStatus: AutoAssetManager.AssetStatus,
+    onModeChange: (RecognitionMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceElevated,
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Layers,
+                        contentDescription = null,
+                        tint = ExpressivePrimaryLight,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = "Recognition Mode",
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = "Material 3 Expressive Mode Selector",
+                    color = ExpressivePrimaryLight,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "SELECT ACTIVE SIGN LANGUAGE MODEL",
+                    color = Slate400,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Material 3 Expressive toggle ButtonGroup
+                ButtonGroup(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    toggleableItem(
+                        checked = currentMode == RecognitionMode.ASL,
+                        label = "ASL",
+                        onCheckedChange = { if (it) onModeChange(RecognitionMode.ASL) }
+                    )
+                    toggleableItem(
+                        checked = currentMode == RecognitionMode.ISL,
+                        label = "ISL",
+                        onCheckedChange = { if (it) onModeChange(RecognitionMode.ISL) }
+                    )
+                    toggleableItem(
+                        checked = currentMode == RecognitionMode.FINGERSPELLING,
+                        label = "Fingerspelling",
+                        onCheckedChange = { if (it) onModeChange(RecognitionMode.FINGERSPELLING) }
+                    )
+                }
+
+                // Model Loading / Verification State using Expressive LoadingIndicator
+                if (!assetStatus.isReady) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = SurfaceContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            LoadingIndicator(
+                                color = ExpressivePrimary,
+                                modifier = Modifier.size(42.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Loading Neural Model...",
+                                color = PureWhite,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = assetStatus.message,
+                                color = Slate400,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = SurfaceContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, ExpressiveBorder, RoundedCornerShape(16.dp))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(ExpressiveEmerald)
+                                )
+                                Text(
+                                    text = currentMode.displayName,
+                                    color = PureWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = currentMode.description,
+                                color = Slate400,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ExpressivePrimary,
+                    contentColor = PureWhite
+                )
+            ) {
+                Text("DONE", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+        }
+    )
 }
