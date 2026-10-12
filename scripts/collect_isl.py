@@ -49,6 +49,7 @@ def draw_hud(
     is_recording: bool,
     countdown: float,
     manual: bool,
+    is_paused: bool,
     hands_detected: int,
 ) -> None:
     """Render interactive collection HUD overlay."""
@@ -58,6 +59,11 @@ def draw_hud(
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (w, 80), (15, 23, 42), -1)
     cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
+
+    # Horizontal progress fill bar
+    bar_w = int(w * (collected / max(target, 1)))
+    bar_color = (52, 211, 153) if collected >= target else (99, 102, 241)
+    cv2.rectangle(frame, (0, 76), (bar_w, 82), bar_color, -1)
 
     # Title & Sign label
     cv2.putText(
@@ -72,14 +78,14 @@ def draw_hud(
     )
 
     # Mode / Instructions
-    instr = "[SPACE] Capture sample" if manual else "Auto-burst recording"
+    instr = "[SPACE] Capture" if manual else ("[P] Pause/Resume" if not is_paused else "PAUSED - [P] Resume")
     cv2.putText(
         frame,
         f"{instr} | Hands: {hands_detected}/2 | [Q] Quit",
         (16, 62),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
-        (148, 163, 184),
+        (245, 158, 11) if is_paused else (148, 163, 184),
         1,
         cv2.LINE_AA,
     )
@@ -90,7 +96,7 @@ def draw_hud(
     cv2.putText(
         frame,
         pill_text,
-        (w - 180, 45),
+        (w - 200, 45),
         cv2.FONT_HERSHEY_DUPLEX,
         0.75,
         (52, 211, 153) if collected >= target else (99, 102, 241),
@@ -106,6 +112,17 @@ def draw_hud(
             frame,
             text,
             (w // 2 - 140, h // 2),
+            cv2.FONT_HERSHEY_DUPLEX,
+            1.2,
+            (245, 158, 11),
+            3,
+            cv2.LINE_AA,
+        )
+    elif is_paused:
+        cv2.putText(
+            frame,
+            "|| PAUSED",
+            (w // 2 - 100, h // 2),
             cv2.FONT_HERSHEY_DUPLEX,
             1.2,
             (245, 158, 11),
@@ -200,6 +217,7 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
     start_time = time.time()
     countdown_duration = 3.0 if not manual else 0.0
     last_sample_time = 0.0
+    is_paused = False
 
     cv2.namedWindow("ISL Collector", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("ISL Collector", 960, 720)
@@ -223,9 +241,11 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
             if key == ord("q") or key == 27:
                 print("\n[Aborted] Collection stopped by user.")
                 break
+            elif key in (ord("p"), ord("P")):
+                is_paused = not is_paused
 
             should_capture = False
-            if countdown == 0.0:
+            if countdown == 0.0 and not is_paused:
                 if manual:
                     if key == 32:  # SPACEBAR
                         should_capture = True
@@ -249,6 +269,7 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
                 is_recording=(countdown == 0.0),
                 countdown=countdown,
                 manual=manual,
+                is_paused=is_paused,
                 hands_detected=num_hands,
             )
 
