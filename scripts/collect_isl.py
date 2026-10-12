@@ -300,7 +300,7 @@ def draw_skeleton(frame: np.ndarray, landmarks_list: List[Any], handedness_list:
             cv2.circle(frame, pt, 4, joint_color, -1, cv2.LINE_AA)
 
 
-def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay: float = 0.12) -> None:
+def collect(sign: str, count: int, source: Any = 0, manual: bool = False, delay: float = 0.12) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     out_file = DATA_DIR / f"{sign.upper()}.npy"
 
@@ -407,12 +407,20 @@ def main():
     parser = argparse.ArgumentParser(description="Collect 164D feature samples for ISL signs")
     parser.add_argument("-s", "--sign", default="D", help="Sign label to record (e.g. D, T, NAMASTE)")
     parser.add_argument("-n", "--count", type=int, default=20, help="Number of samples to collect (default: 20)")
-    parser.add_argument("--source", type=int, default=0, help="Camera device index (default: 0)")
+    parser.add_argument(
+        "--source",
+        default="0",
+        help="Camera index (0, 1), device path (/dev/video2), or Phone IP Webcam URL (e.g. http://192.168.1.50:8080/video)",
+    )
     parser.add_argument("--manual", action="store_true", help="Press SPACEBAR to capture each sample manually")
     parser.add_argument("--delay", type=float, default=0.15, help="Delay between auto-burst samples in seconds (default: 0.15)")
     args = parser.parse_args()
 
-    collect(sign=args.sign, count=args.count, source=args.source, manual=args.manual, delay=args.delay)
+    cam_source = args.source
+    if str(cam_source).isdigit():
+        cam_source = int(cam_source)
+
+    collect(sign=args.sign, count=args.count, source=cam_source, manual=args.manual, delay=args.delay)
 
 
 if __name__ == "__main__":
