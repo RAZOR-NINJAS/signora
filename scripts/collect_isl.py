@@ -13,9 +13,20 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
+
+# Auto-relaunch inside project .venv if run with system python lacking dependencies
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
+if _VENV_PYTHON.exists() and sys.executable != str(_VENV_PYTHON):
+    try:
+        import cv2
+    except ImportError:
+        os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
+
 from typing import Any, List
 
 import cv2

@@ -14,9 +14,23 @@ Usage:
 """
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
+
+# Auto-relaunch inside project .venv if run with system python lacking dependencies
+ROOT_DIR = Path(__file__).resolve().parent.parent
+_VENV_PYTHON = ROOT_DIR / ".venv" / "bin" / "python"
+if _VENV_PYTHON.exists() and sys.executable != str(_VENV_PYTHON):
+    try:
+        import torch
+    except ImportError:
+        os.execv(str(_VENV_PYTHON), [str(_VENV_PYTHON)] + sys.argv)
+
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from typing import Dict, List, Tuple
 
 import numpy as np
