@@ -1,112 +1,173 @@
 package ai.signora.engine
 
 import ai.signora.models.DebounceState
+import ai.signora.models.DwellStatus
 import ai.signora.models.RecognitionResult
 
 /**
- * Temporal debounce and dwell locking engine for fluid sign language transcription.
+ * Temporal debounce and dwell locking engine for fluid, high-accuracy sign language transcription.
  *
- * Implements smoothing, dwell progress tracking, repeat cooldown, and transcript retention.
+ * Implements:
+ * 1. 7-frame majority voting with confusable-pair hysteresis (M/N, U/V, R/U, A/S)
+ * 2. Minimum margin gating (top-1 prob - top-2 prob >= margin)
+ * 3. 150ms dropout pause tolerance (brief occlusion won't reset dwell)
+ * 4. Deliberate double-letter support (requires release or alternate gesture before repeat)
+ * 5. Live-configurable dwell duration, confidence threshold, and margin
  */
 class DebounceEngine(
     var dwellMs: Long = 1000L,
     var threshold: Float = 0.52f,
-    private val smoothMs: Long = 300L,
-    private val spaceDwellMs: Long = 800L,
-    private val repeatCooldownMs: Long = 550L
+    var minMargin: Float = 0.10f,
+    private val voteWindowSize: Int = 7,
+    private val maxDropoutMs: Long = 150L,
+    private val spaceDwellMs: Long = 800L
 ) {
-    private data class HistoryEntry(val timestampMs: Long, val label: String, val confidence: Float)
-    private val history = ArrayDeque<HistoryEntry>()
+    // Sliding vote buffer of recent valid frame labels
+    private val voteWindow = ArrayDeque<String>()
 
-    private var activeDwellCandidate: String = ""
-    private var dwellStartMs: Long = 0L
-    private var lastConfirmed: String = ""
-    private var lastConfirmedTimeMs: Long = 0L
+    // Dwell state tracking
+    private var activeCandidate: String = ""
+    private var dwellAccumulatedMs: Long = 0L
+    private var lastFrameTimeMs: Long = 0L
+    private var lastHandSeenTimeMs: Long = 0L
+
+    // Repeat lock: must release before committing same letter again
+    private var committedWaitingRelease: Boolean = false
+    private var lastCommittedLetter: String = ""
+
+    // Transcript state
     private val transcriptBuilder = StringBuilder()
+
+    // Confusable pair hysteresis map
+    private val confusablePairs = setOf(
+        setOf("M", "N"),
+        setOf("U", "V"),
+        setOf("R", "U"),
+        setOf("A", "S"),
+        setOf("E", "S"),
+        setOf("K", "P")
+    )
 
     fun update(
         result: RecognitionResult?,
         nowMs: Long = System.currentTimeMillis()
     ): DebounceState {
-        if (result != null && result.confidence >= threshold) {
-            history.addLast(HistoryEntry(nowMs, result.label, result.confidence))
-        }
+        // 1. Handle Hand Presence / Loss
+        if (result == null || result.confidence < threshold || result.margin < minMargin) {
+            val timeSinceLastHand = if (lastHandSeenTimeMs > 0L) nowMs - lastHandSeenTimeMs else Long.MAX_VALUE
 
-        // Evict older entries outside smoothing window
-        val cutoff = nowMs - smoothMs
-        while (history.isNotEmpty() && history.first().timestampMs < cutoff) {
-            history.removeFirst()
-        }
-
-        // Find dominant label in smoothing window
-        var dominant: String? = null
-        var maxWeight = 0f
-        var dominantConf = 0f
-        if (history.isNotEmpty()) {
-            val weights = mutableMapOf<String, Float>()
-            for (entry in history) {
-                weights[entry.label] = (weights[entry.label] ?: 0f) + entry.confidence
+            if (timeSinceLastHand > maxDropoutMs) {
+                // Extended loss: reset dwell progress and clear candidate
+                activeCandidate = ""
+                dwellAccumulatedMs = 0L
+                committedWaitingRelease = false
+                voteWindow.clear()
             }
-            for ((lbl, weight) in weights) {
-                if (weight > maxWeight) {
-                    maxWeight = weight
-                    dominant = lbl
-                }
-            }
-            dominantConf = history.lastOrNull { it.label == dominant }?.confidence ?: (result?.confidence ?: 0f)
-        }
+            // If within dropout tolerance, dwellAccumulatedMs is paused (neither increases nor resets)
 
-        if (dominant == null) {
-            activeDwellCandidate = ""
-            dwellStartMs = 0L
+            lastFrameTimeMs = nowMs
+
             return DebounceState(
-                candidate = "",
+                candidate = activeCandidate,
                 confidence = 0f,
-                dwellProgress = 0f,
+                margin = 0f,
+                dwellProgress = if (activeCandidate.isNotBlank()) {
+                    val req = if (activeCandidate == "SPACE") spaceDwellMs else dwellMs
+                    (dwellAccumulatedMs.toFloat() / req.toFloat()).coerceIn(0f, 1f)
+                } else 0f,
                 confirmed = false,
-                lastConfirmed = lastConfirmed,
-                transcript = transcriptBuilder.toString()
+                lastConfirmed = lastCommittedLetter,
+                transcript = transcriptBuilder.toString(),
+                status = if (timeSinceLastHand > maxDropoutMs) DwellStatus.NO_HAND else DwellStatus.HOLDING
             )
         }
 
-        val requiredDwell = if (dominant == "SPACE") spaceDwellMs else dwellMs
-        var confirmed = false
+        // 2. Hand is actively detected and passes confidence & margin thresholds
+        lastHandSeenTimeMs = nowMs
+        val rawLabel = result.label
 
-        if (dominant != activeDwellCandidate) {
-            activeDwellCandidate = dominant
-            dwellStartMs = nowMs
+        // 3. Majority Voting with Hysteresis
+        voteWindow.addLast(rawLabel)
+        if (voteWindow.size > voteWindowSize) {
+            voteWindow.removeFirst()
         }
 
-        val elapsed = nowMs - dwellStartMs
-        val dwellProgress = (elapsed.toFloat() / requiredDwell.toFloat()).coerceIn(0f, 1f)
-
-        if (dwellProgress >= 1.0f) {
-            val cooldownOk = (nowMs - lastConfirmedTimeMs) >= repeatCooldownMs
-            val isNewChar = dominant != lastConfirmed
-
-            if (isNewChar || cooldownOk) {
-                confirmed = true
-                lastConfirmed = dominant
-                lastConfirmedTimeMs = nowMs
-                dwellStartMs = nowMs // Reset for repeat
-
-                if (dominant == "SPACE") {
-                    if (transcriptBuilder.isNotEmpty() && !transcriptBuilder.endsWith(" ")) {
-                        transcriptBuilder.append(" ")
-                    }
-                } else {
-                    transcriptBuilder.append(dominant)
-                }
+        // Count votes in sliding window
+        val voteCounts = mutableMapOf<String, Int>()
+        for (lbl in voteWindow) {
+            voteCounts[lbl] = (voteCounts[lbl] ?: 0) + 1
+        }
+        var dominantLabel = rawLabel
+        var maxVotes = 0
+        for ((lbl, count) in voteCounts) {
+            if (count > maxVotes) {
+                maxVotes = count
+                dominantLabel = lbl
             }
         }
 
+        // Apply hysteresis penalty if switching between confusable pairs
+        if (activeCandidate.isNotBlank() && dominantLabel != activeCandidate) {
+            val isConfusable = confusablePairs.any { it.contains(activeCandidate) && it.contains(dominantLabel) }
+            if (isConfusable && maxVotes < (voteWindowSize - 1)) {
+                // Suppress switch unless strongly voted (overcomes flicker)
+                dominantLabel = activeCandidate
+            }
+        }
+
+        // 4. Update Dwell Timer
+        val dt = if (lastFrameTimeMs > 0L) (nowMs - lastFrameTimeMs).coerceIn(0L, 100L) else 0L
+        lastFrameTimeMs = nowMs
+
+        var confirmedThisFrame = false
+
+        if (dominantLabel != activeCandidate) {
+            // Letter changed: user switched gesture
+            activeCandidate = dominantLabel
+            dwellAccumulatedMs = 0L
+            committedWaitingRelease = false
+        } else {
+            // Same letter held steadily
+            if (!committedWaitingRelease) {
+                dwellAccumulatedMs += dt
+            }
+        }
+
+        val requiredDwell = if (activeCandidate == "SPACE") spaceDwellMs else dwellMs
+        val dwellProgress = (dwellAccumulatedMs.toFloat() / requiredDwell.toFloat()).coerceIn(0f, 1f)
+
+        // 5. Commit Condition
+        if (dwellProgress >= 1.0f && !committedWaitingRelease) {
+            confirmedThisFrame = true
+            lastCommittedLetter = activeCandidate
+            committedWaitingRelease = true // Lock until hand released or different sign made
+
+            if (activeCandidate == "SPACE") {
+                if (transcriptBuilder.isNotEmpty() && !transcriptBuilder.endsWith(" ")) {
+                    transcriptBuilder.append(" ")
+                }
+            } else {
+                transcriptBuilder.append(activeCandidate)
+            }
+        }
+
+        val currentStatus = when {
+            confirmedThisFrame -> DwellStatus.COMMITTED
+            dwellProgress > 0.15f -> DwellStatus.HOLDING
+            activeCandidate.isNotBlank() -> DwellStatus.DETECTING
+            else -> DwellStatus.IDLE
+        }
+
         return DebounceState(
-            candidate = dominant,
-            confidence = dominantConf,
+            candidate = activeCandidate,
+            confidence = result.confidence,
+            margin = result.margin,
             dwellProgress = dwellProgress,
-            confirmed = confirmed,
-            lastConfirmed = lastConfirmed,
-            transcript = transcriptBuilder.toString()
+            confirmed = confirmedThisFrame,
+            lastConfirmed = lastCommittedLetter,
+            transcript = transcriptBuilder.toString(),
+            top3 = result.top3,
+            status = currentStatus
         )
     }
 
@@ -119,7 +180,11 @@ class DebounceEngine(
 
     fun clear(): String {
         transcriptBuilder.setLength(0)
-        lastConfirmed = ""
+        lastCommittedLetter = ""
+        activeCandidate = ""
+        dwellAccumulatedMs = 0L
+        committedWaitingRelease = false
+        voteWindow.clear()
         return ""
     }
 

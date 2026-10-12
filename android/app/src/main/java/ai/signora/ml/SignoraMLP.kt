@@ -37,14 +37,32 @@ class SignoraMLP(
         val probs = forward(feats)
         var maxIdx = 0
         var maxProb = probs[0]
+        var secondMaxProb = 0f
+
         for (i in 1 until probs.size) {
-            if (probs[i] > maxProb) {
-                maxProb = probs[i]
+            val p = probs[i]
+            if (p > maxProb) {
+                secondMaxProb = maxProb
+                maxProb = p
                 maxIdx = i
+            } else if (p > secondMaxProb) {
+                secondMaxProb = p
             }
         }
         val label = if (maxIdx < labels.size) labels[maxIdx] else "UNKNOWN"
-        return RecognitionResult(label, maxProb)
+        val margin = maxProb - secondMaxProb
+
+        val top3 = probs.indices
+            .map { i -> (if (i < labels.size) labels[i] else "UNKNOWN") to probs[i] }
+            .sortedByDescending { it.second }
+            .take(3)
+
+        return RecognitionResult(
+            label = label,
+            confidence = maxProb,
+            margin = margin,
+            top3 = top3
+        )
     }
 
     fun forward(feats: FloatArray): FloatArray {

@@ -1,6 +1,7 @@
 package ai.signora.vision
 
 import android.content.Context
+import ai.signora.filter.LandmarkSmoother
 import ai.signora.models.HandLandmarks
 import ai.signora.models.Point3D
 import com.google.mediapipe.framework.image.MPImage
@@ -14,7 +15,8 @@ import java.io.File
 /**
  * High-performance MediaPipe Tasks Vision wrapper for real-time live video hand tracking.
  *
- * Configured with automatic GPU acceleration delegate and CPU fallback for low-power chipsets.
+ * Configured with One-Euro temporal landmark smoothing, tuned confidence gates,
+ * and automatic GPU acceleration with transparent CPU fallback.
  */
 class HandLandmarkerHelper(
     private val context: Context,
@@ -24,6 +26,12 @@ class HandLandmarkerHelper(
 ) {
 
     private var handLandmarker: HandLandmarker? = null
+    var activeDelegateName: String = "CPU"
+        private set
+
+    // Landmark smoothers per hand channel
+    private val rightSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.008f)
+    private val leftSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.008f)
 
     init {
         setupLandmarker()
@@ -31,9 +39,13 @@ class HandLandmarkerHelper(
 
     private fun setupLandmarker() {
         val gpuSuccess = tryInit(Delegate.GPU)
-        if (!gpuSuccess) {
+        if (gpuSuccess) {
+            activeDelegateName = "GPU"
+        } else {
             val cpuSuccess = tryInit(Delegate.CPU)
-            if (!cpuSuccess) {
+            if (cpuSuccess) {
+                activeDelegateName = "CPU"
+            } else {
                 onError("Failed to initialize MediaPipe HandLandmarker with GPU and CPU.")
             }
         }
@@ -74,9 +86,9 @@ class HandLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinHandDetectionConfidence(0.35f)
-            .setMinTrackingConfidence(0.35f)
-            .setMinHandPresenceConfidence(0.35f)
+            .setMinHandDetectionConfidence(0.55f)
+            .setMinTrackingConfidence(0.55f)
+            .setMinHandPresenceConfidence(0.50f)
             .setNumHands(2)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: HandLandmarkerResult, _ ->
@@ -105,15 +117,24 @@ class HandLandmarkerHelper(
 
         for (i in allLandmarks.indices) {
             val lms = allLandmarks[i]
-            val points = lms.map { lm ->
+            val rawPoints = lms.map { lm ->
                 Point3D(lm.x(), lm.y(), lm.z())
             }
+
             val isRight = if (i < allHandedness.size && allHandedness[i].isNotEmpty()) {
                 allHandedness[i][0].categoryName() == "Right"
             } else {
                 true
             }
-            hands.add(HandLandmarks(points, isRight))
+
+            // Apply One-Euro filter to eliminate jitter while keeping instant zero-lag response
+            val smoothedPoints = if (isRight) {
+                rightSmoother.filter(rawPoints, timestamp)
+            } else {
+                leftSmoother.filter(rawPoints, timestamp)
+            }
+
+            hands.add(HandLandmarks(smoothedPoints, isRight))
         }
 
         onResults(hands, timestamp)
@@ -122,5 +143,7 @@ class HandLandmarkerHelper(
     fun close() {
         handLandmarker?.close()
         handLandmarker = null
+        rightSmoother.reset()
+        leftSmoother.reset()
     }
 }

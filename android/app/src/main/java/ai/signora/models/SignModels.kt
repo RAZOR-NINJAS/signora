@@ -13,23 +13,39 @@ data class HandLandmarks(
 
 data class RecognitionResult(
     val label: String,
-    val confidence: Float
+    val confidence: Float,
+    val margin: Float = 1.0f,
+    val top3: List<Pair<String, Float>> = emptyList()
 )
+
+enum class DwellStatus {
+    IDLE,
+    DETECTING,
+    HOLDING,
+    COMMITTED,
+    NO_HAND,
+    LOW_LIGHT,
+    ERROR
+}
 
 data class DebounceState(
     val candidate: String = "",
     val confidence: Float = 0f,
+    val margin: Float = 0f,
     val dwellProgress: Float = 0f,
     val confirmed: Boolean = false,
     val lastConfirmed: String = "",
     val transcript: String = "",
     val fps: Float = 30f,
-    val isSpeaking: Boolean = false
+    val inferenceMs: Float = 0.5f,
+    val isSpeaking: Boolean = false,
+    val top3: List<Pair<String, Float>> = emptyList(),
+    val status: DwellStatus = DwellStatus.IDLE
 )
 
 enum class RecognitionMode(val displayName: String, val description: String) {
-    ASL("ASL Fingerspelling", "Single-hand static alphabet (A-Z + SPACE)"),
-    ISL("Indian Sign Language", "Dual-handed 164D spatial geometry & words"),
+    ASL("ASL", "Single-hand static alphabet (A-Z + SPACE)"),
+    ISL("ISL", "ISL model currently recognizes A, B, C, D and Space only (5 of 26)"),
     FINGERSPELLING("Fingerspelling", "Continuous fingerspelling stream")
 }
 
