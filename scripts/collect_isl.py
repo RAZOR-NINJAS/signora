@@ -18,6 +18,9 @@ import sys
 import time
 from pathlib import Path
 
+# Wayland/X11 compatibility for OpenCV HighGUI
+os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+
 # Auto-relaunch inside project .venv if run with system python lacking dependencies
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
@@ -203,9 +206,8 @@ def collect(sign: str, count: int, source: int = 0, manual: bool = False, delay:
 
     try:
         while len(collected) < count:
-            frame, landmarks, handedness = pipe.get()
+            frame, landmarks, handedness = pipe.read(timeout=2.0)
             if frame is None:
-                time.sleep(0.01)
                 continue
 
             elapsed = time.time() - start_time
