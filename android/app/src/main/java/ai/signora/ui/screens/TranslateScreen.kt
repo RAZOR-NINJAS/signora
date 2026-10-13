@@ -31,6 +31,7 @@ import ai.signora.ui.components.*
 import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.PureBlack
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val HAND_CONNECTIONS = listOf(
     0 to 1, 1 to 2, 2 to 3, 3 to 4,       // Thumb
@@ -63,6 +64,7 @@ fun TranslateScreen(
     onToggleTorch: () -> Unit,
     onTogglePause: () -> Unit,
     onToggleTheme: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onBackspace: () -> Unit,
     onClear: () -> Unit,
     onSpace: () -> Unit,
@@ -71,13 +73,22 @@ fun TranslateScreen(
 ) {
     var isDebugOpen by remember { mutableStateOf(false) }
 
-    // Hand presence detector with 150ms enter / 800ms exit hysteresis and 5s manual pin
-    val presenceDetector = remember { HandPresenceDetector(autoCollapseEnabled = autoCollapseEnabled) }
-    presenceDetector.autoCollapseEnabled = autoCollapseEnabled
-
+    val coroutineScope = rememberCoroutineScope()
+    var isPinnedExpanded by remember { mutableStateOf(false) }
     var shouldCollapse by remember { mutableStateOf(false) }
-    LaunchedEffect(handLandmarks.isNotEmpty(), autoCollapseEnabled) {
-        shouldCollapse = presenceDetector.update(hasHand = handLandmarks.isNotEmpty())
+
+    LaunchedEffect(handLandmarks.isNotEmpty(), autoCollapseEnabled, isPinnedExpanded) {
+        if (!autoCollapseEnabled || isPinnedExpanded) {
+            shouldCollapse = false
+            return@LaunchedEffect
+        }
+        if (handLandmarks.isNotEmpty()) {
+            delay(150L) // 150ms enter hysteresis
+            shouldCollapse = true
+        } else {
+            delay(800L) // 800ms dropout tolerance
+            shouldCollapse = false
+        }
     }
 
     // Auto-hiding ISL 5-of-26 notification chip (hides after 4s)
@@ -131,7 +142,6 @@ fun TranslateScreen(
                 val pts = hand.points
                 if (pts.size < 21) continue
 
-                val isFront = hand.isFrontCamera
                 val boneColor = if (hand.isRightHand) rightBone else leftBone
                 val jointColor = if (hand.isRightHand) rightJoint else leftJoint
 
@@ -140,11 +150,8 @@ fun TranslateScreen(
                     val p1Raw = pts[c.first]
                     val p2Raw = pts[c.second]
 
-                    val p1X = if (isFront) (1f - p1Raw.x) else p1Raw.x
-                    val p2X = if (isFront) (1f - p2Raw.x) else p2Raw.x
-
-                    val p1 = Offset(p1X * scaledW + offsetX, p1Raw.y * scaledH + offsetY)
-                    val p2 = Offset(p2X * scaledW + offsetX, p2Raw.y * scaledH + offsetY)
+                    val p1 = Offset(p1Raw.x * scaledW + offsetX, p1Raw.y * scaledH + offsetY)
+                    val p2 = Offset(p2Raw.x * scaledW + offsetX, p2Raw.y * scaledH + offsetY)
 
                     drawLine(
                         color = boneColor,
@@ -157,8 +164,7 @@ fun TranslateScreen(
 
                 // Draw spatial joints with glowing aura
                 for (p in pts) {
-                    val pX = if (isFront) (1f - p.x) else p.x
-                    val center = Offset(pX * scaledW + offsetX, p.y * scaledH + offsetY)
+                    val center = Offset(p.x * scaledW + offsetX, p.y * scaledH + offsetY)
 
                     drawCircle(
                         color = jointColor,
@@ -210,7 +216,7 @@ fun TranslateScreen(
                     onToggleCamera = onToggleCamera,
                     onToggleTorch = onToggleTorch,
                     onTogglePause = onTogglePause,
-                    onOpenSettings = {}
+                    onOpenSettings = onOpenSettings
                 )
             }
 
@@ -286,8 +292,11 @@ fun TranslateScreen(
             shouldCollapse = shouldCollapse,
             debounceState = debounceState,
             onPinExpanded = {
-                presenceDetector.pinExpanded()
-                shouldCollapse = false
+                coroutineScope.launch {
+                    isPinnedExpanded = true
+                    delay(5000L)
+                    isPinnedExpanded = false
+                }
             },
             onSpace = onSpace,
             onDelete = onBackspace,

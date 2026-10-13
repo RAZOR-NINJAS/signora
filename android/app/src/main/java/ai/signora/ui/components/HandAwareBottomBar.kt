@@ -218,7 +218,7 @@ fun HandAwareBottomBar(
                             // Center sign glyph or letter
                             if (debounceState.candidate == "SPACE") {
                                 Icon(
-                                    imageVector = Icons.Default.SpaceBar,
+                                    imageVector = Icons.Filled.SpaceBar,
                                     contentDescription = "Space",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)

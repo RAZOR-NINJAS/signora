@@ -2,6 +2,8 @@ package ai.signora.camera
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Matrix
 import android.util.Size
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -16,7 +18,7 @@ import java.util.concurrent.Executors
 
 /**
  * CameraX lifecycle manager with zero-allocation frame processing,
- * native hardware rotation via MediaPipe ImageProcessingOptions, and dedicated single-thread execution.
+ * native upright portrait rotation and hardware mirroring, and dedicated single-thread execution.
  */
 class CameraXManager(
     private val context: Context,
@@ -29,8 +31,11 @@ class CameraXManager(
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
 
-    // Reusable single Bitmap buffer across all incoming frames (eliminates per-frame heap churn)
-    private var reusableBitmap: Bitmap? = null
+    // Pre-allocated reusable buffers across frames (zero per-frame heap allocation)
+    private var rawBitmap: Bitmap? = null
+    private var portraitBitmap: Bitmap? = null
+    private var rotateCanvas: Canvas? = null
+    private var rotateMatrix: Matrix? = null
 
     var isFrontCamera: Boolean = true
         private set
@@ -55,6 +60,9 @@ class CameraXManager(
     fun toggleCamera() {
         isFrontCamera = !isFrontCamera
         isTorchOn = false
+        portraitBitmap = null
+        rotateCanvas = null
+        rotateMatrix = null
         bindCameraUseCases()
     }
 
@@ -135,24 +143,48 @@ class CameraXManager(
 
             val width = imageProxy.width
             val height = imageProxy.height
+            val rot = imageProxy.imageInfo.rotationDegrees
 
-            // Re-allocate bitmap ONLY if resolution changes (first frame or camera flip)
-            if (reusableBitmap == null || reusableBitmap?.width != width || reusableBitmap?.height != height) {
-                reusableBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            // Destination upright dimensions (swapped if 90 or 270)
+            val isRotated = rot == 90 || rot == 270
+            val targetW = if (isRotated) height else width
+            val targetH = if (isRotated) width else height
+
+            // Pre-allocate raw input buffer
+            if (rawBitmap == null || rawBitmap?.width != width || rawBitmap?.height != height) {
+                rawBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             }
 
+            // Pre-allocate destination upright portrait buffer and transformation matrix
+            if (portraitBitmap == null || portraitBitmap?.width != targetW || portraitBitmap?.height != targetH) {
+                portraitBitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                rotateCanvas = Canvas(portraitBitmap!!)
+
+                val matrix = Matrix()
+                matrix.postTranslate(-width / 2f, -height / 2f)
+                matrix.postRotate(rot.toFloat())
+                if (isFrontCamera) {
+                    matrix.postScale(-1f, 1f)
+                }
+                matrix.postTranslate(targetW / 2f, targetH / 2f)
+                rotateMatrix = matrix
+            }
+
+            // Zero-allocation direct native pixel copy
             val buffer = imageProxy.planes[0].buffer
             buffer.rewind()
-            reusableBitmap!!.copyPixelsFromBuffer(buffer)
-            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            rawBitmap!!.copyPixelsFromBuffer(buffer)
+
+            // Sub-millisecond hardware blit into upright mirrored portrait bitmap
+            rotateCanvas!!.drawBitmap(rawBitmap!!, rotateMatrix!!, null)
 
             TrackingProfiler.onConversionDone(frameId)
 
             // Wrap in MPImage without copying pixels
-            val mpImage = BitmapImageBuilder(reusableBitmap!!).build()
+            val mpImage = BitmapImageBuilder(portraitBitmap!!).build()
 
             TrackingProfiler.onDetectAsyncCalled(frameId)
-            onFrame(mpImage, rotationDegrees, isFrontCamera, frameId, frameTime)
+            onFrame(mpImage, 0, isFrontCamera, frameId, frameTime)
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {

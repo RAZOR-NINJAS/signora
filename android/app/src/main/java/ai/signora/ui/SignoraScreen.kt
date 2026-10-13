@@ -76,8 +76,7 @@ fun SignoraScreen(
 
         Scaffold(
             bottomBar = {
-                // In Translate screen, navigation bar is embedded in the expanded bottom deck or hidden during translate
-                if (!isWideScreen && currentDestination != AppDestination.TRANSLATE) {
+                if (!isWideScreen) {
                     AppNavigationBar(
                         currentDestination = currentDestination,
                         onNavigate = { currentDestination = it }
@@ -91,7 +90,7 @@ fun SignoraScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = if (!isWideScreen && currentDestination != AppDestination.TRANSLATE) innerPadding.calculateBottomPadding() else 0.dp)
+                    .padding(bottom = if (!isWideScreen) innerPadding.calculateBottomPadding() else 0.dp)
             ) {
                 when (currentDestination) {
                     AppDestination.TRANSLATE -> {
@@ -117,6 +116,7 @@ fun SignoraScreen(
                             onToggleTorch = onToggleTorch,
                             onTogglePause = onTogglePause,
                             onToggleTheme = onToggleTheme,
+                            onOpenSettings = { currentDestination = AppDestination.SETTINGS },
                             onBackspace = onBackspace,
                             onClear = onClear,
                             onSpace = onSpace,
