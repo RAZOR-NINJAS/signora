@@ -6,9 +6,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.*
@@ -20,11 +23,22 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import ai.signora.engine.HandPresenceDetector
 import ai.signora.models.*
+import ai.signora.profiler.TrackingProfiler
 import ai.signora.recovery.AutoAssetManager
 import ai.signora.ui.components.*
 import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.PureBlack
+import kotlinx.coroutines.delay
+
+private val HAND_CONNECTIONS = listOf(
+    0 to 1, 1 to 2, 2 to 3, 3 to 4,       // Thumb
+    0 to 5, 5 to 6, 6 to 7, 7 to 8,       // Index
+    0 to 9, 9 to 10, 10 to 11, 11 to 12,  // Middle
+    0 to 13, 13 to 14, 14 to 15, 15 to 16,// Ring
+    0 to 17, 17 to 18, 18 to 19, 19 to 20 // Pinky
+)
 
 @Composable
 fun TranslateScreen(
@@ -40,6 +54,8 @@ fun TranslateScreen(
     isPaused: Boolean,
     fps: Float,
     isDark: Boolean,
+    autoCollapseEnabled: Boolean = true,
+    latestFrameId: Long = 0L,
     assetStatus: AutoAssetManager.AssetStatus,
     onModeChange: (RecognitionMode) -> Unit,
     onToggleMute: () -> Unit,
@@ -55,6 +71,27 @@ fun TranslateScreen(
 ) {
     var isDebugOpen by remember { mutableStateOf(false) }
 
+    // Hand presence detector with 150ms enter / 800ms exit hysteresis and 5s manual pin
+    val presenceDetector = remember { HandPresenceDetector(autoCollapseEnabled = autoCollapseEnabled) }
+    presenceDetector.autoCollapseEnabled = autoCollapseEnabled
+
+    var shouldCollapse by remember { mutableStateOf(false) }
+    LaunchedEffect(handLandmarks.isNotEmpty(), autoCollapseEnabled) {
+        shouldCollapse = presenceDetector.update(hasHand = handLandmarks.isNotEmpty())
+    }
+
+    // Auto-hiding ISL 5-of-26 notification chip (hides after 4s)
+    var islBannerVisible by remember(currentMode) { mutableStateOf(currentMode == RecognitionMode.ISL) }
+    LaunchedEffect(currentMode) {
+        if (currentMode == RecognitionMode.ISL) {
+            islBannerVisible = true
+            delay(4000L)
+            islBannerVisible = false
+        } else {
+            islBannerVisible = false
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -69,7 +106,7 @@ fun TranslateScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Hand Skeleton Landmark Overlay (Zero hardcoded colors: pure AppTheme.semantic tokens)
+        // 2. Exact Landmark Overlay Alignment (Phase 3: FILL_CENTER scale/crop + front-camera horizontal mirror)
         val rightBone = AppTheme.semantic.handRightBone
         val leftBone = AppTheme.semantic.handLeftBone
         val rightJoint = AppTheme.semantic.handRightJoint
@@ -79,53 +116,71 @@ fun TranslateScreen(
             val canvasW = size.width
             val canvasH = size.height
 
-            val connections = listOf(
-                0 to 1, 1 to 2, 2 to 3, 3 to 4,       // Thumb
-                0 to 5, 5 to 6, 6 to 7, 7 to 8,       // Index
-                0 to 9, 9 to 10, 10 to 11, 11 to 12,  // Middle
-                0 to 13, 13 to 14, 14 to 15, 15 to 16,// Ring
-                0 to 17, 17 to 18, 18 to 19, 19 to 20 // Pinky
-            )
+            // 640x480 analysis resolution in portrait (aspect ratio 480:640 = 3:4)
+            val camW = 480f
+            val camH = 640f
+
+            // Exact FILL_CENTER transformation matching PreviewView
+            val scale = maxOf(canvasW / camW, canvasH / camH)
+            val scaledW = camW * scale
+            val scaledH = camH * scale
+            val offsetX = (canvasW - scaledW) / 2f
+            val offsetY = (canvasH - scaledH) / 2f
 
             for (hand in handLandmarks) {
                 val pts = hand.points
                 if (pts.size < 21) continue
 
+                val isFront = hand.isFrontCamera
                 val boneColor = if (hand.isRightHand) rightBone else leftBone
                 val jointColor = if (hand.isRightHand) rightJoint else leftJoint
 
                 // Draw bones with round caps
-                for ((start, end) in connections) {
-                    val p1 = Offset(pts[start].x * canvasW, pts[start].y * canvasH)
-                    val p2 = Offset(pts[end].x * canvasW, pts[end].y * canvasH)
+                for (c in HAND_CONNECTIONS) {
+                    val p1Raw = pts[c.first]
+                    val p2Raw = pts[c.second]
+
+                    val p1X = if (isFront) (1f - p1Raw.x) else p1Raw.x
+                    val p2X = if (isFront) (1f - p2Raw.x) else p2Raw.x
+
+                    val p1 = Offset(p1X * scaledW + offsetX, p1Raw.y * scaledH + offsetY)
+                    val p2 = Offset(p2X * scaledW + offsetX, p2Raw.y * scaledH + offsetY)
+
                     drawLine(
                         color = boneColor,
                         start = p1,
                         end = p2,
-                        strokeWidth = 4.5f,
+                        strokeWidth = 5f,
                         cap = StrokeCap.Round
                     )
                 }
 
                 // Draw spatial joints with glowing aura
                 for (p in pts) {
-                    val center = Offset(p.x * canvasW, p.y * canvasH)
+                    val pX = if (isFront) (1f - p.x) else p.x
+                    val center = Offset(pX * scaledW + offsetX, p.y * scaledH + offsetY)
+
                     drawCircle(
                         color = jointColor,
-                        radius = 6f,
+                        radius = 6.5f,
                         center = center
                     )
                     drawCircle(
                         color = jointColor.copy(alpha = 0.35f),
-                        radius = 12f,
+                        radius = 13f,
                         center = center,
                         style = Stroke(width = 2.5f)
                     )
                 }
             }
+
+            // Instrument overlay draw completion for TRACKPERF
+            if (latestFrameId > 0L) {
+                TrackingProfiler.onOverlayDrawn(latestFrameId)
+            }
         }
 
-        // 3. Top Cluster (AppTopBar & ModeSelector)
+        // 3. Top Cluster (Slim merged row: AppTopBar + ModeSelector + FloatingCameraToolbar)
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -159,35 +214,55 @@ fun TranslateScreen(
                 )
             }
 
-            // Mode Selector
+            // Mode Selector on translucent scrim
             ModeSelector(
                 currentMode = currentMode,
                 onModeSelected = onModeChange,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Honest ISL 5-of-26 Status Banner
-            if (currentMode == RecognitionMode.ISL) {
+            // Auto-hiding, dismissible ISL 5-of-26 Status Chip (Phase 6.5)
+            AnimatedVisibility(
+                visible = islBannerVisible,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.small)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "ISL Info",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "ISL model currently recognizes A, B, C, D and Space only (5 of 26)",
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.small),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "ISL Info",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "ISL model recognizes A, B, C, D and Space (5 of 26)",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        IconButton(
+                            onClick = { islBannerVisible = false },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Dismiss",
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -197,7 +272,7 @@ fun TranslateScreen(
         if (isDebugOpen) {
             DebugOverlay(
                 debounceState = debounceState,
-                delegateName = "MediaPipe Vision + MLP",
+                delegateName = TrackingProfiler.activeDelegate,
                 handLandmarks = handLandmarks,
                 onClose = { isDebugOpen = false },
                 modifier = Modifier
@@ -206,51 +281,20 @@ fun TranslateScreen(
             )
         }
 
-        // 5. Expressive Bottom Deck (Constrained to <= 38% height)
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 28.dp,
-                topEnd = 28.dp
-            ),
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.38f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
-                verticalArrangement = Arrangement.SpaceBetween,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Active Sign Display with circular dwell ring and confidence
-                ActiveSignDisplay(
-                    candidate = debounceState.candidate,
-                    confidence = debounceState.confidence,
-                    dwellProgressProvider = { debounceState.dwellProgress },
-                    status = debounceState.status
-                )
-
-                // Transcript Text Box
-                TranscriptField(
-                    transcript = debounceState.transcript,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                // Action Button Row: Space, Delete, Clear, Speak
-                ActionButtonRow(
-                    transcript = debounceState.transcript,
-                    onSpace = onSpace,
-                    onDelete = onBackspace,
-                    onClear = onClear,
-                    onSpeak = onSpeak,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
+        // 5. Hand-Aware Responsive Bottom Deck (Phase 6 & Phase 7)
+        HandAwareBottomBar(
+            shouldCollapse = shouldCollapse,
+            debounceState = debounceState,
+            onPinExpanded = {
+                presenceDetector.pinExpanded()
+                shouldCollapse = false
+            },
+            onSpace = onSpace,
+            onDelete = onBackspace,
+            onClear = onClear,
+            onSpeak = onSpeak,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
 
         // 6. Camera Permission Required Screen
         if (!hasCameraPermission) {

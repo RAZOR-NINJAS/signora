@@ -1,37 +1,45 @@
 package ai.signora.vision
 
 import android.content.Context
+import android.util.Log
 import ai.signora.filter.LandmarkSmoother
 import ai.signora.models.HandLandmarks
 import ai.signora.models.Point3D
+import ai.signora.profiler.TrackingProfiler
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
+import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * High-performance MediaPipe Tasks Vision wrapper for real-time live video hand tracking.
  *
  * Configured with One-Euro temporal landmark smoothing, tuned confidence gates,
- * and automatic GPU acceleration with transparent CPU fallback.
+ * native ImageProcessingOptions hardware rotation, and automatic GPU acceleration with transparent CPU fallback.
  */
 class HandLandmarkerHelper(
     private val context: Context,
     private val modelFile: File?,
-    private val onResults: (List<HandLandmarks>, Long) -> Unit,
+    private val onResults: (List<HandLandmarks>, Long, Long) -> Unit,
     private val onError: (String) -> Unit
 ) {
+
+    data class FrameMeta(val frameId: Long, val isFrontCamera: Boolean)
 
     private var handLandmarker: HandLandmarker? = null
     var activeDelegateName: String = "CPU"
         private set
 
-    // Landmark smoothers per hand channel
-    private val rightSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.008f)
-    private val leftSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.008f)
+    // Landmark smoothers tuned for zero lag: beta = 0.05f allows rapid motion without lag, minCutoff = 1.0f keeps still hands steady
+    private val rightSmoother = LandmarkSmoother(minCutoff = 1.0f, beta = 0.05f)
+    private val leftSmoother = LandmarkSmoother(minCutoff = 1.0f, beta = 0.05f)
+
+    private val frameMetaMap = ConcurrentHashMap<Long, FrameMeta>()
 
     init {
         setupLandmarker()
@@ -49,6 +57,9 @@ class HandLandmarkerHelper(
                 onError("Failed to initialize MediaPipe HandLandmarker with GPU and CPU.")
             }
         }
+
+        TrackingProfiler.activeDelegate = activeDelegateName
+        Log.i("TRACKPERF", "HandLandmarker initialized with delegate: $activeDelegateName")
     }
 
     private fun tryInit(delegate: Delegate): Boolean {
@@ -92,7 +103,10 @@ class HandLandmarkerHelper(
             .setNumHands(2)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: HandLandmarkerResult, _ ->
-                processResult(result, result.timestampMs())
+                val timestamp = result.timestampMs()
+                val meta = frameMetaMap.remove(timestamp) ?: FrameMeta(0L, true)
+                TrackingProfiler.onResultCallback(meta.frameId)
+                processResult(result, meta.frameId, meta.isFrontCamera, timestamp)
             }
             .setErrorListener { error ->
                 onError("MediaPipe tracking error: ${error.message}")
@@ -102,15 +116,32 @@ class HandLandmarkerHelper(
         handLandmarker = HandLandmarker.createFromOptions(context, options)
     }
 
-    fun detectLiveStream(mpImage: MPImage, frameTime: Long) {
+    fun detectLiveStream(
+        mpImage: MPImage,
+        rotationDegrees: Int,
+        isFrontCamera: Boolean,
+        frameId: Long,
+        frameTime: Long
+    ) {
         try {
-            handLandmarker?.detectAsync(mpImage, frameTime)
+            val imageProcessingOptions = ImageProcessingOptions.builder()
+                .setRotationDegrees(rotationDegrees)
+                .build()
+
+            frameMetaMap[frameTime] = FrameMeta(frameId, isFrontCamera)
+            handLandmarker?.detectAsync(mpImage, imageProcessingOptions, frameTime)
         } catch (e: Exception) {
+            frameMetaMap.remove(frameTime)
             onError("Detection frame drop: ${e.message}")
         }
     }
 
-    private fun processResult(result: HandLandmarkerResult, timestamp: Long) {
+    private fun processResult(
+        result: HandLandmarkerResult,
+        frameId: Long,
+        isFrontCamera: Boolean,
+        timestamp: Long
+    ) {
         val hands = mutableListOf<HandLandmarks>()
         val allLandmarks = result.landmarks()
         val allHandedness = result.handedness()
@@ -134,10 +165,11 @@ class HandLandmarkerHelper(
                 leftSmoother.filter(rawPoints, timestamp)
             }
 
-            hands.add(HandLandmarks(smoothedPoints, isRight))
+            hands.add(HandLandmarks(smoothedPoints, isRight, isFrontCamera))
         }
 
-        onResults(hands, timestamp)
+        TrackingProfiler.onSmoothingDone(frameId)
+        onResults(hands, frameId, timestamp)
     }
 
     fun close() {
@@ -145,5 +177,6 @@ class HandLandmarkerHelper(
         handLandmarker = null
         rightSmoother.reset()
         leftSmoother.reset()
+        frameMetaMap.clear()
     }
 }
