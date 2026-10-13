@@ -138,4 +138,80 @@ class DebounceEngineUnitTest {
         assertEquals("Ambiguous predictions with low margin must be rejected", "", state.candidate)
         assertEquals(0f, state.dwellProgress, 0.01f)
     }
+
+    @Test
+    fun testHandPresenceEntersAfter150ms() {
+        val detector = ai.signora.engine.HandPresenceDetector(enterDelayMs = 150L, exitDelayMs = 800L)
+        var time = 1000L
+
+        // Initial state: not collapsed
+        assertFalse(detector.update(hasHand = false, nowMs = time))
+
+        // Hand seen at 1000ms: not yet 150ms
+        assertFalse(detector.update(hasHand = true, nowMs = time))
+
+        // Hand seen at 1100ms: 100ms elapsed, still < 150ms
+        assertFalse(detector.update(hasHand = true, nowMs = time + 100L))
+
+        // Hand seen at 1160ms: 160ms elapsed >= 150ms -> should collapse!
+        assertTrue(detector.update(hasHand = true, nowMs = time + 160L))
+        assertTrue(detector.isHandPresent)
+    }
+
+    @Test
+    fun testHandPresenceDropoutUnder800msDoesNotExpand() {
+        val detector = ai.signora.engine.HandPresenceDetector(enterDelayMs = 150L, exitDelayMs = 800L)
+        var time = 1000L
+
+        // Enter presence
+        detector.update(hasHand = true, nowMs = time)
+        detector.update(hasHand = true, nowMs = time + 200L)
+        assertTrue(detector.isHandPresent)
+
+        // Hand lost for 300ms (< 800ms dropout)
+        assertTrue(detector.update(hasHand = false, nowMs = time + 500L))
+        assertTrue("Brief dropout under 800ms must not expand", detector.isHandPresent)
+
+        // Hand returns at 600ms
+        assertTrue(detector.update(hasHand = true, nowMs = time + 600L))
+        assertTrue(detector.isHandPresent)
+    }
+
+    @Test
+    fun testHandPresenceExitsOnlyAfter800ms() {
+        val detector = ai.signora.engine.HandPresenceDetector(enterDelayMs = 150L, exitDelayMs = 800L)
+        var time = 1000L
+
+        // Enter presence
+        detector.update(hasHand = true, nowMs = time)
+        detector.update(hasHand = true, nowMs = time + 200L)
+        assertTrue(detector.isHandPresent)
+
+        // Hand absent for 850ms (> 800ms)
+        val shouldCollapse = detector.update(hasHand = false, nowMs = time + 200L + 850L)
+        assertFalse("Absence > 800ms must exit collapsed state", shouldCollapse)
+        assertFalse(detector.isHandPresent)
+    }
+
+    @Test
+    fun testManualPinOverrideStaysExpandedFor5000ms() {
+        val detector = ai.signora.engine.HandPresenceDetector(enterDelayMs = 150L, exitDelayMs = 800L, pinDurationMs = 5000L)
+        var time = 1000L
+
+        // Enter presence
+        detector.update(hasHand = true, nowMs = time)
+        detector.update(hasHand = true, nowMs = time + 200L)
+        assertTrue(detector.isHandPresent)
+        assertTrue(detector.shouldCollapse(nowMs = time + 200L))
+
+        // User taps collapsed pill to pin expanded
+        detector.pinExpanded(nowMs = time + 250L)
+
+        // Even though hand is continuously present, should NOT collapse during pin
+        assertFalse("Must stay expanded while pinned", detector.update(hasHand = true, nowMs = time + 1000L))
+        assertFalse("Must stay expanded while pinned", detector.update(hasHand = true, nowMs = time + 4000L))
+
+        // After 5000ms passes (nowMs = time + 5300L), pin expires and collapses again
+        assertTrue("Must re-collapse after pin duration expires", detector.update(hasHand = true, nowMs = time + 5300L))
+    }
 }

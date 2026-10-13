@@ -34,6 +34,7 @@ fun SettingsScreen(
     minMargin: Float,
     isMuted: Boolean,
     isFrontCamera: Boolean,
+    autoCollapseEnabled: Boolean = true,
     onThemeModeChange: (AppThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onDwellProfileChange: (DwellProfile) -> Unit,
@@ -42,6 +43,7 @@ fun SettingsScreen(
     onMinMarginChange: (Float) -> Unit,
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
+    onAutoCollapseChange: (Boolean) -> Unit = {},
     onTestVoice: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -202,8 +204,32 @@ fun SettingsScreen(
                     Slider(
                         value = customDwellMs.toFloat(),
                         onValueChange = { onCustomDwellChange(it.toLong()) },
-                        valueRange = 500f..3000f,
-                        steps = 25
+                        valueRange = 300f..3000f,
+                        steps = 27
+                    )
+                }
+
+                // Auto-Collapse Bottom Bar Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Auto-Collapse on Hand Detection",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Collapses dock into compact tab (150ms enter, 800ms exit hysteresis)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = autoCollapseEnabled,
+                        onCheckedChange = onAutoCollapseChange
                     )
                 }
 
