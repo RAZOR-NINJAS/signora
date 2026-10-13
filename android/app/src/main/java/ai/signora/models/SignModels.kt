@@ -8,7 +8,8 @@ data class Point3D(
 
 data class HandLandmarks(
     val points: List<Point3D>,
-    val isRightHand: Boolean
+    val isRightHand: Boolean,
+    val isFrontCamera: Boolean = true
 )
 
 data class RecognitionResult(

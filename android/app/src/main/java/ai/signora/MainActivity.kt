@@ -18,6 +18,7 @@ import ai.signora.ml.SignoraMLP
 import ai.signora.models.*
 import ai.signora.recovery.AutoAssetManager
 import ai.signora.tts.SpeechManager
+import ai.signora.profiler.TrackingProfiler
 import ai.signora.ui.SignoraScreen
 import ai.signora.ui.theme.AppThemeMode
 import ai.signora.ui.theme.SignoraTheme
@@ -49,6 +50,8 @@ class MainActivity : ComponentActivity() {
     private var isFrontCamera by mutableStateOf(true)
     private var isTorchOn by mutableStateOf(false)
     private var isPaused by mutableStateOf(false)
+    private var autoCollapseEnabled by mutableStateOf(true)
+    private var latestFrameId by mutableStateOf(0L)
     private var themeMode by mutableStateOf(AppThemeMode.DARK)
     private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
@@ -102,6 +105,8 @@ class MainActivity : ComponentActivity() {
                     isDark = themeMode == AppThemeMode.DARK,
                     themeMode = themeMode,
                     dynamicColor = dynamicColorEnabled,
+                    autoCollapseEnabled = autoCollapseEnabled,
+                    latestFrameId = latestFrameId,
                     customDwellMs = customDwellMs,
                     confidenceThreshold = confidenceThreshold,
                     minMargin = minMargin,
@@ -124,6 +129,7 @@ class MainActivity : ComponentActivity() {
                         minMargin = margin
                         debounceEngine.minMargin = margin
                     },
+                    onAutoCollapseChange = { autoCollapseEnabled = it },
                     onToggleMute = {
                         isMuted = !isMuted
                         speechManager.isMuted = isMuted
@@ -214,8 +220,8 @@ class MainActivity : ComponentActivity() {
         handHelper = HandLandmarkerHelper(
             context = this,
             modelFile = landmarkerTaskFile,
-            onResults = { hands, timestamp ->
-                onHandsDetected(hands, timestamp)
+            onResults = { hands, frameId, timestamp ->
+                onHandsDetected(hands, frameId, timestamp)
             },
             onError = { _ ->
                 // Vision pipeline logging
@@ -226,17 +232,18 @@ class MainActivity : ComponentActivity() {
             context = this,
             lifecycleOwner = this,
             previewView = previewView,
-            onFrame = { mpImage, frameTime ->
-                handHelper?.detectLiveStream(mpImage, frameTime)
+            onFrame = { mpImage, rotationDegrees, isFront, frameId, frameTime ->
+                handHelper?.detectLiveStream(mpImage, rotationDegrees, isFront, frameId, frameTime)
             }
         )
         cameraManager?.startCamera()
     }
 
-    private fun onHandsDetected(hands: List<HandLandmarks>, timestamp: Long) {
+    private fun onHandsDetected(hands: List<HandLandmarks>, frameId: Long, timestamp: Long) {
         if (isPaused) return
 
         activeLandmarks = hands
+        latestFrameId = frameId
 
         // Calculate real-time FPS
         frameCount++
@@ -249,25 +256,34 @@ class MainActivity : ComponentActivity() {
 
         if (hands.isEmpty()) {
             debounceState = debounceEngine.update(null, now).copy(fps = currentFps)
+            TrackingProfiler.onVoteDwellDone(frameId)
+            TrackingProfiler.onUiStateEmitted(frameId)
             return
         }
 
         // Extract features based on active mode
         val activeMlp = if (currentMode == RecognitionMode.ASL) aslMlp else islMlp
-        if (activeMlp == null) return
+        if (activeMlp == null) {
+            TrackingProfiler.onUiStateEmitted(frameId)
+            return
+        }
 
         val feats = if (currentMode == RecognitionMode.ASL) {
             FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
         } else {
             FeatureExtractor.extractIslFeatures(hands)
         }
+        TrackingProfiler.onFeaturesExtracted(frameId)
 
         // Run sub-ms neural forward pass
         val result = activeMlp.predict(feats)
+        TrackingProfiler.onMlpDone(frameId)
 
         // Debounce and dwell tracking
         val newState = debounceEngine.update(result, now).copy(fps = currentFps)
+        TrackingProfiler.onVoteDwellDone(frameId)
         debounceState = newState
+        TrackingProfiler.onUiStateEmitted(frameId)
 
         // Vocalize confirmed letters/words
         if (newState.confirmed && newState.lastConfirmed.isNotBlank() && newState.lastConfirmed != "SPACE") {
