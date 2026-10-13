@@ -2,7 +2,6 @@ package ai.signora.ui
 
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,10 +16,8 @@ import ai.signora.ui.components.AppNavigationRail
 import ai.signora.ui.screens.LearnScreen
 import ai.signora.ui.screens.SettingsScreen
 import ai.signora.ui.screens.TranslateScreen
-import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.AppThemeMode
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SignoraScreen(
     previewView: PreviewView,
@@ -38,6 +35,8 @@ fun SignoraScreen(
     isDark: Boolean = true,
     themeMode: AppThemeMode = AppThemeMode.DARK,
     dynamicColor: Boolean = true,
+    autoCollapseEnabled: Boolean = true,
+    latestFrameId: Long = 0L,
     customDwellMs: Long = 1000L,
     confidenceThreshold: Float = 0.70f,
     minMargin: Float = 0.10f,
@@ -47,6 +46,7 @@ fun SignoraScreen(
     onCustomDwellChange: (Long) -> Unit = {},
     onConfidenceThresholdChange: (Float) -> Unit = {},
     onMinMarginChange: (Float) -> Unit = {},
+    onAutoCollapseChange: (Boolean) -> Unit = {},
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
     onToggleTorch: () -> Unit = {},
@@ -76,7 +76,8 @@ fun SignoraScreen(
 
         Scaffold(
             bottomBar = {
-                if (!isWideScreen) {
+                // In Translate screen, navigation bar is embedded in the expanded bottom deck or hidden during translate
+                if (!isWideScreen && currentDestination != AppDestination.TRANSLATE) {
                     AppNavigationBar(
                         currentDestination = currentDestination,
                         onNavigate = { currentDestination = it }
@@ -90,7 +91,7 @@ fun SignoraScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = if (!isWideScreen) innerPadding.calculateBottomPadding() else 0.dp)
+                    .padding(bottom = if (!isWideScreen && currentDestination != AppDestination.TRANSLATE) innerPadding.calculateBottomPadding() else 0.dp)
             ) {
                 when (currentDestination) {
                     AppDestination.TRANSLATE -> {
@@ -107,6 +108,8 @@ fun SignoraScreen(
                             isPaused = isPaused,
                             fps = fps,
                             isDark = isDark,
+                            autoCollapseEnabled = autoCollapseEnabled,
+                            latestFrameId = latestFrameId,
                             assetStatus = assetStatus,
                             onModeChange = onModeChange,
                             onToggleMute = onToggleMute,
@@ -140,12 +143,14 @@ fun SignoraScreen(
                             minMargin = minMargin,
                             isMuted = isMuted,
                             isFrontCamera = isFrontCamera,
+                            autoCollapseEnabled = autoCollapseEnabled,
                             onThemeModeChange = onThemeModeChange,
                             onDynamicColorChange = onDynamicColorChange,
                             onDwellProfileChange = onDwellProfileChange,
                             onCustomDwellChange = onCustomDwellChange,
                             onConfidenceThresholdChange = onConfidenceThresholdChange,
                             onMinMarginChange = onMinMarginChange,
+                            onAutoCollapseChange = onAutoCollapseChange,
                             onToggleMute = onToggleMute,
                             onToggleCamera = onToggleCamera,
                             onTestVoice = onTestVoice

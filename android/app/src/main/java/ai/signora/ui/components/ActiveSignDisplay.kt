@@ -8,6 +8,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SpaceBar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,11 +97,26 @@ fun ActiveSignDisplay(
                 }
             ) {
                 if (candidate.isNotBlank()) {
-                    Text(
-                        text = candidate,
-                        style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
-                        color = if (isCommitted) successColor else MaterialTheme.colorScheme.onSurface
-                    )
+                    if (candidate == "SPACE") {
+                        Icon(
+                            imageVector = Icons.Filled.SpaceBar,
+                            contentDescription = "Space",
+                            tint = if (isCommitted) successColor else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Text(
+                            text = "SPACE",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = candidate,
+                            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
+                            color = if (isCommitted) successColor else MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1
+                        )
+                    }
 
                     if (confidence > 0f) {
                         Text(
