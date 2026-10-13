@@ -469,7 +469,7 @@ def run_isl_collector(
     # If requested direct training
     if auto_train:
         print("[Studio] Directly invoking ISL model training on all data...")
-        from scripts.train_isl import train_isl_model
+        from signora.isl.train import train_isl_model
 
         res = train_isl_model(data_dir=data_dir)
         return 0 if res.get("success") else 1
@@ -569,7 +569,7 @@ def run_isl_collector(
 
                 print("\n[Studio] Initiating neural network training on all data...")
                 try:
-                    from scripts.train_isl import train_isl_model
+                    from signora.isl.train import train_isl_model
 
                     res = train_isl_model(data_dir=data_dir)
                     if res.get("success"):

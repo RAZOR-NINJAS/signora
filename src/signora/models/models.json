@@ -48,8 +48,8 @@
       "filename": "isl_mlp.pt",
       "subdir": "isl",
       "description": "164D ISL two-handed MLP classifier (A-Z + 10 static words)",
-      "size_bytes": 223621,
-      "sha256": "06c5ba4cc295945797beb5ab43f4759155936f27f5b25a98a016d3d02b893b42",
+      "size_bytes": 224517,
+      "sha256": "ed1eb234a6937d2233b85800f1784a8daeb98112da9af26d386de412c839d1e3",
       "urls": [
         "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.0/isl_mlp.pt"
       ]
