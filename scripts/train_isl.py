@@ -98,11 +98,8 @@ def load_dataset(data_dir: Path, baseline_ckpt_path: Path) -> Tuple[np.ndarray, 
 
     # 2. Load newly recorded user samples from data/isl/*.npy
     new_files = list(data_dir.glob("*.npy"))
-    if not new_files:
-        print(f"[Error] No sample files found in {data_dir}.", file=sys.stderr)
-        print("Please record samples first using:")
-        print("    python scripts/collect_isl.py --sign D --count 20", file=sys.stderr)
-        sys.exit(1)
+    if not new_files and not baseline_ckpt_path.exists():
+        raise FileNotFoundError(f"No sample files found in {data_dir} and no baseline checkpoint found.")
 
     for npy_file in new_files:
         sign_label = npy_file.stem.upper()
@@ -239,6 +236,23 @@ def train_isl_model(
     torch.save(new_ckpt, ckpt_path)
     print(f"🎉 Saved updated ISL model checkpoint -> {ckpt_path}")
 
+    # Synchronize models.json manifest hash
+    try:
+        import json
+        from signora.models.manifest import _MANIFEST_PATH, compute_sha256
+
+        if _MANIFEST_PATH.exists():
+            with open(_MANIFEST_PATH, "r", encoding="utf-8") as mf:
+                mdata = json.load(mf)
+            if "isl_signs" in mdata.get("models", {}):
+                mdata["models"]["isl_signs"]["sha256"] = compute_sha256(ckpt_path)
+                mdata["models"]["isl_signs"]["size_bytes"] = ckpt_path.stat().st_size
+                with open(_MANIFEST_PATH, "w", encoding="utf-8") as mf:
+                    json.dump(mdata, mf, indent=2)
+                print(f"✓ Updated manifest SHA-256 in {_MANIFEST_PATH.name}")
+    except Exception as me:
+        print(f"[Warning] Could not update models.json manifest: {me}")
+
     # Automatically export for Android APK
     print("\n⚡ Exporting mobile assets for Android Unspoken app...")
     from scripts.export_mobile_models import export_model_to_json
@@ -254,6 +268,15 @@ def train_isl_model(
     print("Or recompile the Android APK:")
     print("    ./android/setup.sh")
     print("=" * 65)
+
+    return {
+        "success": True,
+        "val_acc": float(best_acc),
+        "labels": labels,
+        "n_samples": int(len(X)),
+        "epochs": epochs,
+        "ckpt_path": str(ckpt_path),
+    }
 
 
 def main():

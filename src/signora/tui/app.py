@@ -202,6 +202,12 @@ class SignoraTUI:
             "Low (~10%)",
         )
         table.add_row(
+            "C",
+            "ISL Studio (Collect & Train)",
+            "Interactive letter sample recorder (300 samples, 5s timer) & MLP trainer",
+            "Real-time",
+        )
+        table.add_row(
             "3",
             "ASL Dynamic Words",
             "16-word holistic motion trajectory matching via FastDTW-kNN",
@@ -295,6 +301,8 @@ class SignoraTUI:
             choices=[
                 "1",
                 "2",
+                "C",
+                "c",
                 "3",
                 "4",
                 "5",
@@ -960,6 +968,22 @@ class SignoraTUI:
                 self.console.print(panel)
         Prompt.ask("\nPress Enter to return to dictionary menu", console=self.console)
 
+    def run_isl_collector_flow(self) -> None:
+        self.console.print("\n[bold cyan]=== ISL Sample Collection Studio & Neural Trainer ===[/bold cyan]\n")
+        self.console.print("Studio highlights:")
+        self.console.print("  • [bold green][SPACE][/bold green] : Start 5s countdown & auto-collect 300 samples")
+        self.console.print("  • [bold cyan][← / → or A-Z][/bold cyan] : Select any ISL sign (A-Z, SPACE)")
+        self.console.print("  • [bold yellow][T][/bold yellow] : Train neural network on all collected data")
+        self.console.print("  • [bold red][Q][/bold red] : Exit Studio\n")
+        from signora.isl.collect import run_isl_collector
+
+        selected_source = self.settings.get("camera_index", 0)
+        try:
+            run_isl_collector(source=selected_source, count=300, timer_seconds=5.0)
+        except Exception as exc:
+            self.console.print(f"[bold red]Error running collector: {exc}[/bold red]")
+        Prompt.ask("\nPress Enter to return to main menu", console=self.console)
+
     def loop(self) -> int:
         """Main interaction loop."""
         while True:
@@ -971,6 +995,8 @@ class SignoraTUI:
                 self.run_asl_flow()
             elif choice == "2":
                 self.run_isl_flow()
+            elif choice in ("C", "c"):
+                self.run_isl_collector_flow()
             elif choice == "3":
                 self.run_words_flow()
             elif choice == "4":

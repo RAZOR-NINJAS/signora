@@ -20,6 +20,14 @@
 
 ---
 
+## 📸 Screenshots
+
+| Live ASL Translation ('A') | Live ASL Translation ('M') | Sign Academy (Learn Mode) | Material 3 Preferences |
+| :---: | :---: | :---: | :---: |
+| ![Live Translation A](../assets/screenshots/screenshot-01-translate-a.jpg) | ![Live Translation M](../assets/screenshots/screenshot-02-translate-m.jpg) | ![Sign Academy](../assets/screenshots/screenshot-03-learn-academy.jpg) | ![Preferences](../assets/screenshots/screenshot-04-settings-preferences.jpg) |
+
+---
+
 ## 📂 Architecture & Directory Structure
 
 ```

@@ -14,7 +14,19 @@ def test_cli_version():
 
 def test_cli_subcommands_present():
     parser = create_parser()
-    expected_cmds = {"live", "asl", "isl", "words", "game", "learn", "doctor", "models", "tui"}
+    expected_cmds = {
+        "live",
+        "asl",
+        "isl",
+        "words",
+        "game",
+        "learn",
+        "doctor",
+        "models",
+        "tui",
+        "collect",
+        "studio",
+    }
 
     subparsers_actions = [
         action
@@ -122,6 +134,20 @@ def test_cli_models_args():
     assert args.subcommand == "models"
     assert args.action == "verify"
     assert args.dir == "/tmp/models"
+
+
+def test_cli_collect_args():
+    parser = create_parser()
+    args = parser.parse_args(
+        ["collect", "-s", "D", "-n", "300", "--timer", "5.0", "--train", "--headless", "--fake-camera"]
+    )
+    assert args.subcommand == "collect"
+    assert args.sign == "D"
+    assert args.count == 300
+    assert args.timer == 5.0
+    assert args.train is True
+    assert args.headless is True
+    assert args.fake_camera is True
 
 
 def test_tui_initialization_and_header():

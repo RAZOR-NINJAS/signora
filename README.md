@@ -22,7 +22,7 @@
 
 ---
 
-[Quick Install](#-quick-install) • [Core Modes](#-core-modes) • [Modern Glassmorphic HUD](#-modern-glassmorphic-hud) • [Interactive TUI](#-interactive-terminal-dashboard-tui) • [How It Works](#-how-it-works) • [Controls](#-keyboard-controls) • [System Doctor](#-system-diagnostics) • [Benchmarks](#-performance-benchmarks) • [Documentation](#-documentation)
+[Quick Install](#-quick-install) • [Core Modes](#-core-modes) • [Native Android App](#-native-android-app-unspoken) • [Modern Glassmorphic HUD](#-modern-glassmorphic-hud) • [Interactive TUI](#-interactive-terminal-dashboard-tui) • [How It Works](#-how-it-works) • [Controls](#-keyboard-controls) • [System Doctor](#-system-diagnostics) • [Benchmarks](#-performance-benchmarks) • [Documentation](#-documentation)
 
 ---
 
@@ -86,6 +86,22 @@ signora doctor
 | **🦖 Shadow-Play Game** | `signora game --kiosk` | Real-time hand posture classification | Browser obstacle runner • Jump/crouch gestures |
 | **🎓 Learning Kiosk** | `signora learn --kiosk` | Real-time posture tracking vs reference signs | Interactive drills • Visual guides • Timed sign quizzes |
 | **🩺 System Doctor** | `signora doctor` | Automated 10-point self-test suite | Camera backends, model weights, audio, loopback |
+
+---
+
+## 📱 Native Android App (Unspoken)
+
+Signora features a native companion app for Android (**Unspoken.apk** / **Signora.apk**), built with Jetpack Compose, CameraX, and Google MediaPipe Tasks Vision:
+
+- **100% On-Device Neural Inference:** Sub-0.2ms forward pass using a custom pure-Kotlin neural MLP with zero heavy C++/NDK bloat.
+- **Hardware Matrix Upright Blit:** Real-time portrait transformation with zero per-frame heap allocations (<1.0ms) ensures pixel-perfect landmark tracking on front-facing cameras.
+- **Material 3 Expressive Design:** Hand-aware auto-collapsing navigation bar with 150ms enter / 800ms exit hysteresis, floating status pill, and Sign Academy.
+
+| Live ASL Translation ('A') | Live ASL Translation ('M') | Sign Academy (Learn Mode) | Material 3 Preferences |
+| :---: | :---: | :---: | :---: |
+| ![Live Translation A](assets/screenshots/screenshot-01-translate-a.jpg) | ![Live Translation M](assets/screenshots/screenshot-02-translate-m.jpg) | ![Sign Academy](assets/screenshots/screenshot-03-learn-academy.jpg) | ![Preferences](assets/screenshots/screenshot-04-settings-preferences.jpg) |
+
+Download the pre-compiled APK directly from the [latest GitHub Release](https://github.com/RAZOR-NINJAS/signora/releases/latest).
 
 ---
 

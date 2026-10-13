@@ -156,6 +156,34 @@ def create_parser() -> argparse.ArgumentParser:
     # 8. signora tui
     subparsers.add_parser("tui", help="Launch interactive Terminal UI dashboard")
 
+    # 9. signora collect / studio
+    p_collect = subparsers.add_parser(
+        "collect",
+        aliases=["studio"],
+        help="Interactive ISL sample collection studio & neural trainer",
+    )
+    p_collect.add_argument(
+        "-s", "--sign", default=None, help="Specific ISL letter/sign to collect (e.g. A-Z, SPACE)"
+    )
+    p_collect.add_argument(
+        "-n", "--count", type=int, default=300, help="Target samples to collect automatically (default: 300)"
+    )
+    p_collect.add_argument(
+        "--timer", type=float, default=5.0, help="Countdown timer duration before auto-capture in seconds (default: 5.0)"
+    )
+    p_collect.add_argument(
+        "--source", default="0", help="Camera index or device path (default: 0)"
+    )
+    p_collect.add_argument(
+        "--train", action="store_true", help="Train PyTorch MLP model on all collected ISL data"
+    )
+    p_collect.add_argument(
+        "--headless", action="store_true", help="Run without graphical display window"
+    )
+    p_collect.add_argument(
+        "--fake-camera", action="store_true", help="Use synthetic camera for testing"
+    )
+
     return parser
 
 
@@ -280,6 +308,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         from signora.tui.app import run_tui
 
         return run_tui()
+
+    if args.subcommand in ("collect", "studio"):
+        from signora.isl.collect import run_isl_collector
+
+        cam_source = args.source
+        if str(cam_source).isdigit():
+            cam_source = int(cam_source)
+
+        return run_isl_collector(
+            sign=args.sign,
+            count=args.count,
+            source=cam_source,
+            timer_seconds=args.timer,
+            headless=args.headless,
+            use_fake=args.fake_camera,
+            auto_train=args.train,
+        )
 
     parser.print_help()
     return 0

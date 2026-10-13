@@ -35,3 +35,18 @@ def test_isl_predictor_inference():
     label, conf = predictor.predict(dummy_feats)
     assert label in predictor.labels
     assert 0.0 <= conf <= 1.0
+
+
+def test_isl_collect_studio():
+    from signora.isl.collect import ISL_LETTERS, get_existing_counts, run_isl_collector
+
+    assert len(ISL_LETTERS) == 27
+    assert "A" in ISL_LETTERS
+    assert "Z" in ISL_LETTERS
+    assert "SPACE" in ISL_LETTERS
+
+    counts = get_existing_counts()
+    assert isinstance(counts, dict)
+
+    rc = run_isl_collector(sign="A", count=1, headless=True, use_fake=True)
+    assert rc == 0
