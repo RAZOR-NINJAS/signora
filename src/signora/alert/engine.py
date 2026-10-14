@@ -148,3 +148,4 @@ class AlertEngine:
             except Exception:
                 pass
             self.stream = None
+        self.classifier.close()

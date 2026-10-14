@@ -226,6 +226,15 @@ def create_parser() -> argparse.ArgumentParser:
     p_alert.add_argument(
         "--fake-mic", action="store_true", help="Use synthetic microphone audio for testing"
     )
+    p_alert.add_argument(
+        "--calibrate", action="store_true", help="Profile room ambient acoustics and calibrate sensitivity"
+    )
+    p_alert.add_argument(
+        "--simulate",
+        choices=["doorbell", "knock", "siren", "call", "baby", "bark", "glass"],
+        default=None,
+        help="Simulate a specific acoustic event and trigger desktop/popup alerts",
+    )
 
     p_lipsync = subparsers.add_parser(
         "lipsync",
@@ -403,6 +412,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             dispatcher = AlertDispatcher(enable_desktop=True)
             dispatcher.test_alert()
             print("✓ Dispatched test visual desktop alert: 🔔 DOORBELL")
+            return 0
+
+        if args.calibrate:
+            from signora.alert import calibrate_microphone
+
+            calibrate_microphone(use_fake=args.fake_mic)
+            return 0
+
+        if args.simulate:
+            from signora.alert import AlertEngine
+
+            engine = AlertEngine(enable_desktop=enable_desktop, use_fake_mic=True)
+            ev = engine.simulate_sound(args.simulate)
+            if ev:
+                print(f"✓ Successfully simulated sound: {ev.icon} {ev.title}")
+            else:
+                print(f"✓ Dispatched simulated acoustic test: {args.simulate.upper()}")
             return 0
 
         if args.stop:

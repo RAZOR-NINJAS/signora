@@ -48,7 +48,7 @@ def test_documented_flags_exist():
     # Check alert flags
     alert_parser = subparser_dict["alert"]
     alert_flags = [opt for act in alert_parser._actions for opt in act.option_strings]
-    for flag in ["--daemon", "--start", "--stop", "--status", "--sensitivity", "--test"]:
+    for flag in ["--daemon", "--start", "--stop", "--status", "--sensitivity", "--test", "--calibrate", "--simulate"]:
         assert flag in alert_flags, f"Missing flag '{flag}' on 'signora alert'"
 
     # Check live flags

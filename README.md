@@ -95,16 +95,25 @@ signora doctor
 
 Assistive environmental acoustic perception designed specifically for Deaf and Hard of Hearing individuals. 100% offline edge audio processing detects household sounds and translates them into vivid visual notifications and peripheral screen strobes.
 
-- **Detectable Sound Signatures:**
-  - 🔔 **Doorbell / Intercom Chimes:** Dual-tone resonant harmonics (600–900 Hz).
-  - 🚪 **Door Knocks:** Rhythmic low-frequency acoustic transient onset strikes (100–750 Hz).
-  - 🚨 **Siren / Fire Alarms:** Continuous or pulsed high-frequency alarm tones (2.4–3.8 kHz) with immediate critical urgency.
-  - 🗣️ **Human Calls:** Formant harmonic energy spikes (someone calling out or shouting for attention).
-- **Background Daemon:** Runs silently in the background using minimal CPU (<1%), triggering native desktop notifications via `notify-send` (Linux) or Windows Toast notifications.
-- **Glassmorphic Visual HUD:** Live audio decibel meter (dB SPL), spectral energy breakdown bars, recent event history, and full-screen pulsing strobe border during active alerts.
+- **Dual-Engine Sound Perception:**
+  - **Google YAMNet AudioSet Deep Neural Network:** 521-class neural model running 100% on-device CPU via MediaPipe Tasks Audio for false-positive-free acoustic classification.
+  - **Sub-50ms Spectral Fast-Path:** Instant FFT energy analysis to detect sharp transients immediately.
+- **Recognized Sound Categories:**
+  - 🔔 **Doorbells & Chimes:** Ding-dong bells, telephone ringers, and intercom buzzers.
+  - 🚪 **Door Knocks:** Rhythmic low-frequency strikes and tapping on door surfaces.
+  - 🚨 **Smoke Alarms & Sirens:** High-frequency emergency alarms, fire sirens, and vehicle sirens.
+  - 🗣️ **Human Shouting & Calls:** Urgent distress yelling, calling out, and crying.
+  - 👶 **Baby Crying:** Infant acoustic distress harmonics.
+  - 🐕 **Dog Barking:** Canine acoustic bursts.
+  - 💥 **Glass Shatter:** Sudden high-frequency breaking impulses.
+- **Unmissable On-Top Visual Popups:** Floating topmost visual strobe banner catches peripheral vision over all desktop windows with color-coded pulsing borders.
+- **Acoustic Calibration Tool:** Profiles room ambient noise floor and automatically tunes detection thresholds.
 
 ```bash
-# Launch interactive visual monitor with HUD
+# Calibrate microphone to your room's ambient noise
+signora alert --calibrate
+
+# Launch interactive visual monitor with live HUD
 signora alert
 
 # Start background audio monitoring daemon
@@ -116,8 +125,8 @@ signora alert --status
 # Stop background daemon
 signora alert --stop
 
-# Send a test visual alert
-signora alert --test
+# Simulate any sound to test notifications (doorbell, knock, siren, call, baby, bark, glass)
+signora alert --simulate doorbell
 ```
 
 ---

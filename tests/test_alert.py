@@ -12,7 +12,9 @@ from signora.cli import create_parser
 class TestSoundClassifier:
     @pytest.fixture
     def classifier(self):
-        return SoundClassifier(sample_rate=16000, sensitivity="medium")
+        c = SoundClassifier(sample_rate=16000, sensitivity="medium")
+        yield c
+        c.close()
 
     def test_silence_detection(self, classifier):
         # 16000 samples of zero
@@ -143,5 +145,28 @@ class TestAlertCLI:
             "--test",
             "--headless",
             "--fake-mic",
+            "--calibrate",
+            "--simulate",
         ]:
             assert expected in flags, f"Flag {expected} missing in alert subcommand"
+
+
+class TestAlertCalibrationAndPopup:
+    def test_calibrate_microphone_fake(self):
+        from signora.alert.calibrate import calibrate_microphone
+
+        rec, metrics = calibrate_microphone(duration_seconds=0.2, use_fake=True)
+        assert rec in ["high", "medium", "low"]
+        assert "avg_db" in metrics
+        assert "max_db" in metrics
+
+    def test_popup_smoke(self):
+        from signora.alert.popup import spawn_alert_popup_async
+
+        # Smoke test without crashing
+        spawn_alert_popup_async(
+            icon="🔔",
+            title="TEST DOORBELL",
+            description="Unit test trigger",
+            duration_seconds=0.1,
+        )

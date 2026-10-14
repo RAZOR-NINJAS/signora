@@ -101,12 +101,14 @@ def render_alert_hud(
         2,
         cv2.LINE_AA,
     )
+    neural_active = telemetry.get("neural_active", 0.0) > 0.5
+    engine_label = "Neural: Google YAMNet AudioSet" if neural_active else "Spectral Acoustic FFT"
     cv2.putText(
         frame,
-        f"100% Offline Acoustic Assistive Monitor  |  Sensitivity: {sensitivity.upper()}  |  Desktop Alerts: {'ON' if desktop_enabled else 'OFF'}",
+        f"100% Offline Assistive Monitor  |  {engine_label}  |  Sens: {sensitivity.upper()}  |  Desktop: {'ON' if desktop_enabled else 'OFF'}",
         (20, 62),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.48,
+        0.44,
         (148, 163, 184),
         1,
         cv2.LINE_AA,

@@ -1008,9 +1008,11 @@ class SignoraTUI:
         self.console.print("  [3] Stop Background Daemon")
         self.console.print("  [4] View Daemon Status & Alert Log")
         self.console.print("  [5] Fire Test Desktop Notification (Doorbell)")
+        self.console.print("  [6] Calibrate Room Noise & Acoustic Thresholds")
+        self.console.print("  [7] Simulate Sound (Doorbell / Knock / Siren / Call / Baby)")
         self.console.print("  [0] Return to Main Menu\n")
 
-        sub = Prompt.ask("Select option", choices=["1", "2", "3", "4", "5", "0"], default="1", console=self.console)
+        sub = Prompt.ask("Select option", choices=["1", "2", "3", "4", "5", "6", "7", "0"], default="1", console=self.console)
         if sub == "1":
             from signora.alert import run_alert_live
             run_alert_live(sensitivity="medium")
@@ -1027,6 +1029,21 @@ class SignoraTUI:
             from signora.alert import AlertDispatcher
             AlertDispatcher(enable_desktop=True).test_alert()
             self.console.print("[bold green]✓ Test desktop notification sent![/bold green]")
+        elif sub == "6":
+            from signora.alert import calibrate_microphone
+            calibrate_microphone()
+        elif sub == "7":
+            sound_choice = Prompt.ask(
+                "Choose sound to simulate",
+                choices=["doorbell", "knock", "siren", "call", "baby", "bark", "glass"],
+                default="doorbell",
+                console=self.console,
+            )
+            from signora.alert import AlertEngine
+            engine = AlertEngine(enable_desktop=True, use_fake_mic=True)
+            ev = engine.simulate_sound(sound_choice)
+            if ev:
+                self.console.print(f"[bold green]✓ Successfully triggered simulation: {ev.icon} {ev.title}[/bold green]")
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
     def run_lipsync_flow(self) -> None:

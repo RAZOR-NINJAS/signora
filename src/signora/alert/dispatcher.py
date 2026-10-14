@@ -138,6 +138,23 @@ class AlertDispatcher:
                 except Exception:
                     pass
 
+        # Trigger on-top floating visual strobe window
+        try:
+            from signora.alert.popup import spawn_alert_popup_async
+
+            b, g, r = event.color_bgr
+            color_hex = f"#{r:02x}{g:02x}{b:02x}"
+            duration = 6.0 if event.urgency == "critical" else 4.2
+            spawn_alert_popup_async(
+                icon=event.icon,
+                title=event.title,
+                description=event.description,
+                color_hex=color_hex,
+                duration_seconds=duration,
+            )
+        except Exception:
+            pass
+
     def test_alert(self, category: SoundCategory = SoundCategory.DOORBELL) -> AlertEvent:
         """Generate and dispatch a test alert for instant verification."""
         if category == SoundCategory.SIREN_ALARM:

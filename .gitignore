@@ -28,11 +28,13 @@ models/*.task
 models/*.pt
 models/*.onnx*
 models/*.npz
+models/*.tflite
 *.onnx
 *.onnx.json
 *.task
 *.pt
 *.npz
+*.tflite
 
 # Logs & temporary files
 *.log

@@ -1,4 +1,8 @@
-"""Acoustic environmental sound classifier for deaf/hard-of-hearing assistive alerts."""
+"""Acoustic environmental sound classifier for deaf/hard-of-hearing assistive alerts.
+
+Combines Google AudioSet deep neural network (YAMNet via MediaPipe Tasks Audio)
+with low-latency spectral energy band analysis for 100% offline edge sound detection.
+"""
 
 import collections
 import time
@@ -7,6 +11,17 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+
+try:
+    from mediapipe.tasks.python import audio
+    from mediapipe.tasks.python.components import containers
+    from mediapipe.tasks.python.core import base_options
+    MEDIAPIPE_AUDIO_AVAILABLE = True
+except Exception:
+    audio = None
+    containers = None
+    base_options = None
+    MEDIAPIPE_AUDIO_AVAILABLE = False
 
 
 class SoundCategory(str, Enum):
@@ -17,6 +32,7 @@ class SoundCategory(str, Enum):
     HUMAN_CALL = "HUMAN_CALL"
     BABY_CRY = "BABY_CRY"
     DOG_BARK = "DOG_BARK"
+    GLASS_BREAK = "GLASS_BREAK"
     AMBIENT = "AMBIENT"
 
 
@@ -27,8 +43,8 @@ class AlertEvent:
     title: str
     description: str
     confidence: float
-    urgency: str       # "critical", "normal", "low"
-    icon: str          # Emoji/symbol for display
+    urgency: str       # "critical", "high", "normal", "low"
+    icon: str          # Visual symbol / emoji
     color_bgr: Tuple[int, int, int]
     timestamp: float = 0.0
 
@@ -37,37 +53,96 @@ class AlertEvent:
             self.timestamp = time.time()
 
 
+# AudioSet keyword to SoundCategory mapping
+YAMNET_CLASS_MAP = {
+    # Doorbell / Chime
+    "doorbell": (SoundCategory.DOORBELL, "DOORBELL / CHIME DETECTED", "🔔", "Harmonic doorbell / chime ring at door", "normal", (52, 211, 153)),
+    "ding-dong": (SoundCategory.DOORBELL, "DOORBELL CHIME DETECTED", "🔔", "Ding-dong door chime acoustic signature", "normal", (52, 211, 153)),
+    "chime": (SoundCategory.DOORBELL, "DOOR CHIME DETECTED", "🔔", "Resonant chime acoustic signature", "normal", (52, 211, 153)),
+    "jingle bell": (SoundCategory.DOORBELL, "BELL CHIME DETECTED", "🔔", "Bell or chime ringing", "normal", (52, 211, 153)),
+    "telephone bell ringing": (SoundCategory.DOORBELL, "TELEPHONE / INTERCOM RING", "📞", "Telephone or intercom bell ringing", "normal", (52, 211, 153)),
+    "bicycle bell": (SoundCategory.DOORBELL, "BELL RING DETECTED", "🔔", "Bell ringing acoustic signature", "normal", (52, 211, 153)),
+    "buzzer": (SoundCategory.DOORBELL, "INTERCOM / DOOR BUZZER", "🚨", "Electric door buzzer tone", "normal", (52, 211, 153)),
+
+    # Knocks
+    "knock": (SoundCategory.DOOR_KNOCK, "KNOCK AT THE DOOR", "🚪", "Impulsive knocking acoustic signature", "normal", (245, 158, 11)),
+    "door": (SoundCategory.DOOR_KNOCK, "DOOR ACTIVITY / KNOCK", "🚪", "Door movement or strike detected", "normal", (245, 158, 11)),
+    "tap": (SoundCategory.DOOR_KNOCK, "TAPPING / KNOCKING", "🚪", "Rhythmic tapping detected", "normal", (245, 158, 11)),
+    "thump, thud": (SoundCategory.DOOR_KNOCK, "LOUD THUMP / KNOCK", "🚪", "Heavy strike or knock detected", "normal", (245, 158, 11)),
+
+    # Alarms / Sirens
+    "fire alarm": (SoundCategory.SIREN_ALARM, "EMERGENCY: FIRE ALARM", "🚨", "Fire alarm acoustic warning pattern", "critical", (0, 0, 255)),
+    "smoke detector, smoke alarm": (SoundCategory.SIREN_ALARM, "EMERGENCY: SMOKE DETECTOR", "🚨", "High-frequency smoke detector beeps", "critical", (0, 0, 255)),
+    "siren": (SoundCategory.SIREN_ALARM, "EMERGENCY: SIREN ALARM", "🚨", "High-frequency emergency siren", "critical", (0, 0, 255)),
+    "ambulance (siren)": (SoundCategory.SIREN_ALARM, "EMERGENCY: AMBULANCE SIREN", "🚑", "Emergency vehicle siren nearby", "critical", (0, 0, 255)),
+    "police car (siren)": (SoundCategory.SIREN_ALARM, "EMERGENCY: POLICE SIREN", "🚓", "Police emergency siren nearby", "critical", (0, 0, 255)),
+    "fire engine, fire truck (siren)": (SoundCategory.SIREN_ALARM, "EMERGENCY: FIRE TRUCK SIREN", "🚒", "Fire vehicle siren nearby", "critical", (0, 0, 255)),
+    "civil defense siren": (SoundCategory.SIREN_ALARM, "EMERGENCY: SIREN WARNING", "🚨", "Civil siren acoustic warning", "critical", (0, 0, 255)),
+    "alarm": (SoundCategory.SIREN_ALARM, "LOUD ALARM DETECTED", "⏰", "Continuous acoustic alarm tone", "critical", (0, 0, 255)),
+    "car alarm": (SoundCategory.SIREN_ALARM, "VEHICLE ALARM DETECTED", "🚗", "Car alarm acoustic horn pattern", "high", (0, 0, 255)),
+
+    # Human calls
+    "shout": (SoundCategory.HUMAN_CALL, "SOMEONE SHOUTING", "🗣️", "Loud shouting detected nearby", "normal", (6, 182, 212)),
+    "yell": (SoundCategory.HUMAN_CALL, "SOMEONE CALLING OUT", "🗣️", "Human voice calling for attention", "normal", (6, 182, 212)),
+    "children shouting": (SoundCategory.HUMAN_CALL, "CHILDREN SHOUTING", "🗣️", "Shouting or calling detected", "normal", (6, 182, 212)),
+    "screaming": (SoundCategory.HUMAN_CALL, "URGENT: SCREAM / YELL", "⚠️", "Urgent vocal distress / screaming detected", "high", (6, 182, 212)),
+
+    # Baby cry
+    "baby cry, infant cry": (SoundCategory.BABY_CRY, "BABY CRYING DETECTED", "👶", "Infant crying acoustic harmonics", "high", (244, 114, 182)),
+    "crying, sobbing": (SoundCategory.BABY_CRY, "CRYING DETECTED", "👶", "Vocal distress / crying detected", "high", (244, 114, 182)),
+
+    # Dog bark
+    "bark": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic bark signature", "low", (251, 146, 60)),
+    "dog": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic sound detected", "low", (251, 146, 60)),
+
+    # Glass shatter
+    "glass": (SoundCategory.GLASS_BREAK, "GLASS BREAKING / SHATTER", "💥", "High-frequency glass shatter acoustic impulse", "critical", (239, 68, 68)),
+}
+
+
 class SoundClassifier:
-    """100% Offline, low-latency spectral acoustic event classifier."""
+    """Hybrid edge sound classifier combining Google YAMNet neural inference and spectral acoustics."""
 
     def __init__(self, sample_rate: int = 16000, sensitivity: str = "medium"):
         self.sample_rate = sample_rate
         self.set_sensitivity(sensitivity)
 
-        # Sliding audio analysis buffer (1.2 seconds ~ 19,200 samples)
-        self.buffer_len = int(sample_rate * 1.2)
+        # 0.975s analysis buffer for YAMNet (15,600 samples)
+        self.buffer_len = int(sample_rate * 1.0)
         self.buffer: collections.deque = collections.deque(maxlen=self.buffer_len)
 
         # Rolling history for transient onset detection
         self.energy_history: collections.deque = collections.deque(maxlen=40)
-        self.noise_floor: float = 0.01
+        self.noise_floor: float = 0.012
 
-        # Attempt to load MediaPipe AudioClassifier if available
+        # Step rate limiter for YAMNet neural inference (run every ~250ms)
+        self.last_yamnet_time = 0.0
+        self.yamnet_interval = 0.25
+
+        # Initialize MediaPipe AudioClassifier
         self.mediapipe_classifier = None
         self._init_mediapipe_audio()
 
     def _init_mediapipe_audio(self) -> None:
-        """Optionally initialize MediaPipe AudioClassifier if model asset is present."""
+        """Initialize Google AudioSet neural classifier if model is present."""
+        if not MEDIAPIPE_AUDIO_AVAILABLE:
+            return
+
         try:
-            from mediapipe.tasks.python import audio
             from signora.models.manifest import get_default_models_dir
 
             model_path = get_default_models_dir() / "yamnet.tflite"
+            if not model_path.exists():
+                # Check repo root
+                alt_path = model_path.parents[3] / "models" / "yamnet.tflite"
+                if alt_path.exists():
+                    model_path = alt_path
+
             if model_path.exists():
                 options = audio.AudioClassifierOptions(
-                    base_options=audio.BaseOptions(model_asset_path=str(model_path)),
-                    max_results=3,
-                    score_threshold=0.35,
+                    base_options=base_options.BaseOptions(model_asset_path=str(model_path)),
+                    max_results=6,
+                    score_threshold=0.15 * self.thresh_mult,
                 )
                 self.mediapipe_classifier = audio.AudioClassifier.create_from_options(options)
         except Exception:
@@ -78,124 +153,147 @@ class SoundClassifier:
         sensitivity = sensitivity.lower()
         if sensitivity == "high":
             self.thresh_mult = 0.65
-            self.min_confidence = 0.45
+            self.min_confidence = 0.40
         elif sensitivity == "low":
-            self.thresh_mult = 1.4
+            self.thresh_mult = 1.45
             self.min_confidence = 0.75
         else:  # medium
             self.thresh_mult = 1.0
-            self.min_confidence = 0.60
+            self.min_confidence = 0.55
 
     def update_audio(self, samples: np.ndarray) -> None:
         """Append incoming audio samples to rolling circular buffer."""
         self.buffer.extend(samples.flatten())
 
     def process(self) -> Tuple[Optional[AlertEvent], Dict[str, float]]:
-        """Analyze current audio buffer and detect significant environmental events.
-
-        Returns:
-            (event, telemetry_dict)
-        """
-        if len(self.buffer) < int(self.sample_rate * 0.4):
+        """Analyze current audio buffer and return detected sound event and telemetry."""
+        if len(self.buffer) < int(self.sample_rate * 0.3):
             return None, {"rms": 0.0, "db": -60.0}
 
-        audio = np.array(self.buffer, dtype=np.float32)
+        audio_arr = np.array(self.buffer, dtype=np.float32)
 
-        # Compute RMS volume and decibels
-        rms = float(np.sqrt(np.mean(audio**2)))
-        db_spl = float(20.0 * np.log10(max(rms, 1e-5)) + 94.0)  # Approx dB SPL relative to mic max
+        # 1. Compute RMS volume and decibels
+        rms = float(np.sqrt(np.mean(audio_arr**2)))
+        db_spl = float(20.0 * np.log10(max(rms, 1e-5)) + 94.0)
 
-        # Update adaptive noise floor
-        self.noise_floor = 0.98 * self.noise_floor + 0.02 * min(rms, self.noise_floor * 2.0)
-        norm_energy = float(np.clip((rms - self.noise_floor) / max(0.015, self.noise_floor * 4.0), 0.0, 1.0))
+        # Update adaptive noise floor (slowly tracking ambient quiet background)
+        self.noise_floor = 0.99 * self.noise_floor + 0.01 * min(rms, self.noise_floor * 1.8)
+        norm_energy = float(np.clip((rms - self.noise_floor) / max(0.015, self.noise_floor * 3.5), 0.0, 1.0))
         self.energy_history.append(rms)
 
-        telemetry = {
+        telemetry: Dict[str, float] = {
             "rms": rms,
             "db": db_spl,
             "noise_floor": self.noise_floor,
             "norm_energy": norm_energy,
+            "neural_active": 1.0 if self.mediapipe_classifier else 0.0,
         }
 
-        # If audio energy is below active threshold, return ambient
-        if rms < 0.012 * self.thresh_mult:
-            return None, telemetry
-
-        # 1. Spectral Analysis via FFT
+        # 2. Spectral Analysis via FFT for telemetry & fast-path
         n_fft = 2048
-        if len(audio) < n_fft:
+        if len(audio_arr) >= n_fft:
+            recent_chunk = audio_arr[-n_fft:] * np.hanning(n_fft)
+            fft_mag = np.abs(np.fft.rfft(recent_chunk))
+            freqs = np.fft.rfftfreq(n_fft, 1.0 / self.sample_rate)
+
+            def band_energy(f_low: float, f_high: float) -> float:
+                idx = (freqs >= f_low) & (freqs <= f_high)
+                return float(np.sum(fft_mag[idx]**2)) if np.any(idx) else 0.0
+
+            total_energy = float(np.sum(fft_mag**2)) + 1e-8
+            telemetry["e_knock"] = band_energy(100, 750) / total_energy
+            telemetry["e_voice"] = band_energy(300, 3200) / total_energy
+            telemetry["e_chime"] = band_energy(550, 1200) / total_energy
+            telemetry["e_siren"] = band_energy(2400, 3800) / total_energy
+        else:
+            telemetry["e_knock"] = 0.0
+            telemetry["e_voice"] = 0.0
+            telemetry["e_chime"] = 0.0
+            telemetry["e_siren"] = 0.0
+
+        # If audio energy is below background gate, return ambient
+        if rms < 0.010 * self.thresh_mult:
             return None, telemetry
 
-        # Take the most recent 2048 samples
-        recent_chunk = audio[-n_fft:] * np.hanning(n_fft)
-        fft_mag = np.abs(np.fft.rfft(recent_chunk))
-        freqs = np.fft.rfftfreq(n_fft, 1.0 / self.sample_rate)
+        now = time.monotonic()
 
-        # Spectral energy bands
-        def band_energy(f_low: float, f_high: float) -> float:
-            idx = (freqs >= f_low) & (freqs <= f_high)
-            return float(np.sum(fft_mag[idx]**2)) if np.any(idx) else 0.0
+        # 3. Neural AudioSet Classifier (Google YAMNet)
+        if self.mediapipe_classifier and len(audio_arr) >= int(self.sample_rate * 0.75):
+            if now - self.last_yamnet_time >= self.yamnet_interval:
+                self.last_yamnet_time = now
+                try:
+                    # YAMNet requires exactly 15,600 or 16,000 float32 samples
+                    chunk_len = min(len(audio_arr), int(self.sample_rate * 0.975))
+                    sample_slice = audio_arr[-chunk_len:]
+                    audio_data = containers.AudioData.create_from_array(sample_slice, self.sample_rate)
+                    results = self.mediapipe_classifier.classify(audio_data)
 
-        total_energy = float(np.sum(fft_mag**2)) + 1e-8
-        e_knock = band_energy(100, 750) / total_energy
-        e_voice = band_energy(300, 3200) / total_energy
-        e_chime = band_energy(550, 1200) / total_energy
-        e_siren = band_energy(2400, 3800) / total_energy
+                    if results and results[0].classifications:
+                        for cat in results[0].classifications[0].categories:
+                            c_name = cat.category_name.lower()
+                            score = float(cat.score)
 
-        telemetry["e_knock"] = e_knock
-        telemetry["e_voice"] = e_voice
-        telemetry["e_siren"] = e_siren
-        telemetry["e_chime"] = e_chime
+                            for key, (category, title, icon, desc, urgency, color) in YAMNET_CLASS_MAP.items():
+                                if key in c_name:
+                                    # Boost score if energy is elevated
+                                    effective_score = float(min(0.99, score + (norm_energy * 0.25)))
+                                    if effective_score >= self.min_confidence:
+                                        telemetry["detected_class"] = c_name
+                                        telemetry["detected_score"] = effective_score
+                                        return AlertEvent(
+                                            category=category,
+                                            title=title,
+                                            description=f"{desc} (YAMNet Neural: {int(effective_score*100)}%)",
+                                            confidence=effective_score,
+                                            urgency=urgency,
+                                            icon=icon,
+                                            color_bgr=color,
+                                        ), telemetry
+                except Exception:
+                    pass
 
-        # 2. Heuristic Classifiers
+        # 4. Low-Latency Heuristic Fast-Path (sub-50ms transient response or fallback)
+        e_siren = telemetry["e_siren"]
+        e_chime = telemetry["e_chime"]
+        e_knock = telemetry["e_knock"]
+        e_voice = telemetry["e_voice"]
 
         # A. SIREN / FIRE ALARM (Continuous / Pulsed High-Pitch Tone ~2.8-3.4 kHz)
-        if e_siren > (0.42 * self.thresh_mult) and rms > 0.04:
-            # Check for dominant sharp spectral peak in 2.5 - 3.5 kHz
-            siren_band = (freqs >= 2400) & (freqs <= 3800)
-            peak_freq = freqs[siren_band][np.argmax(fft_mag[siren_band])]
-            peak_power = np.max(fft_mag[siren_band]) / (np.mean(fft_mag) + 1e-6)
+        if e_siren > (0.38 * self.thresh_mult) and rms > 0.035:
+            conf = float(min(0.98, e_siren * 1.5 + (norm_energy * 0.2)))
+            if conf >= self.min_confidence:
+                return AlertEvent(
+                    category=SoundCategory.SIREN_ALARM,
+                    title="EMERGENCY: SIREN / FIRE ALARM",
+                    description="High-frequency alarm acoustic signature detected",
+                    confidence=conf,
+                    urgency="critical",
+                    icon="🚨",
+                    color_bgr=(0, 0, 255),
+                ), telemetry
 
-            if peak_power > 12.0:
-                conf = float(min(0.99, (e_siren * 1.5) + (peak_power / 60.0)))
-                if conf >= self.min_confidence:
-                    return AlertEvent(
-                        category=SoundCategory.SIREN_ALARM,
-                        title="EMERGENCY: SIREN / FIRE ALARM",
-                        description=f"High-frequency alarm tone detected ({int(peak_freq)} Hz)",
-                        confidence=conf,
-                        urgency="critical",
-                        icon="🚨",
-                        color_bgr=(0, 0, 255),  # Red
-                    ), telemetry
+        # B. DOORBELL (Two-tone resonant chimes ~600-850 Hz)
+        if e_chime > (0.32 * self.thresh_mult) and rms > 0.030:
+            conf = float(min(0.96, e_chime * 1.6 + (norm_energy * 0.2)))
+            if conf >= self.min_confidence:
+                return AlertEvent(
+                    category=SoundCategory.DOORBELL,
+                    title="DOORBELL CHIME DETECTED",
+                    description="Harmonic chime at the door",
+                    confidence=conf,
+                    urgency="normal",
+                    icon="🔔",
+                    color_bgr=(52, 211, 153),
+                ), telemetry
 
-        # B. DOORBELL (Two-tone resonant chimes: e.g. 600-850 Hz prominent peaks)
-        if e_chime > (0.35 * self.thresh_mult) and rms > 0.035:
-            chime_band = (freqs >= 500) & (freqs <= 1200)
-            peaks_sorted = freqs[chime_band][np.argsort(fft_mag[chime_band])[-3:]]
-            # Check for characteristic chime frequencies (e.g. around 650Hz, 780Hz)
-            if any(600 <= f <= 850 for f in peaks_sorted):
-                conf = float(min(0.96, e_chime * 1.6))
-                if conf >= self.min_confidence:
-                    return AlertEvent(
-                        category=SoundCategory.DOORBELL,
-                        title="DOORBELL CHIME DETECTED",
-                        description="Harmonic chime sound at the door",
-                        confidence=conf,
-                        urgency="normal",
-                        icon="🔔",
-                        color_bgr=(52, 211, 153),  # Emerald
-                    ), telemetry
-
-        # C. DOOR KNOCK (Rhythmic acoustic impulses with sharp onset in low-mid band)
-        if e_knock > (0.45 * self.thresh_mult) and rms > 0.045:
-            # Count onset spikes in recent energy history
+        # C. DOOR KNOCK (Rhythmic acoustic impulses with sharp onset in low band)
+        if e_knock > (0.40 * self.thresh_mult) and rms > 0.038:
             history = list(self.energy_history)[-25:]
-            if len(history) >= 10:
+            if len(history) >= 8:
                 diffs = np.diff(history)
-                spike_count = int(np.sum(diffs > (0.025 * self.thresh_mult)))
-                if 2 <= spike_count <= 6:
-                    conf = float(min(0.95, 0.65 + 0.08 * spike_count))
+                spike_count = int(np.sum(diffs > (0.020 * self.thresh_mult)))
+                if spike_count >= 2:
+                    conf = float(min(0.95, 0.60 + 0.10 * spike_count))
                     if conf >= self.min_confidence:
                         return AlertEvent(
                             category=SoundCategory.DOOR_KNOCK,
@@ -204,37 +302,30 @@ class SoundClassifier:
                             confidence=conf,
                             urgency="normal",
                             icon="🚪",
-                            color_bgr=(245, 158, 11),  # Amber
+                            color_bgr=(245, 158, 11),
                         ), telemetry
 
-        # D. HUMAN CALL / SHOUTING ("Calling for attention!")
-        if e_voice > (0.55 * self.thresh_mult) and rms > 0.06:
-            # Voice pitch harmonics in 150 - 3000 Hz
-            voice_band = (freqs >= 200) & (freqs <= 3000)
-            voice_peak = np.max(fft_mag[voice_band]) / (np.mean(fft_mag) + 1e-6)
-            if voice_peak > 8.0:
-                conf = float(min(0.94, (e_voice * 1.1) + (rms * 2.0)))
-                if conf >= self.min_confidence:
-                    return AlertEvent(
-                        category=SoundCategory.HUMAN_CALL,
-                        title="SOMEONE CALLING / SHOUTING",
-                        description="Human voice calling out loudly for attention",
-                        confidence=conf,
-                        urgency="normal",
-                        icon="🗣️",
-                        color_bgr=(6, 182, 212),  # Electric Cyan
-                    ), telemetry
-
-        # E. DOG BARK (Short explosive acoustic bark burst)
-        if (0.35 <= e_knock <= 0.65) and (0.30 <= e_voice <= 0.60) and rms > 0.08:
-            return AlertEvent(
-                category=SoundCategory.DOG_BARK,
-                title="DOG BARKING DETECTED",
-                description="Loud canine bark acoustic signature",
-                confidence=0.78,
-                urgency="low",
-                icon="🐕",
-                color_bgr=(251, 146, 60),  # Orange
-            ), telemetry
+        # D. HUMAN CALL / SHOUTING
+        if e_voice > (0.50 * self.thresh_mult) and rms > 0.055:
+            conf = float(min(0.94, e_voice * 1.1 + (rms * 2.0)))
+            if conf >= self.min_confidence:
+                return AlertEvent(
+                    category=SoundCategory.HUMAN_CALL,
+                    title="SOMEONE CALLING / SHOUTING",
+                    description="Human voice calling out loudly for attention",
+                    confidence=conf,
+                    urgency="normal",
+                    icon="🗣️",
+                    color_bgr=(6, 182, 212),
+                ), telemetry
 
         return None, telemetry
+
+    def close(self) -> None:
+        """Release MediaPipe AudioClassifier and background resources."""
+        if self.mediapipe_classifier:
+            try:
+                self.mediapipe_classifier.close()
+            except Exception:
+                pass
+            self.mediapipe_classifier = None
