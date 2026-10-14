@@ -236,7 +236,9 @@ class LipDetector:
         """Classify current oral configuration into linguistic viseme groups."""
         if mar < 0.055:
             return Viseme.BILABIAL_M
-        elif mar >= 0.22:
+        if not is_speaking and mar < 0.10:
+            return Viseme.REST
+        if mar >= 0.22:
             return Viseme.OPEN_A
         elif lip_width_ratio < 0.65 and mar >= 0.09:
             return Viseme.ROUNDED_O

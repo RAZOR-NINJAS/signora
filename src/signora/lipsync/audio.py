@@ -4,7 +4,7 @@ import collections
 import threading
 import time
 from enum import Enum
-from typing import Deque, Optional, Tuple
+from typing import Any, Deque, Optional, Tuple
 
 import numpy as np
 
@@ -197,7 +197,7 @@ class AudioEnergyTracker:
         """Release audio stream."""
         if self.stream:
             try:
-                self.stream.stop()
+                self.stream.abort()
                 self.stream.close()
             except Exception:
                 pass

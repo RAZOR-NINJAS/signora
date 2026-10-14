@@ -214,6 +214,12 @@ class SignoraTUI:
             "Low (<1%)",
         )
         table.add_row(
+            "L",
+            "Lip Sync & Speech Activity",
+            "Oral viseme tracking, mouth aperture (MAR), & audio-visual sync",
+            "Low (~10%)",
+        )
+        table.add_row(
             "3",
             "ASL Dynamic Words",
             "16-word holistic motion trajectory matching via FastDTW-kNN",
@@ -311,6 +317,8 @@ class SignoraTUI:
                 "c",
                 "H",
                 "h",
+                "L",
+                "l",
                 "3",
                 "4",
                 "5",
@@ -1021,6 +1029,17 @@ class SignoraTUI:
             self.console.print("[bold green]✓ Test desktop notification sent![/bold green]")
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
+    def run_lipsync_flow(self) -> None:
+        self.console.print("\n[bold cyan]=== Lip Sync & Visual Speech Activity ===[/bold cyan]\n")
+        self.console.print("Tracking oral visemes (A, O, M, F, EE), mouth kinematics, and audio-visual correlation.\n")
+        from signora.lipsync import run_lipsync_live
+
+        try:
+            run_lipsync_live(source=self.settings.get("camera_source", 0))
+        except Exception as exc:
+            self.console.print(f"[bold red]Error running Lip Sync monitor: {exc}[/bold red]")
+        Prompt.ask("\nPress Enter to return to main menu", console=self.console)
+
     def loop(self) -> int:
         """Main interaction loop."""
         while True:
@@ -1036,6 +1055,8 @@ class SignoraTUI:
                 self.run_isl_collector_flow()
             elif choice in ("H", "h"):
                 self.run_alert_flow()
+            elif choice in ("L", "l"):
+                self.run_lipsync_flow()
             elif choice == "3":
                 self.run_words_flow()
             elif choice == "4":

@@ -29,3 +29,4 @@ def test_readme_mentions_all_core_modes():
     assert "signora doctor" in content
     assert "signora tui" in content
     assert "signora alert" in content
+    assert "signora lipsync" in content

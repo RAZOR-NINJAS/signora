@@ -23,6 +23,7 @@ def test_documented_subcommands_exist():
         "models",
         "tui",
         "alert",
+        "lipsync",
     ]
 
     for cmd in documented_commands:
@@ -37,6 +38,12 @@ def test_documented_flags_exist():
         if hasattr(action, "choices") and isinstance(action.choices, dict)
     ]
     subparser_dict = subparsers_actions[0].choices
+
+    # Check lipsync flags
+    lipsync_parser = subparser_dict["lipsync"]
+    lipsync_flags = [opt for act in lipsync_parser._actions for opt in act.option_strings]
+    for flag in ["--source", "-s", "--no-audio", "--headless", "--fake-camera"]:
+        assert flag in lipsync_flags, f"Missing flag '{flag}' on 'signora lipsync'"
 
     # Check alert flags
     alert_parser = subparser_dict["alert"]

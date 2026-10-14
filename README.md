@@ -86,6 +86,7 @@ signora doctor
 | **🦖 Shadow-Play Game** | `signora game --kiosk` | Real-time hand posture classification | Browser obstacle runner • Jump/crouch gestures |
 | **🎓 Learning Kiosk** | `signora learn --kiosk` | Real-time posture tracking vs reference signs | Interactive drills • Visual guides • Timed sign quizzes |
 | **🔔 Environmental Alert** | `signora alert` | 16 kHz real-time spectral acoustic monitoring | Doorbell, knocks, alarms, calls • Pulsing HUD & desktop daemon |
+| **👄 Lip Sync & Speech Activity** | `signora lipsync` | MediaPipe FaceMesh 40 lip landmarks + mic RMS | Oral visemes (`A`, `O`, `M`, `F`, `EE`) • V-VAD speech cadence • Audio-Visual correlation |
 | **🩺 System Doctor** | `signora doctor` | Automated 10-point self-test suite | Camera backends, model weights, audio, loopback |
 
 ---
@@ -117,6 +118,28 @@ signora alert --stop
 
 # Send a test visual alert
 signora alert --test
+```
+
+---
+
+## 👄 Lip Sync & Visual Speech Activity
+
+Real-time oral kinematics and multi-modal speechreading designed for accessibility and sign language mouthing detection:
+
+- **40-Landmark Lip Geometry:** Tracks inner aperture and outer contour in real-time via MediaPipe FaceMesh.
+- **Oral Viseme Classification:** Classifies speech postures into standard phonetic viseme groups (`OPEN 'A/AH'`, `ROUNDED 'O/U'`, `BILABIAL 'M/B/P'`, `DENTAL 'F/V'`, `SPREAD 'EE/S'`, `NEUTRAL`).
+- **Visual Voice Activity Detection (V-VAD):** Calculates Mouth Aspect Ratio (MAR), Lip Width Ratio (LWR), and syllable cadence ($1.5\text{--}6.0\text{ Hz}$).
+- **Audio-Visual Cross-Correlation:** Estimates correlation percentage and millisecond acoustic-visual offset between live microphone audio and lip movements, identifying whether a person is actively speaking, silently mouthing, or listening to background noise.
+
+```bash
+# Launch interactive lip sync and speech activity monitor
+signora lipsync
+
+# Launch with camera source index 0 (default)
+signora lipsync -s 0
+
+# Run in pure visual mode without microphone
+signora lipsync --no-audio
 ```
 
 ---

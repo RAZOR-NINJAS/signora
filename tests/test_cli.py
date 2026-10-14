@@ -27,6 +27,7 @@ def test_cli_subcommands_present():
         "collect",
         "studio",
         "alert",
+        "lipsync",
     }
 
     subparsers_actions = [

@@ -227,6 +227,24 @@ def create_parser() -> argparse.ArgumentParser:
         "--fake-mic", action="store_true", help="Use synthetic microphone audio for testing"
     )
 
+    p_lipsync = subparsers.add_parser(
+        "lipsync",
+        aliases=["lip", "lips"],
+        help="Real-time Lip Sync & Visual Speech Activity recognition",
+    )
+    p_lipsync.add_argument(
+        "-s", "--source", default=0, help="Camera index or video file path (default: 0)"
+    )
+    p_lipsync.add_argument(
+        "--no-audio", action="store_true", help="Disable microphone audio synchronization"
+    )
+    p_lipsync.add_argument(
+        "--headless", action="store_true", help="Run in headless mode without window"
+    )
+    p_lipsync.add_argument(
+        "--fake-camera", action="store_true", help="Use synthetic animated face camera bench"
+    )
+
     return parser
 
 
@@ -412,6 +430,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             enable_desktop=enable_desktop,
             headless=args.headless,
             use_fake_mic=args.fake_mic,
+        )
+
+    if args.subcommand in ("lipsync", "lip", "lips"):
+        from signora.lipsync import run_lipsync_live
+
+        return run_lipsync_live(
+            source=args.source,
+            enable_audio=not args.no_audio,
+            headless=args.headless,
+            fake_camera=args.fake_camera,
         )
 
     parser.print_help()
