@@ -146,13 +146,28 @@ def spawn_alert_popup_async(
     color_hex: str = "#34d399",
     duration_seconds: float = 4.5,
 ) -> None:
-    """Spawn alert popup in a separate daemon thread."""
-    t = threading.Thread(
-        target=show_alert_popup,
-        args=(icon, title, description, color_hex, duration_seconds),
-        daemon=True,
-    )
-    t.start()
+    """Spawn alert popup in an isolated detached subprocess."""
+    import subprocess
+
+    try:
+        cmd = [
+            sys.executable,
+            "-m",
+            "signora.alert.popup",
+            "--icon", str(icon),
+            "--title", str(title),
+            "--desc", str(description),
+            "--color", str(color_hex),
+            "--duration", str(duration_seconds),
+        ]
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
