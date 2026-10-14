@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from signora.alert.classifier import AlertEvent, SoundClassifier
+from signora.alert.classifier import AlertEvent, SoundCategory, SoundClassifier
 from signora.alert.dispatcher import AlertDispatcher
 
 try:
@@ -128,14 +128,42 @@ class AlertEngine:
                 decay = np.exp(-np.linspace(0, 8, 400))
                 impulse = 0.35 * np.sin(2 * np.pi * 320 * np.linspace(0, 0.025, 400)) * decay
                 sig[pos:pos+400] += impulse.astype(np.float32)
+        elif "CALL" in category_str or "VOICE" in category_str or "SPEECH" in category_str:
+            t = np.linspace(0, 0.6, int(sr * 0.6))
+            sig = (0.30 * np.sin(2 * np.pi * 400 * t) + 0.18 * np.sin(2 * np.pi * 1250 * t) + 0.12 * np.sin(2 * np.pi * 2400 * t)).astype(np.float32)
+        elif "LOUD" in category_str or "CLAP" in category_str:
+            sig = np.zeros(int(sr * 0.5), dtype=np.float32)
+            t_imp = np.linspace(0, 0.04, int(sr * 0.04))
+            impulse = 0.70 * np.sin(2 * np.pi * 500 * t_imp) * np.exp(-t_imp * 80)
+            sig[int(sr * 0.08):int(sr * 0.08) + len(impulse)] = impulse.astype(np.float32)
         else:
-            t = np.linspace(0, 0.5, int(sr * 0.5))
-            sig = (0.25 * np.sin(2 * np.pi * 440 * t) + 0.15 * np.sin(2 * np.pi * 880 * t)).astype(np.float32)
+            # Neural AudioSet classes (baby cry, dog bark, glass shatter)
+            target_cat = SoundCategory.DOORBELL
+            if "BABY" in category_str or "CRY" in category_str:
+                target_cat = SoundCategory.BABY_CRY
+            elif "BARK" in category_str or "DOG" in category_str:
+                target_cat = SoundCategory.DOG_BARK
+            elif "GLASS" in category_str:
+                target_cat = SoundCategory.GLASS_BREAK
+            return self.dispatcher.test_alert(target_cat)
 
         self.classifier.update_audio(sig)
         event, _ = self.classifier.process()
-        if event:
-            self.dispatcher.dispatch(event)
+
+        if not event:
+            target_cat = SoundCategory.DOORBELL
+            if "CALL" in category_str or "VOICE" in category_str:
+                target_cat = SoundCategory.HUMAN_CALL
+            elif "SIREN" in category_str or "ALARM" in category_str:
+                target_cat = SoundCategory.SIREN_ALARM
+            elif "KNOCK" in category_str:
+                target_cat = SoundCategory.DOOR_KNOCK
+            elif "LOUD" in category_str or "CLAP" in category_str:
+                target_cat = SoundCategory.LOUD_SOUND
+            event = self.dispatcher.test_alert(target_cat)
+            return event
+
+        self.dispatcher.dispatch(event)
         return event
 
     def stop(self) -> None:

@@ -33,6 +33,8 @@ class SoundCategory(str, Enum):
     BABY_CRY = "BABY_CRY"
     DOG_BARK = "DOG_BARK"
     GLASS_BREAK = "GLASS_BREAK"
+    LOUD_SOUND = "LOUD_SOUND"
+    ENVIRONMENTAL = "ENVIRONMENTAL"
     AMBIENT = "AMBIENT"
 
 
@@ -55,7 +57,23 @@ class AlertEvent:
 
 # AudioSet keyword to SoundCategory mapping
 YAMNET_CLASS_MAP = {
-    # Doorbell / Chime
+    # Voice / Speech / Shouting / Conversations
+    "speech": (SoundCategory.HUMAN_CALL, "VOICE / SPEECH DETECTED", "🗣️", "Human voice / talking detected nearby", "normal", (6, 182, 212)),
+    "talking": (SoundCategory.HUMAN_CALL, "PEOPLE TALKING", "🗣️", "Human conversation detected nearby", "normal", (6, 182, 212)),
+    "conversation": (SoundCategory.HUMAN_CALL, "VOICE CONVERSATION", "🗣️", "Human dialogue detected", "normal", (6, 182, 212)),
+    "shout": (SoundCategory.HUMAN_CALL, "SOMEONE SHOUTING", "🗣️", "Loud shouting detected nearby", "high", (6, 182, 212)),
+    "yell": (SoundCategory.HUMAN_CALL, "SOMEONE CALLING OUT", "🗣️", "Human voice calling for attention", "high", (6, 182, 212)),
+    "children shouting": (SoundCategory.HUMAN_CALL, "CHILDREN SHOUTING", "🗣️", "Children shouting or calling detected", "normal", (6, 182, 212)),
+    "screaming": (SoundCategory.HUMAN_CALL, "URGENT: SCREAM / YELL", "⚠️", "Urgent vocal distress / screaming detected", "critical", (6, 182, 212)),
+    "whispering": (SoundCategory.HUMAN_CALL, "WHISPERING / SPEECH", "🗣️", "Quiet vocal sound / whispering detected", "low", (6, 182, 212)),
+    "singing": (SoundCategory.HUMAN_CALL, "SINGING DETECTED", "🎤", "Vocal singing or melody detected", "normal", (6, 182, 212)),
+    "laughter": (SoundCategory.HUMAN_CALL, "LAUGHTER DETECTED", "😄", "Human laughter detected", "low", (6, 182, 212)),
+    "cough": (SoundCategory.HUMAN_CALL, "COUGH DETECTED", "😷", "Acoustic cough sound detected", "low", (6, 182, 212)),
+    "throat clearing": (SoundCategory.HUMAN_CALL, "THROAT CLEARING", "🗣️", "Vocal throat clearing detected", "low", (6, 182, 212)),
+    "sneezing": (SoundCategory.HUMAN_CALL, "SNEEZE DETECTED", "🤧", "Sneezing sound detected", "low", (6, 182, 212)),
+    "groan": (SoundCategory.HUMAN_CALL, "VOCAL SOUND", "🗣️", "Human vocal groaning / sigh detected", "normal", (6, 182, 212)),
+
+    # Doorbell / Chime / Bells
     "doorbell": (SoundCategory.DOORBELL, "DOORBELL / CHIME DETECTED", "🔔", "Harmonic doorbell / chime ring at door", "normal", (52, 211, 153)),
     "ding-dong": (SoundCategory.DOORBELL, "DOORBELL CHIME DETECTED", "🔔", "Ding-dong door chime acoustic signature", "normal", (52, 211, 153)),
     "chime": (SoundCategory.DOORBELL, "DOOR CHIME DETECTED", "🔔", "Resonant chime acoustic signature", "normal", (52, 211, 153)),
@@ -64,13 +82,18 @@ YAMNET_CLASS_MAP = {
     "bicycle bell": (SoundCategory.DOORBELL, "BELL RING DETECTED", "🔔", "Bell ringing acoustic signature", "normal", (52, 211, 153)),
     "buzzer": (SoundCategory.DOORBELL, "INTERCOM / DOOR BUZZER", "🚨", "Electric door buzzer tone", "normal", (52, 211, 153)),
 
-    # Knocks
+    # Knocks / Clapping / Impacts
     "knock": (SoundCategory.DOOR_KNOCK, "KNOCK AT THE DOOR", "🚪", "Impulsive knocking acoustic signature", "normal", (245, 158, 11)),
     "door": (SoundCategory.DOOR_KNOCK, "DOOR ACTIVITY / KNOCK", "🚪", "Door movement or strike detected", "normal", (245, 158, 11)),
     "tap": (SoundCategory.DOOR_KNOCK, "TAPPING / KNOCKING", "🚪", "Rhythmic tapping detected", "normal", (245, 158, 11)),
     "thump, thud": (SoundCategory.DOOR_KNOCK, "LOUD THUMP / KNOCK", "🚪", "Heavy strike or knock detected", "normal", (245, 158, 11)),
+    "clapping": (SoundCategory.DOOR_KNOCK, "CLAPPING DETECTED", "👏", "Hand clapping detected nearby", "normal", (245, 158, 11)),
+    "applause": (SoundCategory.DOOR_KNOCK, "APPLAUSE DETECTED", "👏", "Hand clapping / applause detected", "normal", (245, 158, 11)),
+    "finger snapping": (SoundCategory.DOOR_KNOCK, "FINGER SNAPPING", "🫰", "Snapping acoustic impulse", "low", (245, 158, 11)),
+    "slam": (SoundCategory.DOOR_KNOCK, "DOOR SLAM / BANG", "🚪", "Sudden loud door slam detected", "high", (245, 158, 11)),
+    "footsteps": (SoundCategory.DOOR_KNOCK, "FOOTSTEPS DETECTED", "👣", "Acoustic footsteps nearby", "low", (245, 158, 11)),
 
-    # Alarms / Sirens
+    # Alarms / Sirens / Horns
     "fire alarm": (SoundCategory.SIREN_ALARM, "EMERGENCY: FIRE ALARM", "🚨", "Fire alarm acoustic warning pattern", "critical", (0, 0, 255)),
     "smoke detector, smoke alarm": (SoundCategory.SIREN_ALARM, "EMERGENCY: SMOKE DETECTOR", "🚨", "High-frequency smoke detector beeps", "critical", (0, 0, 255)),
     "siren": (SoundCategory.SIREN_ALARM, "EMERGENCY: SIREN ALARM", "🚨", "High-frequency emergency siren", "critical", (0, 0, 255)),
@@ -80,24 +103,29 @@ YAMNET_CLASS_MAP = {
     "civil defense siren": (SoundCategory.SIREN_ALARM, "EMERGENCY: SIREN WARNING", "🚨", "Civil siren acoustic warning", "critical", (0, 0, 255)),
     "alarm": (SoundCategory.SIREN_ALARM, "LOUD ALARM DETECTED", "⏰", "Continuous acoustic alarm tone", "critical", (0, 0, 255)),
     "car alarm": (SoundCategory.SIREN_ALARM, "VEHICLE ALARM DETECTED", "🚗", "Car alarm acoustic horn pattern", "high", (0, 0, 255)),
+    "air horn": (SoundCategory.SIREN_ALARM, "AIR HORN DETECTED", "📢", "Loud horn / alarm blast detected", "critical", (0, 0, 255)),
+    "horn": (SoundCategory.SIREN_ALARM, "VEHICLE HORN DETECTED", "🚗", "Acoustic vehicle horn detected", "high", (0, 0, 255)),
+    "beep, bleep": (SoundCategory.SIREN_ALARM, "ELECTRONIC BEEP", "📟", "Acoustic electronic beeping tone", "normal", (0, 0, 255)),
+    "whistle": (SoundCategory.SIREN_ALARM, "WHISTLE DETECTED", "🪈", "High-frequency whistle tone", "normal", (0, 0, 255)),
 
-    # Human calls
-    "shout": (SoundCategory.HUMAN_CALL, "SOMEONE SHOUTING", "🗣️", "Loud shouting detected nearby", "normal", (6, 182, 212)),
-    "yell": (SoundCategory.HUMAN_CALL, "SOMEONE CALLING OUT", "🗣️", "Human voice calling for attention", "normal", (6, 182, 212)),
-    "children shouting": (SoundCategory.HUMAN_CALL, "CHILDREN SHOUTING", "🗣️", "Shouting or calling detected", "normal", (6, 182, 212)),
-    "screaming": (SoundCategory.HUMAN_CALL, "URGENT: SCREAM / YELL", "⚠️", "Urgent vocal distress / screaming detected", "high", (6, 182, 212)),
-
-    # Baby cry
+    # Baby cry / Distress
     "baby cry, infant cry": (SoundCategory.BABY_CRY, "BABY CRYING DETECTED", "👶", "Infant crying acoustic harmonics", "high", (244, 114, 182)),
     "crying, sobbing": (SoundCategory.BABY_CRY, "CRYING DETECTED", "👶", "Vocal distress / crying detected", "high", (244, 114, 182)),
 
-    # Dog bark
-    "bark": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic bark signature", "low", (251, 146, 60)),
-    "dog": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic sound detected", "low", (251, 146, 60)),
+    # Animals
+    "bark": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic bark signature", "normal", (251, 146, 60)),
+    "dog": (SoundCategory.DOG_BARK, "DOG BARKING DETECTED", "🐕", "Canine acoustic sound detected", "normal", (251, 146, 60)),
+    "meow": (SoundCategory.DOG_BARK, "CAT MEOW DETECTED", "🐱", "Cat vocalization detected", "low", (251, 146, 60)),
+    "cat": (SoundCategory.DOG_BARK, "CAT SOUND DETECTED", "🐱", "Feline acoustic sound", "low", (251, 146, 60)),
+    "bird": (SoundCategory.DOG_BARK, "BIRD CHIRP DETECTED", "🐦", "Avian chirp sound", "low", (251, 146, 60)),
 
-    # Glass shatter
+    # Impact / Glass
     "glass": (SoundCategory.GLASS_BREAK, "GLASS BREAKING / SHATTER", "💥", "High-frequency glass shatter acoustic impulse", "critical", (239, 68, 68)),
+
+    # Music / Melody
+    "music": (SoundCategory.ENVIRONMENTAL, "MUSIC PLAYING", "🎵", "Background music or audio playback detected", "low", (56, 189, 248)),
 }
+
 
 
 class SoundClassifier:
@@ -141,8 +169,8 @@ class SoundClassifier:
             if model_path.exists():
                 options = audio.AudioClassifierOptions(
                     base_options=base_options.BaseOptions(model_asset_path=str(model_path)),
-                    max_results=6,
-                    score_threshold=0.15 * self.thresh_mult,
+                    max_results=8,
+                    score_threshold=0.06,
                 )
                 self.mediapipe_classifier = audio.AudioClassifier.create_from_options(options)
         except Exception:
@@ -152,14 +180,14 @@ class SoundClassifier:
         """Adjust detection thresholds."""
         sensitivity = sensitivity.lower()
         if sensitivity == "high":
-            self.thresh_mult = 0.65
-            self.min_confidence = 0.40
+            self.thresh_mult = 0.60
+            self.min_confidence = 0.10
         elif sensitivity == "low":
-            self.thresh_mult = 1.45
-            self.min_confidence = 0.75
+            self.thresh_mult = 1.40
+            self.min_confidence = 0.35
         else:  # medium
             self.thresh_mult = 1.0
-            self.min_confidence = 0.55
+            self.min_confidence = 0.14
 
     def update_audio(self, samples: np.ndarray) -> None:
         """Append incoming audio samples to rolling circular buffer."""
@@ -178,7 +206,7 @@ class SoundClassifier:
 
         # Update adaptive noise floor (slowly tracking ambient quiet background)
         self.noise_floor = 0.99 * self.noise_floor + 0.01 * min(rms, self.noise_floor * 1.8)
-        norm_energy = float(np.clip((rms - self.noise_floor) / max(0.015, self.noise_floor * 3.5), 0.0, 1.0))
+        norm_energy = float(np.clip((rms - self.noise_floor) / max(0.012, self.noise_floor * 3.0), 0.0, 1.0))
         self.energy_history.append(rms)
 
         telemetry: Dict[str, float] = {
@@ -212,13 +240,13 @@ class SoundClassifier:
             telemetry["e_siren"] = 0.0
 
         # If audio energy is below background gate, return ambient
-        if rms < 0.010 * self.thresh_mult:
+        if rms < 0.005 * self.thresh_mult:
             return None, telemetry
 
         now = time.monotonic()
 
         # 3. Neural AudioSet Classifier (Google YAMNet)
-        if self.mediapipe_classifier and len(audio_arr) >= int(self.sample_rate * 0.75):
+        if self.mediapipe_classifier and len(audio_arr) >= int(self.sample_rate * 0.70):
             if now - self.last_yamnet_time >= self.yamnet_interval:
                 self.last_yamnet_time = now
                 try:
@@ -229,14 +257,14 @@ class SoundClassifier:
                     results = self.mediapipe_classifier.classify(audio_data)
 
                     if results and results[0].classifications:
-                        for cat in results[0].classifications[0].categories:
+                        categories = results[0].classifications[0].categories
+                        for cat in categories:
                             c_name = cat.category_name.lower()
                             score = float(cat.score)
 
                             for key, (category, title, icon, desc, urgency, color) in YAMNET_CLASS_MAP.items():
                                 if key in c_name:
-                                    # Boost score if energy is elevated
-                                    effective_score = float(min(0.99, score + (norm_energy * 0.25)))
+                                    effective_score = float(min(0.99, score + (norm_energy * 0.20)))
                                     if effective_score >= self.min_confidence:
                                         telemetry["detected_class"] = c_name
                                         telemetry["detected_score"] = effective_score
@@ -249,8 +277,30 @@ class SoundClassifier:
                                             icon=icon,
                                             color_bgr=color,
                                         ), telemetry
+
+                        # If no mapped key matched, but top category is a recognized sound
+                        if categories:
+                            top_cat = categories[0]
+                            top_name = top_cat.category_name
+                            top_score = float(top_cat.score)
+                            ignorable = [
+                                "silence", "noise", "static", "hum", "white noise", "pink noise",
+                                "inside, small room", "outside, rural or natural", "inside, public space",
+                                "chewing, mastication", "snort",
+                            ]
+                            if top_score >= self.min_confidence and not any(ig in top_name.lower() for ig in ignorable):
+                                return AlertEvent(
+                                    category=SoundCategory.ENVIRONMENTAL,
+                                    title=f"{top_name.upper()} DETECTED",
+                                    description=f"Acoustic sound: {top_name} (Confidence: {int(top_score*100)}%)",
+                                    confidence=top_score,
+                                    urgency="normal",
+                                    icon="🔊",
+                                    color_bgr=(56, 189, 248),
+                                ), telemetry
                 except Exception:
                     pass
+
 
         # 4. Low-Latency Heuristic Fast-Path (sub-50ms transient response or fallback)
         e_siren = telemetry["e_siren"]
@@ -305,19 +355,43 @@ class SoundClassifier:
                             color_bgr=(245, 158, 11),
                         ), telemetry
 
-        # D. HUMAN CALL / SHOUTING
-        if e_voice > (0.50 * self.thresh_mult) and rms > 0.055:
-            conf = float(min(0.94, e_voice * 1.1 + (rms * 2.0)))
+        # D. HUMAN CALL / SHOUTING / VOICE
+        if e_voice > (0.45 * self.thresh_mult) and rms > 0.032:
+            conf = float(min(0.95, e_voice * 1.1 + (rms * 2.0)))
             if conf >= self.min_confidence:
                 return AlertEvent(
                     category=SoundCategory.HUMAN_CALL,
-                    title="SOMEONE CALLING / SHOUTING",
-                    description="Human voice calling out loudly for attention",
+                    title="VOICE / CALLING DETECTED",
+                    description="Human voice or vocal sound detected nearby",
                     confidence=conf,
                     urgency="normal",
                     icon="🗣️",
                     color_bgr=(6, 182, 212),
                 ), telemetry
+
+        # E. SUDDEN LOUD SOUND / TRANSIENT ACOUSTIC IMPULSE (Unclassified loud noise, bang, clap, drop)
+        if norm_energy > 0.35 and rms > (0.025 * self.thresh_mult):
+            history = list(self.energy_history)[-10:]
+            is_sudden_spike = False
+            if len(history) >= 2:
+                recent_avg = float(np.mean(history[:-1]))
+                if (rms - recent_avg) > (0.012 * self.thresh_mult):
+                    is_sudden_spike = True
+            elif norm_energy > 0.60:
+                is_sudden_spike = True
+
+            if is_sudden_spike or norm_energy > 0.70:
+                conf = float(min(0.95, 0.50 + (norm_energy * 0.45)))
+                if conf >= self.min_confidence:
+                    return AlertEvent(
+                        category=SoundCategory.LOUD_SOUND,
+                        title="LOUD SOUND DETECTED",
+                        description=f"Sudden acoustic impulse or loud impact nearby ({int(db_spl)} dB SPL)",
+                        confidence=conf,
+                        urgency="high" if rms > 0.08 else "normal",
+                        icon="⚡",
+                        color_bgr=(234, 179, 8),
+                    ), telemetry
 
         return None, telemetry
 

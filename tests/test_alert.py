@@ -57,6 +57,19 @@ class TestSoundClassifier:
         classifier.set_sensitivity("medium")
         assert classifier.thresh_mult == 1.0
 
+    def test_loud_impulse_detection(self, classifier):
+        # Sudden sharp loud clap/bang impulse
+        sr = 16000
+        audio = np.zeros(int(sr * 0.4), dtype=np.float32)
+        t_imp = np.linspace(0, 0.05, int(sr * 0.05))
+        impulse = 0.85 * np.sin(2 * np.pi * 500 * t_imp) * np.exp(-t_imp * 60)
+        audio[int(sr * 0.05):int(sr * 0.05) + len(impulse)] = impulse.astype(np.float32)
+
+        classifier.update_audio(audio)
+        event, telemetry = classifier.process()
+        assert event is not None
+        assert event.category in (SoundCategory.LOUD_SOUND, SoundCategory.DOOR_KNOCK)
+
 
 class TestAlertDispatcher:
     def test_dispatch_and_cooldown(self, tmp_path):
@@ -94,6 +107,34 @@ class TestAlertDispatcher:
         assert event.category == SoundCategory.DOORBELL
         assert len(dispatcher.recent_events) == 1
 
+    def test_cross_category_dispatch_no_suppression(self, tmp_path):
+        log_file = tmp_path / "alerts.log"
+        dispatcher = AlertDispatcher(enable_desktop=False, log_path=log_file, cooldown_seconds=5.0)
+
+        e1 = AlertEvent(
+            category=SoundCategory.HUMAN_CALL,
+            title="SOMEONE CALLING",
+            description="Human voice calling",
+            confidence=0.9,
+            urgency="normal",
+            icon="🗣️",
+            color_bgr=(6, 182, 212),
+        )
+        e2 = AlertEvent(
+            category=SoundCategory.DOOR_KNOCK,
+            title="KNOCK AT DOOR",
+            description="Impulsive knock",
+            confidence=0.9,
+            urgency="normal",
+            icon="🚪",
+            color_bgr=(245, 158, 11),
+        )
+
+        assert dispatcher.dispatch(e1) is True
+        # Immediately dispatching a different category must succeed without suppression
+        assert dispatcher.dispatch(e2) is True
+        assert len(dispatcher.recent_events) == 2
+
 
 class TestAlertEngine:
     def test_fake_mic_engine_lifecycle(self):
@@ -119,6 +160,13 @@ class TestAlertEngine:
 
         engine.stop()
         assert not engine.running
+
+    def test_simulate_various_sounds(self):
+        engine = AlertEngine(enable_desktop=False, use_fake_mic=True)
+        for snd in ["siren", "call", "knock", "loud", "baby", "bark", "glass"]:
+            ev = engine.simulate_sound(snd)
+            assert ev is not None, f"Failed simulation for {snd}"
+        engine.stop()
 
 
 class TestAlertCLI:

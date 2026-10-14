@@ -32,7 +32,7 @@ class AlertDispatcher:
         self,
         enable_desktop: bool = True,
         log_path: Optional[Path] = None,
-        cooldown_seconds: float = 3.5,
+        cooldown_seconds: float = 1.0,
     ):
         self.enable_desktop = enable_desktop
         self.log_path = log_path or get_default_alerts_log_path()
@@ -52,9 +52,8 @@ class AlertDispatcher:
         """Dispatch an alert event if cooldown conditions are satisfied."""
         now = time.time()
         with self.lock:
-            # Check cooldown per category
+            # Check cooldown per category (1.0s for general sounds, 8.0s for sirens)
             last_t = self.last_fired.get(event.category, 0.0)
-            # Sirens stay on longer cooldown to avoid spamming
             cooldown = 8.0 if event.category == SoundCategory.SIREN_ALARM else self.cooldown_seconds
             if now - last_t < cooldown:
                 return False
@@ -176,6 +175,56 @@ class AlertDispatcher:
                 urgency="normal",
                 icon="🗣️",
                 color_bgr=(6, 182, 212),
+            )
+        elif category == SoundCategory.LOUD_SOUND:
+            event = AlertEvent(
+                category=SoundCategory.LOUD_SOUND,
+                title="TEST ALERT: LOUD SOUND",
+                description="Simulated sudden acoustic impulse / noise spike",
+                confidence=0.90,
+                urgency="high",
+                icon="⚡",
+                color_bgr=(234, 179, 8),
+            )
+        elif category == SoundCategory.DOOR_KNOCK:
+            event = AlertEvent(
+                category=SoundCategory.DOOR_KNOCK,
+                title="TEST ALERT: DOOR KNOCK",
+                description="Simulated door knock acoustic strikes",
+                confidence=0.94,
+                urgency="normal",
+                icon="🚪",
+                color_bgr=(245, 158, 11),
+            )
+        elif category == SoundCategory.BABY_CRY:
+            event = AlertEvent(
+                category=SoundCategory.BABY_CRY,
+                title="TEST ALERT: BABY CRYING",
+                description="Simulated infant crying acoustic distress",
+                confidence=0.91,
+                urgency="high",
+                icon="👶",
+                color_bgr=(244, 114, 182),
+            )
+        elif category == SoundCategory.DOG_BARK:
+            event = AlertEvent(
+                category=SoundCategory.DOG_BARK,
+                title="TEST ALERT: DOG BARK",
+                description="Simulated canine bark acoustic pattern",
+                confidence=0.93,
+                urgency="normal",
+                icon="🐕",
+                color_bgr=(251, 146, 60),
+            )
+        elif category == SoundCategory.GLASS_BREAK:
+            event = AlertEvent(
+                category=SoundCategory.GLASS_BREAK,
+                title="TEST ALERT: GLASS SHATTER",
+                description="Simulated glass break acoustic impulse",
+                confidence=0.95,
+                urgency="critical",
+                icon="💥",
+                color_bgr=(239, 68, 68),
             )
         else:
             event = AlertEvent(
