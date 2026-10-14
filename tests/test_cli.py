@@ -26,6 +26,7 @@ def test_cli_subcommands_present():
         "tui",
         "collect",
         "studio",
+        "alert",
     }
 
     subparsers_actions = [
@@ -156,3 +157,16 @@ def test_tui_initialization_and_header():
     tui = SignoraTUI()
     tui.print_header()
     assert tui.models_dir.exists()
+
+
+def test_cli_alert_args():
+    parser = create_parser()
+    args = parser.parse_args(
+        ["alert", "--daemon", "--sensitivity", "high", "--no-desktop", "--fake-mic", "--headless"]
+    )
+    assert args.subcommand == "alert"
+    assert args.daemon is True
+    assert args.sensitivity == "high"
+    assert args.no_desktop is True
+    assert args.fake_mic is True
+    assert args.headless is True

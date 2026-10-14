@@ -22,6 +22,7 @@ def test_documented_subcommands_exist():
         "doctor",
         "models",
         "tui",
+        "alert",
     ]
 
     for cmd in documented_commands:
@@ -36,6 +37,12 @@ def test_documented_flags_exist():
         if hasattr(action, "choices") and isinstance(action.choices, dict)
     ]
     subparser_dict = subparsers_actions[0].choices
+
+    # Check alert flags
+    alert_parser = subparser_dict["alert"]
+    alert_flags = [opt for act in alert_parser._actions for opt in act.option_strings]
+    for flag in ["--daemon", "--start", "--stop", "--status", "--sensitivity", "--test"]:
+        assert flag in alert_flags, f"Missing flag '{flag}' on 'signora alert'"
 
     # Check live flags
     live_parser = subparser_dict["live"]

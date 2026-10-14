@@ -208,6 +208,12 @@ class SignoraTUI:
             "Real-time",
         )
         table.add_row(
+            "H",
+            "SIGNORA Alert (Hear Through Eyes)",
+            "Acoustic watcher daemon: doorbell, knock, fire alarm, calling out",
+            "Low (<1%)",
+        )
+        table.add_row(
             "3",
             "ASL Dynamic Words",
             "16-word holistic motion trajectory matching via FastDTW-kNN",
@@ -303,6 +309,8 @@ class SignoraTUI:
                 "2",
                 "C",
                 "c",
+                "H",
+                "h",
                 "3",
                 "4",
                 "5",
@@ -984,6 +992,35 @@ class SignoraTUI:
             self.console.print(f"[bold red]Error running collector: {exc}[/bold red]")
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
+    def run_alert_flow(self) -> None:
+        self.console.print("\n[bold cyan]=== SIGNORA Alert: Hear Through Your Eyes ===[/bold cyan]\n")
+        self.console.print("Options:")
+        self.console.print("  [1] Launch Interactive Visual Sound Monitor (with live decibel radar & strobe)")
+        self.console.print("  [2] Start Background Daemon (watches mic & fires desktop notifications)")
+        self.console.print("  [3] Stop Background Daemon")
+        self.console.print("  [4] View Daemon Status & Alert Log")
+        self.console.print("  [5] Fire Test Desktop Notification (Doorbell)")
+        self.console.print("  [0] Return to Main Menu\n")
+
+        sub = Prompt.ask("Select option", choices=["1", "2", "3", "4", "5", "0"], default="1", console=self.console)
+        if sub == "1":
+            from signora.alert import run_alert_live
+            run_alert_live(sensitivity="medium")
+        elif sub == "2":
+            from signora.alert import start_daemon
+            start_daemon(sensitivity="medium")
+        elif sub == "3":
+            from signora.alert import stop_daemon
+            stop_daemon()
+        elif sub == "4":
+            from signora.alert import status_daemon
+            status_daemon()
+        elif sub == "5":
+            from signora.alert import AlertDispatcher
+            AlertDispatcher(enable_desktop=True).test_alert()
+            self.console.print("[bold green]✓ Test desktop notification sent![/bold green]")
+        Prompt.ask("\nPress Enter to return to main menu", console=self.console)
+
     def loop(self) -> int:
         """Main interaction loop."""
         while True:
@@ -997,6 +1034,8 @@ class SignoraTUI:
                 self.run_isl_flow()
             elif choice in ("C", "c"):
                 self.run_isl_collector_flow()
+            elif choice in ("H", "h"):
+                self.run_alert_flow()
             elif choice == "3":
                 self.run_words_flow()
             elif choice == "4":

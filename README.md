@@ -85,7 +85,39 @@ signora doctor
 | **🌊 ASL Dynamic Words** | `signora words` | 153D upper-body pose & hands trajectory | 16 dynamic signs • FastDTW-kNN sequence matching |
 | **🦖 Shadow-Play Game** | `signora game --kiosk` | Real-time hand posture classification | Browser obstacle runner • Jump/crouch gestures |
 | **🎓 Learning Kiosk** | `signora learn --kiosk` | Real-time posture tracking vs reference signs | Interactive drills • Visual guides • Timed sign quizzes |
+| **🔔 Environmental Alert** | `signora alert` | 16 kHz real-time spectral acoustic monitoring | Doorbell, knocks, alarms, calls • Pulsing HUD & desktop daemon |
 | **🩺 System Doctor** | `signora doctor` | Automated 10-point self-test suite | Camera backends, model weights, audio, loopback |
+
+---
+
+## 🔔 SIGNORA Alert: Hear Through Your Eyes
+
+Assistive environmental acoustic perception designed specifically for Deaf and Hard of Hearing individuals. 100% offline edge audio processing detects household sounds and translates them into vivid visual notifications and peripheral screen strobes.
+
+- **Detectable Sound Signatures:**
+  - 🔔 **Doorbell / Intercom Chimes:** Dual-tone resonant harmonics (600–900 Hz).
+  - 🚪 **Door Knocks:** Rhythmic low-frequency acoustic transient onset strikes (100–750 Hz).
+  - 🚨 **Siren / Fire Alarms:** Continuous or pulsed high-frequency alarm tones (2.4–3.8 kHz) with immediate critical urgency.
+  - 🗣️ **Human Calls:** Formant harmonic energy spikes (someone calling out or shouting for attention).
+- **Background Daemon:** Runs silently in the background using minimal CPU (<1%), triggering native desktop notifications via `notify-send` (Linux) or Windows Toast notifications.
+- **Glassmorphic Visual HUD:** Live audio decibel meter (dB SPL), spectral energy breakdown bars, recent event history, and full-screen pulsing strobe border during active alerts.
+
+```bash
+# Launch interactive visual monitor with HUD
+signora alert
+
+# Start background audio monitoring daemon
+signora alert --start
+
+# Check daemon running status and recent alerts
+signora alert --status
+
+# Stop background daemon
+signora alert --stop
+
+# Send a test visual alert
+signora alert --test
+```
 
 ---
 

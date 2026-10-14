@@ -184,6 +184,49 @@ def create_parser() -> argparse.ArgumentParser:
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
     )
 
+    # 10. signora alert (Hear Through Your Eyes)
+    p_alert = subparsers.add_parser(
+        "alert",
+        aliases=["listen", "hear"],
+        help="SIGNORA Alert: Hear Through Your Eyes (Doorbell, Alarms, Calls, Knocks)",
+    )
+    p_alert.add_argument(
+        "--daemon", "--bg", dest="daemon", action="store_true", help="Spawn and run in background daemon mode"
+    )
+    p_alert.add_argument(
+        "--start", action="store_true", help="Start background alert watcher daemon"
+    )
+    p_alert.add_argument(
+        "--stop", action="store_true", help="Stop running background alert watcher daemon"
+    )
+    p_alert.add_argument(
+        "--status", action="store_true", help="Inspect background daemon health and recent sound log"
+    )
+    p_alert.add_argument(
+        "--daemon-loop", action="store_true", help=argparse.SUPPRESS
+    )
+    p_alert.add_argument(
+        "--sensitivity",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="Acoustic detection sensitivity (default: medium)",
+    )
+    p_alert.add_argument(
+        "-s", "--source", default=None, help="Camera index if visual video backdrop is desired (default: None)"
+    )
+    p_alert.add_argument(
+        "--no-desktop", action="store_true", help="Disable OS desktop visual notifications"
+    )
+    p_alert.add_argument(
+        "--test", action="store_true", help="Fire an instant test notification and exit"
+    )
+    p_alert.add_argument(
+        "--headless", action="store_true", help="Run without HighGUI display window"
+    )
+    p_alert.add_argument(
+        "--fake-mic", action="store_true", help="Use synthetic microphone audio for testing"
+    )
+
     return parser
 
 
@@ -324,6 +367,51 @@ def main(argv: Optional[List[str]] = None) -> int:
             headless=args.headless,
             use_fake=args.fake_camera,
             auto_train=args.train,
+        )
+
+    if args.subcommand in ("alert", "listen", "hear"):
+        from signora.alert import (
+            AlertDispatcher,
+            run_alert_live,
+            run_daemon_loop,
+            start_daemon,
+            status_daemon,
+            stop_daemon,
+        )
+
+        enable_desktop = not args.no_desktop
+
+        if args.test:
+            dispatcher = AlertDispatcher(enable_desktop=True)
+            dispatcher.test_alert()
+            print("✓ Dispatched test visual desktop alert: 🔔 DOORBELL")
+            return 0
+
+        if args.stop:
+            return stop_daemon()
+
+        if args.status:
+            return status_daemon()
+
+        if args.daemon or args.start:
+            return start_daemon(
+                sensitivity=args.sensitivity,
+                enable_desktop=enable_desktop,
+            )
+
+        if args.daemon_loop:
+            return run_daemon_loop(
+                sensitivity=args.sensitivity,
+                enable_desktop=enable_desktop,
+                use_fake_mic=args.fake_mic,
+            )
+
+        return run_alert_live(
+            source=args.source,
+            sensitivity=args.sensitivity,
+            enable_desktop=enable_desktop,
+            headless=args.headless,
+            use_fake_mic=args.fake_mic,
         )
 
     parser.print_help()
