@@ -30,6 +30,7 @@ def test_cli_subcommands_present():
         "studio",
         "alert",
         "lipsync",
+        "train",
     }
 
     subparsers_actions = [
@@ -187,3 +188,46 @@ def test_cli_alert_args():
     assert args.no_desktop is True
     assert args.fake_mic is True
     assert args.headless is True
+
+
+def test_cli_train_subcommand():
+    parser = create_parser()
+    args = parser.parse_args(["train", "--body", "--epochs", "15", "--lr", "0.002", "-d", "/tmp/spatial_data"])
+    assert args.subcommand == "train"
+    assert args.body is True
+    assert args.epochs == 15
+    assert args.lr == 0.002
+    assert args.data_dir == "/tmp/spatial_data"
+
+
+def test_cli_body_collect_train_subcommand():
+    parser = create_parser()
+    args_collect = parser.parse_args(["body", "--collect", "--source", "1", "--headless", "--fake-camera"])
+    assert args_collect.subcommand == "body"
+    assert args_collect.collect is True
+
+    args_train = parser.parse_args(["body", "--train"])
+    assert args_train.subcommand == "body"
+    assert args_train.train is True
+
+
+def test_cli_dwell_configuration():
+    parser = create_parser()
+    args_live = parser.parse_args(["live", "--dwell", "1200"])
+    assert args_live.dwell == 1200
+
+    args_isl = parser.parse_args(["isl", "--dwell", "1400"])
+    assert args_isl.dwell == 1400
+
+    args_body = parser.parse_args(["body", "--dwell", "1500"])
+    assert args_body.dwell == 1500
+
+
+def test_cli_collect_body_flag():
+    parser = create_parser()
+    args = parser.parse_args(["collect", "--body", "-s", "FOOD", "-n", "100", "--fake-camera"])
+    assert args.subcommand == "collect"
+    assert args.body is True
+    assert args.sign == "FOOD"
+    assert args.count == 100
+

@@ -154,3 +154,50 @@ def test_run_body_live_headless():
         use_fake=True,
     )
     assert ret == 0
+
+
+def test_spatial_collection_headless(tmp_path):
+    """Verify Spatial ISL Studio captures 220D samples and writes to disk."""
+    from signora.isl.collect import run_isl_collector
+
+    rc = run_isl_collector(
+        sign="FATHER",
+        count=1,
+        headless=True,
+        use_fake=True,
+        enable_body=True,
+        auto_start=True,
+        data_dir=tmp_path,
+    )
+    assert rc == 0
+    saved_file = tmp_path / "FATHER.npy"
+    assert saved_file.exists()
+    arr = np.load(saved_file)
+    assert arr.shape[1] == 220
+
+
+def test_spatial_model_training_cycle(tmp_path):
+    """Verify ISL trainer correctly trains on 220D spatial features."""
+    from signora.isl.train import train_isl_model
+
+    # Generate synthetic 220D samples for two signs
+    f_data = np.random.randn(8, 220).astype(np.float32)
+    m_data = np.random.randn(8, 220).astype(np.float32)
+    np.save(tmp_path / "FATHER.npy", f_data)
+    np.save(tmp_path / "MOTHER.npy", m_data)
+
+    out_ckpt = tmp_path / "isl_spatial_mlp.pt"
+    res = train_isl_model(
+        data_dir=tmp_path,
+        epochs=3,
+        batch_size=4,
+        ckpt_path=out_ckpt,
+        in_dim=220,
+    )
+
+    assert res["success"] is True
+    assert res["in_dim"] == 220
+    assert "FATHER" in res["labels"]
+    assert "MOTHER" in res["labels"]
+    assert out_ckpt.exists()
+

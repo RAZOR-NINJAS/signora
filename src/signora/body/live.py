@@ -21,7 +21,8 @@ from signora.isl.config import (
 )
 from signora.isl.features import extract_features
 from signora.isl.model import Predictor
-from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor
+from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
+from signora.models.manifest import get_default_models_dir
 from signora.tts.piper import PiperTTS
 
 WINDOW_NAME = "Signora - Body Spatial Mode"
@@ -48,15 +49,26 @@ def run_body_live(
     print("    [Open Space]: HELLO, GOOD, BAD, OK, PEACE, STOP")
     print("=" * 65)
 
-    try:
-        predictor = Predictor()
-    except FileNotFoundError:
-        print("[Auto-Healing] ISL neural model weights missing. Fetching...", file=sys.stderr)
-        from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
-        from signora.models.manifest import get_default_models_dir
+    spatial_ckpt = get_default_models_dir() / "isl_spatial_mlp.pt"
+    is_spatial_model = False
+    if spatial_ckpt.exists():
+        try:
+            predictor = Predictor(spatial_ckpt)
+            is_spatial_model = True
+            print(f"✓ Loaded 220D Spatial Hand+Body neural checkpoint from {spatial_ckpt.name}")
+        except Exception as e:
+            print(f"[Warning] Failed loading spatial checkpoint: {e}. Falling back to standard ISL model.")
+            is_spatial_model = False
 
-        fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
-        predictor = Predictor()
+    if not is_spatial_model:
+        try:
+            predictor = Predictor()
+        except FileNotFoundError:
+            print("[Auto-Healing] ISL neural model weights missing. Fetching...", file=sys.stderr)
+            from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
+
+            fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
+            predictor = Predictor()
 
     engine = DebounceEngine(
         predictor=predictor,
@@ -121,8 +133,11 @@ def run_body_live(
                 )
                 hnd_list = handedness if isinstance(handedness, list) else [handedness]
 
-                # Base probability from hand articulation
-                feats = extract_features(lms_list, hnd_list)
+                # Base probability from hand articulation / spatial body features
+                if is_spatial_model:
+                    feats = extract_spatial_features(lms_list, hnd_list, pose_lms)
+                else:
+                    feats = extract_features(lms_list, hnd_list)
                 probs = predictor.probs(feats)
                 top_idx = int(np.argmax(probs))
                 raw_prob = float(probs[top_idx])

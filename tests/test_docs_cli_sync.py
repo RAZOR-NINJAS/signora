@@ -25,6 +25,8 @@ def test_documented_subcommands_exist():
         "alert",
         "lipsync",
         "body",
+        "collect",
+        "train",
     ]
 
     for cmd in documented_commands:
@@ -43,7 +45,7 @@ def test_documented_flags_exist():
     # Check body flags
     body_parser = subparser_dict["body"]
     body_flags = [opt for act in body_parser._actions for opt in act.option_strings]
-    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every", "--fake-camera"]:
+    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every", "--fake-camera", "--dwell", "--collect", "--train"]:
         assert flag in body_flags, f"Missing flag '{flag}' on 'signora body'"
 
     # Check lipsync flags
@@ -61,13 +63,13 @@ def test_documented_flags_exist():
     # Check live flags
     live_parser = subparser_dict["live"]
     live_flags = [opt for act in live_parser._actions for opt in act.option_strings]
-    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every"]:
+    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every", "--dwell"]:
         assert flag in live_flags, f"Missing flag '{flag}' on 'signora live'"
 
     # Check isl flags
     isl_parser = subparser_dict["isl"]
     isl_flags = [opt for act in isl_parser._actions for opt in act.option_strings]
-    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every", "--body"]:
+    for flag in ["--source", "-s", "--headless", "--no-tts", "--detect-every", "--body", "--dwell", "--collect", "--train"]:
         assert flag in isl_flags, f"Missing flag '{flag}' on 'signora isl'"
 
     # Check game flags

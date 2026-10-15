@@ -58,6 +58,9 @@ def create_parser() -> argparse.ArgumentParser:
         "--detect-every", type=int, default=1, help="Process landmarks every N frames (default: 1)"
     )
     p_live.add_argument(
+        "--dwell", type=int, default=None, help="Hold dwell duration in ms for sign confirmation (default: 1000)"
+    )
+    p_live.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
     )
 
@@ -72,6 +75,15 @@ def create_parser() -> argparse.ArgumentParser:
     p_isl.add_argument("--no-tts", action="store_true", help="Disable Piper audio speech feedback")
     p_isl.add_argument(
         "--detect-every", type=int, default=1, help="Process landmarks every N frames (default: 1)"
+    )
+    p_isl.add_argument(
+        "--dwell", type=int, default=None, help="Hold dwell duration in ms for sign confirmation (default: 1000)"
+    )
+    p_isl.add_argument(
+        "--collect", action="store_true", help="Launch interactive collection studio"
+    )
+    p_isl.add_argument(
+        "--train", action="store_true", help="Train PyTorch MLP model on collected ISL data"
     )
     p_isl.add_argument(
         "--body", action="store_true", help="Enable upper-body pose & spatial placement anchor tracking"
@@ -93,6 +105,15 @@ def create_parser() -> argparse.ArgumentParser:
     p_body.add_argument("--no-tts", action="store_true", help="Disable Piper audio speech feedback")
     p_body.add_argument(
         "--detect-every", type=int, default=1, help="Process landmarks every N frames (default: 1)"
+    )
+    p_body.add_argument(
+        "--dwell", type=int, default=None, help="Hold dwell duration in ms for spatial sign confirmation (default: 1000)"
+    )
+    p_body.add_argument(
+        "--collect", action="store_true", help="Launch interactive collection studio with body tracking"
+    )
+    p_body.add_argument(
+        "--train", action="store_true", help="Train 220D PyTorch MLP model on collected spatial data"
     )
     p_body.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
@@ -209,10 +230,31 @@ def create_parser() -> argparse.ArgumentParser:
         "--train", action="store_true", help="Train PyTorch MLP model on all collected ISL data"
     )
     p_collect.add_argument(
+        "--body", action="store_true", help="Enable upper-body pose & spatial placement anchor tracking (220D features)"
+    )
+    p_collect.add_argument(
         "--headless", action="store_true", help="Run without graphical display window"
     )
     p_collect.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
+    )
+
+    # 9.5 signora train
+    p_train = subparsers.add_parser(
+        "train",
+        help="Train or fine-tune neural network classifier on collected sign data",
+    )
+    p_train.add_argument(
+        "--body", action="store_true", help="Train 220D Spatial Hand+Body model from data/isl_spatial/"
+    )
+    p_train.add_argument(
+        "-d", "--data-dir", default=None, help="Custom data directory containing .npy sample files"
+    )
+    p_train.add_argument(
+        "--epochs", type=int, default=50, help="Number of training epochs (default: 50)"
+    )
+    p_train.add_argument(
+        "--lr", type=float, default=1e-3, help="Optimizer learning rate (default: 0.001)"
     )
 
     # 10. signora alert (Hear Through Your Eyes)
@@ -328,9 +370,30 @@ def main(argv: Optional[List[str]] = None) -> int:
             no_tts=args.no_tts,
             detect_every=args.detect_every,
             use_fake=args.fake_camera,
+            dwell_ms=getattr(args, "dwell", None),
         )
 
     if args.subcommand in ("body", "spatial"):
+        cam_source = args.source
+        if str(cam_source).isdigit():
+            cam_source = int(cam_source)
+
+        if getattr(args, "collect", False):
+            from signora.isl.collect import run_isl_collector
+
+            return run_isl_collector(
+                source=cam_source,
+                headless=args.headless,
+                use_fake=args.fake_camera,
+                enable_body=True,
+            )
+
+        if getattr(args, "train", False):
+            from signora.isl.train import DATA_SPATIAL_DIR, train_isl_model
+
+            res = train_isl_model(data_dir=DATA_SPATIAL_DIR, in_dim=220)
+            return 0 if res.get("success") else 1
+
         from signora.body.live import run_body_live
 
         return run_body_live(
@@ -339,9 +402,34 @@ def main(argv: Optional[List[str]] = None) -> int:
             no_tts=args.no_tts,
             detect_every=args.detect_every,
             use_fake=args.fake_camera,
+            dwell_ms=getattr(args, "dwell", None),
         )
 
     if args.subcommand == "isl":
+        cam_source = args.source
+        if str(cam_source).isdigit():
+            cam_source = int(cam_source)
+
+        if getattr(args, "collect", False):
+            from signora.isl.collect import run_isl_collector
+
+            return run_isl_collector(
+                source=cam_source,
+                headless=args.headless,
+                use_fake=args.fake_camera,
+                enable_body=getattr(args, "body", False),
+            )
+
+        if getattr(args, "train", False):
+            from signora.isl.train import DATA_DIR, DATA_SPATIAL_DIR, train_isl_model
+
+            target_dir = DATA_SPATIAL_DIR if getattr(args, "body", False) else DATA_DIR
+            res = train_isl_model(
+                data_dir=target_dir,
+                in_dim=220 if getattr(args, "body", False) else 164,
+            )
+            return 0 if res.get("success") else 1
+
         if getattr(args, "body", False):
             from signora.body.live import run_body_live
 
@@ -351,6 +439,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 no_tts=args.no_tts,
                 detect_every=args.detect_every,
                 use_fake=args.fake_camera,
+                dwell_ms=getattr(args, "dwell", None),
             )
 
         from signora.isl.live import run_isl_live
@@ -361,6 +450,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             no_tts=args.no_tts,
             detect_every=args.detect_every,
             use_fake=args.fake_camera,
+            dwell_ms=getattr(args, "dwell", None),
         )
 
     if args.subcommand == "words":
@@ -461,7 +551,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             headless=args.headless,
             use_fake=args.fake_camera,
             auto_train=args.train,
+            enable_body=getattr(args, "body", False),
         )
+
+    if args.subcommand == "train":
+        from pathlib import Path
+        from signora.isl.train import DATA_DIR, DATA_SPATIAL_DIR, train_isl_model
+
+        if getattr(args, "data_dir", None):
+            target_dir = Path(args.data_dir)
+            in_dim = 220 if getattr(args, "body", False) else None
+        else:
+            target_dir = DATA_SPATIAL_DIR if getattr(args, "body", False) else DATA_DIR
+            in_dim = 220 if getattr(args, "body", False) else 164
+
+        res = train_isl_model(
+            data_dir=target_dir,
+            epochs=args.epochs,
+            lr=args.lr,
+            in_dim=in_dim,
+        )
+        return 0 if res.get("success") else 1
 
     if args.subcommand in ("alert", "listen", "hear"):
         from signora.alert import (

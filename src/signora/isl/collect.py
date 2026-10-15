@@ -27,6 +27,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT_DIR / "data" / "isl"
+DATA_SPATIAL_DIR = ROOT_DIR / "data" / "isl_spatial"
 
 ISL_LETTERS = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -356,6 +357,9 @@ def draw_hud(
     hands_detected: int,
     status_msg: str = "",
     counts_dict: Optional[Dict[str, int]] = None,
+    enable_body: bool = False,
+    active_anchor: str = "OPEN_SPACE",
+    target_anchor: Optional[str] = None,
 ) -> None:
     """Render interactive Glassmorphic Studio HUD."""
     h, w = frame.shape[:2]
@@ -367,13 +371,18 @@ def draw_hud(
     cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
 
     # Title & Mode
+    title = (
+        "SPATIAL ISL STUDIO [220D]: 26 LETTERS + 200 STATIC WORDS + BODY POSE"
+        if enable_body
+        else "ISL STUDIO: SAMPLE COLLECTOR & TRAINER"
+    )
     cv2.putText(
         frame,
-        "ISL STUDIO: SAMPLE COLLECTOR & TRAINER",
+        title,
         (16, 26),
         cv2.FONT_HERSHEY_DUPLEX,
-        0.65,
-        (255, 255, 255),
+        0.54 if enable_body else 0.65,
+        (6, 182, 212) if enable_body else (255, 255, 255),
         1,
         cv2.LINE_AA,
     )
@@ -440,9 +449,18 @@ def draw_hud(
     if bar_w > 0:
         cv2.rectangle(frame, (0, 100), (bar_w, 105), bar_col, -1)
 
-    # Batch status text
+    # Batch status text with body anchor placement
+    anchor_info = ""
+    if enable_body:
+        if target_anchor:
+            is_match = (active_anchor == target_anchor)
+            match_sym = "✓ MATCH" if is_match else "⚠ MOVE"
+            anchor_info = f"| Target: [{target_anchor}] | Anchor: [{active_anchor}] {match_sym} "
+        else:
+            anchor_info = f"| Anchor: [{active_anchor}] "
+
     batch_info = (
-        f"Sign: [{current_sign}] | Batch: {collected_in_batch}/{target_count} ({int(bar_pct*100)}%) "
+        f"Sign: [{current_sign}] {anchor_info}| Batch: {collected_in_batch}/{target_count} ({int(bar_pct*100)}%) "
         f"| Saved: {existing_count} | Hands: {hands_detected}"
     )
     cv2.putText(
@@ -450,7 +468,7 @@ def draw_hud(
         batch_info,
         (16, 92),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.48,
+        0.44 if enable_body else 0.48,
         (226, 232, 240),
         1,
         cv2.LINE_AA,
@@ -459,7 +477,7 @@ def draw_hud(
     # 3. Center State Alerts
     if state == "COUNTDOWN":
         cd_int = max(1, int(np.ceil(countdown_val)))
-        card_w, card_h = 420, 140
+        card_w, card_h = 440, 150 if (enable_body and target_anchor) else 140
         cx, cy = w // 2 - card_w // 2, h // 2 - card_h // 2
         overlay = frame.copy()
         cv2.rectangle(overlay, (cx, cy), (cx + card_w, cy + card_h), (15, 23, 42), -1)
@@ -470,7 +488,7 @@ def draw_hud(
         cv2.putText(
             frame,
             f"STARTING IN: {cd_int}",
-            (cx + 60, cy + 55),
+            (cx + 70, cy + 50),
             cv2.FONT_HERSHEY_DUPLEX,
             1.1,
             (245, 158, 11),
@@ -480,17 +498,28 @@ def draw_hud(
         cv2.putText(
             frame,
             f"Hold posture for ISL '{current_sign}'",
-            (cx + 40, cy + 105),
+            (cx + 40, cy + 95),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
+            0.56,
             (255, 255, 255),
             1,
             cv2.LINE_AA,
         )
+        if enable_body and target_anchor:
+            cv2.putText(
+                frame,
+                f"Target Body Placement: [{target_anchor}]",
+                (cx + 40, cy + 128),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.50,
+                (6, 182, 212),
+                1,
+                cv2.LINE_AA,
+            )
 
     elif state == "COLLECTING":
         # Recording pill top-center
-        pill_w, pill_h = 360, 48
+        pill_w, pill_h = 420 if enable_body else 360, 48
         px, py = w // 2 - pill_w // 2, 120
         overlay = frame.copy()
         cv2.rectangle(overlay, (px, py), (px + pill_w, py + pill_h), (15, 23, 42), -1)
@@ -500,12 +529,17 @@ def draw_hud(
         # Flashing red dot
         if int(time.time() * 4) % 2 == 0:
             cv2.circle(frame, (px + 24, py + 24), 8, (239, 68, 68), -1)
+        rec_title = (
+            f"RECORDING 220D [{active_anchor}]: {collected_in_batch}/{target_count}"
+            if enable_body
+            else f"RECORDING: {collected_in_batch}/{target_count} SAMPLES"
+        )
         cv2.putText(
             frame,
-            f"RECORDING: {collected_in_batch}/{target_count} SAMPLES",
+            rec_title,
             (px + 45, py + 31),
             cv2.FONT_HERSHEY_DUPLEX,
-            0.55,
+            0.48 if enable_body else 0.55,
             (255, 255, 255),
             1,
             cv2.LINE_AA,
@@ -646,20 +680,25 @@ def run_isl_collector(
     count: int = 300,
     source: Any = 0,
     timer_seconds: float = 5.0,
-    data_dir: Path = DATA_DIR,
+    data_dir: Optional[Path] = None,
     headless: bool = False,
     use_fake: bool = False,
     auto_train: bool = False,
+    enable_body: bool = False,
+    auto_start: bool = False,
 ) -> int:
-    """Main execution loop for interactive ISL Studio."""
-    data_dir.mkdir(parents=True, exist_ok=True)
+    """Main execution loop for interactive ISL Studio (supporting hands & body pose)."""
+    target_data_dir = (
+        data_dir if data_dir is not None else (DATA_SPATIAL_DIR if enable_body else DATA_DIR)
+    )
+    target_data_dir.mkdir(parents=True, exist_ok=True)
 
     # If requested direct training
     if auto_train:
         print("[Studio] Directly invoking ISL model training on all data...")
         from signora.isl.train import train_isl_model
 
-        res = train_isl_model(data_dir=data_dir)
+        res = train_isl_model(data_dir=target_data_dir)
         return 0 if res.get("success") else 1
 
     sign_name = sign.upper() if sign else "A"
@@ -667,13 +706,20 @@ def run_isl_collector(
         sign_name = "A"
     sign_idx = ISL_ALL_SIGNS.index(sign_name)
 
+    mode_name = (
+        "Spatial ISL Studio (220D Hand + Body Position)"
+        if enable_body
+        else "ISL Collection Studio (164D Hand Gestures)"
+    )
     print("=" * 65)
-    print("  SIGNORA -- Interactive ISL Collection Studio & Neural Trainer")
+    print(f"  SIGNORA -- {mode_name}")
     print("=" * 65)
     print(f"  Target Samples Per Sign : {count}")
     print(f"  Start Countdown Timer   : {timer_seconds}s")
-    print(f"  Storage Directory       : {data_dir}")
+    print(f"  Storage Directory       : {target_data_dir}")
     print(f"  Total Sign Vocabulary   : {len(ISL_ALL_SIGNS)} Signs (A-Z + 200 Static Daily Words)")
+    if enable_body:
+        print("  Spatial Body Tracking   : ENABLED (33-point Pose + 2-Hand Articulation)")
     print("  Controls:")
     print("    [SPACE]   : Start 5-second countdown & auto-collect 300 samples")
     print("    [<- / ->] : Previous / Next sign")
@@ -684,16 +730,24 @@ def run_isl_collector(
     print("    [Q]       : Quit Studio")
     print("=" * 65)
 
-    pipe = HandPipeline(source=source, num_hands=2, mirror=True, use_fake=use_fake)
+    if enable_body:
+        from signora.core.spatial import SpatialPipeline, draw_cyber_spatial
+        from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
+
+        pipe = SpatialPipeline(source=source, mirror=True, detect_every=1, use_fake=use_fake)
+    else:
+        pipe = HandPipeline(source=source, num_hands=2, mirror=True, use_fake=use_fake)
+
     if not pipe.started.wait(timeout=5) or pipe.error:
         print("[Error] Could not initialize camera.", file=sys.stderr)
         return 1
 
+    win_name = "Signora Spatial Body ISL Studio" if enable_body else "Signora ISL Studio"
     if not headless:
-        cv2.namedWindow("Signora ISL Studio", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Signora ISL Studio", 960, 720)
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(win_name, 960, 720)
 
-    state = "IDLE"  # 'IDLE', 'COUNTDOWN', 'COLLECTING', 'TRAINING', 'SUCCESS'
+    state = "COLLECTING" if auto_start else "IDLE"  # 'IDLE', 'COUNTDOWN', 'COLLECTING', 'TRAINING', 'SUCCESS'
     countdown_start = 0.0
     collected_samples: List[np.ndarray] = []
     status_msg = ""
@@ -701,7 +755,7 @@ def run_isl_collector(
     last_sample_time = 0.0
     is_paused = False
 
-    counts = get_existing_counts(data_dir)
+    counts = get_existing_counts(target_data_dir)
 
     train_worker_info: Dict[str, Any] = {}
     train_thread: Optional[threading.Thread] = None
@@ -710,7 +764,7 @@ def run_isl_collector(
         try:
             from signora.isl.train import train_isl_model
 
-            res = train_isl_model(data_dir=data_dir)
+            res = train_isl_model(data_dir=target_data_dir)
             train_worker_info["res"] = res
             train_worker_info["success"] = res.get("success", False)
         except Exception as exc:
@@ -721,6 +775,7 @@ def run_isl_collector(
 
     try:
         while True:
+            pose_lms = None
             # Training background check
             if state == "TRAINING":
                 time.sleep(0.02)
@@ -729,7 +784,7 @@ def run_isl_collector(
                         res = train_worker_info.get("res", {})
                         acc = res.get("val_acc", 0.0) * 100
                         status_msg = f"✓ Training Complete! Val Acc: {acc:.1f}% | Checkpoint Updated"
-                        counts = get_existing_counts(data_dir)
+                        counts = get_existing_counts(target_data_dir)
                         state = "SUCCESS"
                     else:
                         err = train_worker_info.get("error") or train_worker_info.get("res", {}).get(
@@ -741,12 +796,18 @@ def run_isl_collector(
                     train_thread = None
 
                 # Keep reading camera or reuse last frame so display stays live
-                frame, landmarks, handedness = pipe.read(timeout=0.05)
+                if enable_body:
+                    frame, landmarks, handedness, pose_lms = pipe.read(timeout=0.05)
+                else:
+                    frame, landmarks, handedness = pipe.read(timeout=0.05)
                 if frame is None:
                     continue
                 num_hands = len(landmarks) if isinstance(landmarks, list) else (1 if landmarks else 0)
             else:
-                frame, landmarks, handedness = pipe.read(timeout=1.0)
+                if enable_body:
+                    frame, landmarks, handedness, pose_lms = pipe.read(timeout=1.0)
+                else:
+                    frame, landmarks, handedness = pipe.read(timeout=1.0)
                 if frame is None:
                     continue
 
@@ -761,8 +822,27 @@ def run_isl_collector(
                     else ([handedness] if handedness else [])
                 )
 
-                # Draw skeletons
-                draw_skeleton(frame, lms_list, hnds_list)
+                active_anchor_zone = "OPEN_SPACE"
+                anchor_pt = None
+                target_anchor = None
+                if enable_body:
+                    from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
+
+                    target_anchor = SIGN_ANCHOR_MAP.get(current_sign.upper())
+                    if lms_list:
+                        active_anchor_zone, _, anchor_pt = detect_body_anchor(
+                            lms_list[0], pose_lms, w=frame.shape[1], h=frame.shape[0]
+                        )
+                    draw_cyber_spatial(
+                        frame=frame,
+                        hand_lms_list=lms_list,
+                        handedness_list=hnds_list,
+                        pose_landmarks=pose_lms,
+                        active_anchor_name=active_anchor_zone if active_anchor_zone != "OPEN_SPACE" else None,
+                        active_anchor_pt=anchor_pt,
+                    )
+                else:
+                    draw_skeleton(frame, lms_list, hnds_list)
 
             # Key handling (always call cv2.waitKey to keep window event loop active)
             key = cv2.waitKey(20 if state == "TRAINING" else 1) & 0xFF if not headless else -1
@@ -825,7 +905,10 @@ def run_isl_collector(
                 if num_hands >= expected_hands and not is_paused:
                     now = time.time()
                     if now - last_sample_time >= 0.028:  # ~35 FPS burst capture
-                        feats = extract_features(lms_list, hnds_list)
+                        if enable_body:
+                            feats = extract_spatial_features(lms_list, hnds_list, pose_lms)
+                        else:
+                            feats = extract_features(lms_list, hnds_list)
                         if np.all(np.isfinite(feats)):
                             collected_samples.append(feats)
                             last_sample_time = now
@@ -833,7 +916,7 @@ def run_isl_collector(
                 # Check if batch reached target
                 if len(collected_samples) >= count:
                     # Save to file
-                    out_path = data_dir / f"{current_sign}.npy"
+                    out_path = target_data_dir / f"{current_sign}.npy"
                     prev_samples: List[np.ndarray] = []
                     if out_path.exists():
                         try:
@@ -849,8 +932,9 @@ def run_isl_collector(
                     np.save(out_path, combined.astype(np.float32))
 
                     counts[current_sign] = len(combined)
+                    dim_str = "220D Hand+Body" if enable_body else "164D Hand"
                     status_msg = (
-                        f"🎉 Saved {count} samples for '{current_sign}'! (Total: {len(combined)})"
+                        f"🎉 Saved {count} {dim_str} samples for '{current_sign}'! (Total: {len(combined)})"
                     )
                     status_msg_expiry = time.time() + 3.5
                     state = "SUCCESS"
@@ -874,13 +958,16 @@ def run_isl_collector(
                 hands_detected=num_hands,
                 status_msg=status_msg,
                 counts_dict=counts,
+                enable_body=enable_body,
+                active_anchor=active_anchor_zone if enable_body else "OPEN_SPACE",
+                target_anchor=target_anchor if enable_body else None,
             )
 
             if not headless:
-                cv2.imshow("Signora ISL Studio", frame)
+                cv2.imshow(win_name, frame)
 
             # In testing/fake camera mode with limited cycles
-            if use_fake and headless:
+            if use_fake and headless and (not auto_start or state == "SUCCESS"):
                 break
 
     finally:
