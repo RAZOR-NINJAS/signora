@@ -63,7 +63,7 @@ def create_parser() -> argparse.ArgumentParser:
 
     # 2. signora isl
     p_isl = subparsers.add_parser(
-        "isl", help="Run Indian Sign Language (ISL) two-handed recognition (A-Z + 10 words)"
+        "isl", help="Run Indian Sign Language (ISL) two-handed recognition (A-Z + 200 static words)"
     )
     p_isl.add_argument(
         "-s", "--source", default="0", help="Camera index or video file (default: 0)"

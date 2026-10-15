@@ -68,3 +68,30 @@ def test_isl_collect_keybindings():
     key_shift_t = ord("T")
     assert key_shift_t == 84
     assert not (ord("a") <= key_shift_t <= ord("z"))
+
+
+def test_isl_200_static_words():
+    """Verify that exactly 200 unique static words exist with posture guidance and hand expectations."""
+    from signora.isl.collect import ISL_ALL_SIGNS, get_sign_guide
+    from signora.isl.config import STATIC_WORDS, get_expected_hands
+
+    assert len(STATIC_WORDS) == 200
+    assert len(set(STATIC_WORDS)) == 200
+    assert len(ISL_ALL_SIGNS) >= 227
+
+    for word in STATIC_WORDS:
+        assert word in ISL_ALL_SIGNS
+        hands = get_expected_hands(word)
+        assert hands in (1, 2)
+        guide1, guide2 = get_sign_guide(word)
+        assert isinstance(guide1, str) and len(guide1) > 0
+        assert isinstance(guide2, str) and len(guide2) > 0
+
+
+def test_isl_studio_word_collection():
+    """Verify that ISL collector accepts word signs like WATER and HELP."""
+    from signora.isl.collect import run_isl_collector
+
+    rc = run_isl_collector(sign="WATER", count=1, headless=True, use_fake=True)
+    assert rc == 0
+

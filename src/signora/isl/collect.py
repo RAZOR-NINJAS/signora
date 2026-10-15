@@ -10,6 +10,7 @@ Provides an interactive OpenCV studio allowing users to:
 
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,6 +19,7 @@ import cv2
 import numpy as np
 
 from signora.core.hands import HAND_CONNECTIONS, HandPipeline
+from signora.isl.config import STATIC_WORDS, get_expected_hands
 from signora.isl.features import extract_features
 
 # Wayland / X11 compatibility
@@ -30,6 +32,10 @@ ISL_LETTERS = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "SPACE"
 ]
+
+ISL_WORDS: List[str] = list(STATIC_WORDS)
+ISL_ALL_SIGNS: List[str] = ISL_LETTERS + [w for w in ISL_WORDS if w not in ISL_LETTERS]
+
 
 ISL_GUIDES: Dict[str, Tuple[str, str]] = {
     "A": (
@@ -142,13 +148,176 @@ ISL_GUIDES: Dict[str, Tuple[str, str]] = {
     ),
 }
 
+ISL_WORD_GUIDES: Dict[str, Tuple[str, str]] = {
+    "NAMASTE": (
+        "ISL 'NAMASTE': Both flat palms joined together at chest in prayer pose (2-handed).",
+        "Universal Indian greeting gesture held steady with fingers pointing upward.",
+    ),
+    "HELLO": (
+        "ISL 'HELLO': Open flat right palm held at shoulder/head height facing forward (1-handed).",
+        "Classic greeting posture held steady facing the camera.",
+    ),
+    "WELCOME": (
+        "ISL 'WELCOME': Both open flat palms upturned, extended forward at chest height (2-handed).",
+        "Warm hospitality gesture receiving visitors.",
+    ),
+    "THANK_YOU": (
+        "ISL 'THANK_YOU': Flat right hand with fingertips touching chin/lips facing forward (1-handed).",
+        "Polite expression of sincere thanks and gratitude.",
+    ),
+    "PLEASE": (
+        "ISL 'PLEASE': Open flat right palm placed directly over center of chest (1-handed).",
+        "Respectful request posture held firmly against chest.",
+    ),
+    "CONGRATS": (
+        "ISL 'CONGRATS': Both hands forming thumbs-up upright side-by-side at chest (2-handed).",
+        "Celebration posture expressing congratulations and honor.",
+    ),
+    "RESPECT": (
+        "ISL 'RESPECT': Right flat vertical hand at temple, left flat hand over chest (2-handed).",
+        "Formal salutation expressing deep respect.",
+    ),
+    "PEACE": (
+        "ISL 'PEACE': 'V' peace sign formed with index and middle fingers spread (1-handed).",
+        "Universal peace posture held steady in front of shoulder.",
+    ),
+    "LOVE": (
+        "ISL 'LOVE': Thumb, index, and pinky extended (classic ILY sign) (1-handed).",
+        "Middle and ring fingers folded into palm.",
+    ),
+    "FRIEND": (
+        "ISL 'FRIEND': Index fingers of both hands hooked into each other (2-handed).",
+        "Symbolizes bond and close connection between comrades.",
+    ),
+    "FAMILY": (
+        "ISL 'FAMILY': Both hands forming 'F' circles with index & thumb touching (2-handed).",
+        "Both 'F' hands held together in front of chest.",
+    ),
+    "TOGETHER": (
+        "ISL 'TOGETHER': Both open flat palms facing each other with fingers loosely interlaced (2-handed).",
+        "Unified group solidarity posture.",
+    ),
+    "PROMISE": (
+        "ISL 'PROMISE': Right index finger vertical against lips, left flat palm horizontal (2-handed).",
+        "Solemn vow posture representing truth and commitment.",
+    ),
+    "APOLOGY": (
+        "ISL 'APOLOGY': Closed right fist placed gently over the heart (1-handed).",
+        "Conveys sincere regret and heartfelt apology.",
+    ),
+    "GOODBYE": (
+        "ISL 'GOODBYE': Open flat right palm held upright tilted outward (1-handed).",
+        "Parting wave gesture held stationary.",
+    ),
+    "YES": (
+        "ISL 'YES': Closed right fist held at chin/shoulder height (1-handed).",
+        "Nodding fist posture representing affirmative agreement.",
+    ),
+    "NO": (
+        "ISL 'NO': Index and middle fingers extended together snapping onto thumb tip (1-handed).",
+        "Clear negative response posture.",
+    ),
+    "OK": (
+        "ISL 'OK': Thumb and index tips joined in a ring, other 3 fingers raised (1-handed).",
+        "Universal approval and acknowledgment posture.",
+    ),
+    "GOOD": (
+        "ISL 'GOOD': Single right thumb pointing straight up (thumbs up) (1-handed).",
+        "Positive approval posture.",
+    ),
+    "BAD": (
+        "ISL 'BAD': Single right pinky finger extended upright, others folded (1-handed).",
+        "Disapproval or negative evaluation posture.",
+    ),
+    "HELP": (
+        "ISL 'HELP': Closed right fist with thumb up resting on open flat left palm (2-handed).",
+        "Assistance and support gesture held firmly at chest level.",
+    ),
+    "EMERGENCY": (
+        "ISL 'EMERGENCY': Right hand forming 'E' shape held firmly upright at chest (1-handed).",
+        "Urgent alert gesture calling for immediate intervention.",
+    ),
+    "DOCTOR": (
+        "ISL 'DOCTOR': Three fingers of right hand resting on left inner wrist pulse (2-handed).",
+        "Medical posture checking pulse on wrist.",
+    ),
+    "MEDICINE": (
+        "ISL 'MEDICINE': Right middle fingertip placed on center of open left palm (2-handed).",
+        "Pharmaceutical and treatment posture.",
+    ),
+    "HOSPITAL": (
+        "ISL 'HOSPITAL': Right index & middle fingers form cross on left shoulder (2-handed).",
+        "Sign of the Red Cross medical facility.",
+    ),
+    "WATER": (
+        "ISL 'WATER': Right 'W' shape (3 fingers extended) with index touching bottom lip (1-handed).",
+        "Hydration sign held against lower lip.",
+    ),
+    "FOOD": (
+        "ISL 'FOOD': Flattened right hand with fingertips pinched touching lips (1-handed).",
+        "Eating and meal posture held at mouth.",
+    ),
+    "TEA": (
+        "ISL 'TEA': Right hand 'F' pinch holding imaginary cup handle over left flat palm (2-handed).",
+        "Saucer and teacup posture.",
+    ),
+    "COFFEE": (
+        "ISL 'COFFEE': Right fist resting directly on top of left fist (2-handed).",
+        "Coffee grinder grinding posture held still.",
+    ),
+    "MILK": (
+        "ISL 'MILK': Closed right fist held at chin level in milking grip pose (1-handed).",
+        "Dairy nourishment sign.",
+    ),
+    "HOUSE": (
+        "ISL 'HOUSE': Both open flat hands with fingertips touching at an apex to form a roof (2-handed).",
+        "Shelter and dwelling roof posture.",
+    ),
+    "HOME": (
+        "ISL 'HOME': Right flattened hand touching cheek then held at jawline (1-handed).",
+        "Personal residence and hearth sign.",
+    ),
+    "BOOK": (
+        "ISL 'BOOK': Both open flat palms facing up with pinky edges touching like open book (2-handed).",
+        "Reading and literature posture.",
+    ),
+    "PHONE": (
+        "ISL 'PHONE': Right 'Y' shape (thumb & pinky) held with thumb to ear, pinky to mouth (1-handed).",
+        "Telephone handset posture.",
+    ),
+    "TIME": (
+        "ISL 'TIME': Right index finger pointing at left wrist watch location (2-handed).",
+        "Temporal and clock reference posture.",
+    ),
+    "STOP": (
+        "ISL 'STOP': Open flat right palm facing forward, fingers upright (1-handed).",
+        "Halt and pause posture held firmly.",
+    ),
+}
+
+
+def get_sign_guide(sign: str) -> Tuple[str, str]:
+    """Retrieve two-line posture guidance for any letter or word sign."""
+    s = sign.upper()
+    if s in ISL_GUIDES:
+        return ISL_GUIDES[s]
+    if s in ISL_WORD_GUIDES:
+        return ISL_WORD_GUIDES[s]
+    hands = get_expected_hands(s)
+    hand_str = "1 hand" if hands == 1 else "2 hands"
+    clean_name = s.replace("_", " ").title()
+    return (
+        f"ISL '{clean_name}': Hold standard static sign posture ({hand_str}).",
+        "Keep fingers and wrists steady and motionless to record clean 164D features.",
+    )
+
 
 def get_existing_counts(data_dir: Path = DATA_DIR) -> Dict[str, int]:
     """Scan data directory for existing recorded samples per sign."""
     counts: Dict[str, int] = {}
     if not data_dir.exists():
         return counts
-    for sign in ISL_LETTERS:
+    for sign in ISL_ALL_SIGNS:
         p = data_dir / f"{sign}.npy"
         if p.exists():
             try:
@@ -159,6 +328,7 @@ def get_existing_counts(data_dir: Path = DATA_DIR) -> Dict[str, int]:
         else:
             counts[sign] = 0
     return counts
+
 
 
 def draw_hud(
@@ -195,14 +365,14 @@ def draw_hud(
         cv2.LINE_AA,
     )
 
-    # Alphabet Strip: Show a sliding window of ~9 letters centered around current_sign
+    # Alphabet & Word Strip: Show a sliding window of ~9 signs centered around current_sign
     window_size = 9
-    start_i = max(0, min(len(ISL_LETTERS) - window_size, sign_idx - window_size // 2))
-    end_i = min(len(ISL_LETTERS), start_i + window_size)
+    start_i = max(0, min(len(ISL_ALL_SIGNS) - window_size, sign_idx - window_size // 2))
+    end_i = min(len(ISL_ALL_SIGNS), start_i + window_size)
 
     chip_x = 16
     for i in range(start_i, end_i):
-        let = ISL_LETTERS[i]
+        let = ISL_ALL_SIGNS[i]
         cnt = counts.get(let, 0)
         is_cur = (i == sign_idx)
 
@@ -217,7 +387,7 @@ def draw_hud(
             bg_col = (51, 65, 85)   # Slate gray
             txt_col = (203, 213, 225)
 
-        chip_w = 46 if len(let) <= 2 else 68
+        chip_w = 46 if len(let) <= 2 else max(68, len(let) * 8 + 12)
         cv2.rectangle(frame, (chip_x, 38), (chip_x + chip_w, 68), bg_col, -1)
         if is_cur:
             cv2.rectangle(frame, (chip_x - 2, 36), (chip_x + chip_w + 2, 70), (6, 182, 212), 2)  # Cyan border
@@ -228,7 +398,7 @@ def draw_hud(
             label,
             (chip_x + 4, 58),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.4,
+            0.36,
             txt_col,
             1,
             cv2.LINE_AA,
@@ -237,11 +407,11 @@ def draw_hud(
 
     # Top right: Total Signs Collected Counter
     total_ready = sum(1 for v in counts.values() if v >= target_count)
-    summary_text = f"Ready: {total_ready}/{len(ISL_LETTERS)} Signs"
+    summary_text = f"Ready: {total_ready}/{len(ISL_ALL_SIGNS)} Signs"
     cv2.putText(
         frame,
         summary_text,
-        (w - 220, 26),
+        (w - 240, 26),
         cv2.FONT_HERSHEY_DUPLEX,
         0.55,
         (52, 211, 153),
@@ -329,19 +499,22 @@ def draw_hud(
         )
 
     elif state == "TRAINING":
-        card_w, card_h = 560, 150
+        card_w, card_h = 580, 160
         cx, cy = w // 2 - card_w // 2, h // 2 - card_h // 2
         overlay = frame.copy()
         cv2.rectangle(overlay, (cx, cy), (cx + card_w, cy + card_h), (15, 23, 42), -1)
         cv2.addWeighted(overlay, 0.92, frame, 0.08, 0, frame)
         cv2.rectangle(frame, (cx, cy), (cx + card_w, cy + card_h), (6, 182, 212), 2)
 
+        spinner_chars = ["|", "/", "-", "\\"]
+        spin = spinner_chars[int(time.time() * 8) % len(spinner_chars)]
+
         cv2.putText(
             frame,
-            "TRAINING ISL NEURAL NETWORK...",
-            (cx + 40, cy + 50),
+            f"TRAINING ISL NEURAL NETWORK... [{spin}]",
+            (cx + 35, cy + 45),
             cv2.FONT_HERSHEY_DUPLEX,
-            0.8,
+            0.75,
             (6, 182, 212),
             2,
             cv2.LINE_AA,
@@ -349,24 +522,23 @@ def draw_hud(
         cv2.putText(
             frame,
             "Optimizing 164D MLP weights on all data/isl/ classes",
-            (cx + 40, cy + 90),
+            (cx + 35, cy + 85),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.52,
+            0.50,
             (226, 232, 240),
             1,
             cv2.LINE_AA,
         )
-        if status_msg:
-            cv2.putText(
-                frame,
-                status_msg,
-                (cx + 40, cy + 125),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.48,
-                (52, 211, 153),
-                1,
-                cv2.LINE_AA,
-            )
+        cv2.putText(
+            frame,
+            status_msg or "Preserving baseline exemplars & training PyTorch model...",
+            (cx + 35, cy + 120),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.46,
+            (52, 211, 153),
+            1,
+            cv2.LINE_AA,
+        )
 
     elif state == "SUCCESS" and status_msg:
         # Success popup
@@ -388,7 +560,7 @@ def draw_hud(
         )
 
     # 4. Bottom Posture Guide Box
-    guide = ISL_GUIDES.get(current_sign.upper())
+    guide = get_sign_guide(current_sign.upper())
     if guide:
         overlay = frame.copy()
         cv2.rectangle(overlay, (12, h - 110), (w - 12, h - 50), (15, 23, 42), -1)
@@ -418,8 +590,10 @@ def draw_hud(
     # 5. Bottom Hotkey Navigation Bar
     cv2.rectangle(frame, (0, h - 45), (w, h), (10, 15, 30), -1)
     hotkeys = (
-        "[SPACE] Start 5s Timer & Collect   "
-        "[<-/-> or a-z] Change Sign   "
+        "[SPACE] Record 300   "
+        "[<-/->] Change Sign   "
+        "[TAB] Jump +10   "
+        "[a-z] Jump to Sign   "
         "[Shift+T] Train Model   "
         "[P] Pause   "
         "[Q] Quit"
@@ -429,11 +603,12 @@ def draw_hud(
         hotkeys,
         (16, h - 17),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.45,
+        0.42,
         (203, 213, 225),
         1,
         cv2.LINE_AA,
     )
+
 
 
 def draw_skeleton(frame: np.ndarray, landmarks_list: List[Any], handedness_list: List[str]) -> None:
@@ -475,9 +650,9 @@ def run_isl_collector(
         return 0 if res.get("success") else 1
 
     sign_name = sign.upper() if sign else "A"
-    if sign_name not in ISL_LETTERS:
+    if sign_name not in ISL_ALL_SIGNS:
         sign_name = "A"
-    sign_idx = ISL_LETTERS.index(sign_name)
+    sign_idx = ISL_ALL_SIGNS.index(sign_name)
 
     print("=" * 65)
     print("  SIGNORA -- Interactive ISL Collection Studio & Neural Trainer")
@@ -485,11 +660,14 @@ def run_isl_collector(
     print(f"  Target Samples Per Sign : {count}")
     print(f"  Start Countdown Timer   : {timer_seconds}s")
     print(f"  Storage Directory       : {data_dir}")
+    print(f"  Total Sign Vocabulary   : {len(ISL_ALL_SIGNS)} Signs (A-Z + 200 Static Daily Words)")
     print("  Controls:")
     print("    [SPACE]   : Start 5-second countdown & auto-collect 300 samples")
     print("    [<- / ->] : Previous / Next sign")
-    print("    [a - z]   : Directly jump to sign (e.g. 't' jumps to sign T)")
-    print("    [Shift+T] : Train neural network on all collected data")
+    print("    [TAB]     : Jump forward 10 signs")
+    print("    [a - z]   : Jump to signs starting with letter")
+    print("    [Shift+T] : Train neural network on all collected data (background worker)")
+    print("    [P]       : Pause / Resume")
     print("    [Q]       : Quit Studio")
     print("=" * 65)
 
@@ -512,81 +690,113 @@ def run_isl_collector(
 
     counts = get_existing_counts(data_dir)
 
+    train_worker_info: Dict[str, Any] = {}
+    train_thread: Optional[threading.Thread] = None
+
+    def _train_worker():
+        try:
+            from signora.isl.train import train_isl_model
+
+            res = train_isl_model(data_dir=data_dir)
+            train_worker_info["res"] = res
+            train_worker_info["success"] = res.get("success", False)
+        except Exception as exc:
+            train_worker_info["error"] = str(exc)
+            train_worker_info["success"] = False
+        finally:
+            train_worker_info["done"] = True
+
     try:
         while True:
-            frame, landmarks, handedness = pipe.read(timeout=1.0)
-            if frame is None:
-                continue
+            # Training background check
+            if state == "TRAINING":
+                time.sleep(0.02)
+                if train_worker_info.get("done"):
+                    if train_worker_info.get("success"):
+                        res = train_worker_info.get("res", {})
+                        acc = res.get("val_acc", 0.0) * 100
+                        status_msg = f"✓ Training Complete! Val Acc: {acc:.1f}% | Checkpoint Updated"
+                        counts = get_existing_counts(data_dir)
+                        state = "SUCCESS"
+                    else:
+                        err = train_worker_info.get("error") or train_worker_info.get("res", {}).get(
+                            "error", "Unknown error"
+                        )
+                        status_msg = f"Training Failed: {err}"
+                        state = "IDLE"
+                    status_msg_expiry = time.time() + 4.5
+                    train_thread = None
 
-            current_sign = ISL_LETTERS[sign_idx]
-            num_hands = len(landmarks) if isinstance(landmarks, list) else (1 if landmarks else 0)
-            lms_list = landmarks if isinstance(landmarks, list) else ([landmarks] if landmarks else [])
-            hnds_list = handedness if isinstance(handedness, list) else ([handedness] if handedness else [])
+                # Keep reading camera or reuse last frame so display stays live
+                frame, landmarks, handedness = pipe.read(timeout=0.05)
+                if frame is None:
+                    continue
+                num_hands = len(landmarks) if isinstance(landmarks, list) else (1 if landmarks else 0)
+            else:
+                frame, landmarks, handedness = pipe.read(timeout=1.0)
+                if frame is None:
+                    continue
 
-            # Draw skeletons
-            draw_skeleton(frame, lms_list, hnds_list)
+                current_sign = ISL_ALL_SIGNS[sign_idx]
+                num_hands = len(landmarks) if isinstance(landmarks, list) else (1 if landmarks else 0)
+                lms_list = (
+                    landmarks if isinstance(landmarks, list) else ([landmarks] if landmarks else [])
+                )
+                hnds_list = (
+                    handedness
+                    if isinstance(handedness, list)
+                    else ([handedness] if handedness else [])
+                )
 
-            # Key handling
-            key = cv2.waitKey(1) & 0xFF if not headless else -1
+                # Draw skeletons
+                draw_skeleton(frame, lms_list, hnds_list)
+
+            # Key handling (always call cv2.waitKey to keep window event loop active)
+            key = cv2.waitKey(20 if state == "TRAINING" else 1) & 0xFF if not headless else -1
             if key in (ord("q"), ord("Q"), 27):
                 print("[Studio] Exiting ISL Studio.")
                 break
-            elif key in (ord("p"), ord("P")):
-                is_paused = not is_paused
-            elif key in (ord("["), 81):  # Previous sign
-                sign_idx = (sign_idx - 1) % len(ISL_LETTERS)
-                state = "IDLE"
-                collected_samples = []
-            elif key in (ord("]"), 83):  # Next sign
-                sign_idx = (sign_idx + 1) % len(ISL_LETTERS)
-                state = "IDLE"
-                collected_samples = []
-            elif key == ord("T"):
-                # Shift + T: Trigger neural network training
-                state = "TRAINING"
-                draw_hud(
-                    frame=frame,
-                    current_sign=current_sign,
-                    sign_idx=sign_idx,
-                    collected_in_batch=len(collected_samples),
-                    target_count=count,
-                    existing_count=counts.get(current_sign, 0),
-                    state=state,
-                    countdown_val=0.0,
-                    hands_detected=num_hands,
-                    status_msg="Training MLP classifier...",
-                    counts_dict=counts,
-                )
-                if not headless:
-                    cv2.imshow("Signora ISL Studio", frame)
-                    cv2.waitKey(10)
-
-                print("\n[Studio] Initiating neural network training on all data...")
-                try:
-                    from signora.isl.train import train_isl_model
-
-                    res = train_isl_model(data_dir=data_dir)
-                    if res.get("success"):
-                        acc = res.get("val_acc", 0.0) * 100
-                        status_msg = f"✓ Training Complete! Val Acc: {acc:.1f}% | Checkpoint Updated"
-                    else:
-                        status_msg = f"Training Failed: {res.get('error', 'Unknown')}"
-                except Exception as e:
-                    status_msg = f"Training Error: {e}"
-
-                state = "SUCCESS"
-                status_msg_expiry = time.time() + 4.0
-            elif (ord("a") <= key <= ord("z")) or (ord("A") <= key <= ord("Z") and key != ord("T")):
-                char = chr(key).upper()
-                if char in ISL_LETTERS:
-                    sign_idx = ISL_LETTERS.index(char)
+            elif state != "TRAINING":
+                if key in (ord("p"), ord("P")):
+                    is_paused = not is_paused
+                elif key in (ord("["), 81):  # Previous sign / Left Arrow
+                    sign_idx = (sign_idx - 1) % len(ISL_ALL_SIGNS)
                     state = "IDLE"
                     collected_samples = []
-            elif key == 32:  # SPACE BAR
-                if state in ("IDLE", "SUCCESS"):
-                    state = "COUNTDOWN"
-                    countdown_start = time.time()
+                elif key in (ord("]"), 83):  # Next sign / Right Arrow
+                    sign_idx = (sign_idx + 1) % len(ISL_ALL_SIGNS)
+                    state = "IDLE"
                     collected_samples = []
+                elif key == 9:  # TAB: Jump forward 10 signs
+                    sign_idx = (sign_idx + 10) % len(ISL_ALL_SIGNS)
+                    state = "IDLE"
+                    collected_samples = []
+                elif key in (ord("T"), 84, 20):  # Shift + T (ASCII 84) or Ctrl+T (20)
+                    state = "TRAINING"
+                    status_msg = "Initiating background neural training..."
+                    train_worker_info.clear()
+                    train_thread = threading.Thread(target=_train_worker, daemon=True)
+                    train_thread.start()
+                    print("\n[Studio] Initiated neural network training in background worker...")
+                elif (ord("a") <= key <= ord("z")) or (ord("A") <= key <= ord("Z")):
+                    if key == ord("t"):
+                        status_msg = "ℹ Press [Shift+T] to Train Neural Model"
+                        status_msg_expiry = time.time() + 2.5
+                    else:
+                        char = chr(key).upper()
+                        for idx, s in enumerate(ISL_ALL_SIGNS):
+                            if s == char or s.startswith(char):
+                                sign_idx = idx
+                                state = "IDLE"
+                                collected_samples = []
+                                break
+                elif key == 32:  # SPACE BAR
+                    if state in ("IDLE", "SUCCESS"):
+                        state = "COUNTDOWN"
+                        countdown_start = time.time()
+                        collected_samples = []
+
+            current_sign = ISL_ALL_SIGNS[sign_idx]
 
             # State Logic
             countdown_val = 0.0
@@ -598,7 +808,7 @@ def run_isl_collector(
                     collected_samples = []
 
             elif state == "COLLECTING":
-                expected_hands = 1 if current_sign in ("C", "L", "V", "Z", "SPACE") else 2
+                expected_hands = get_expected_hands(current_sign)
                 if num_hands >= expected_hands and not is_paused:
                     now = time.time()
                     if now - last_sample_time >= 0.028:  # ~35 FPS burst capture
@@ -618,11 +828,17 @@ def run_isl_collector(
                             prev_samples = list(arr)
                         except Exception:
                             pass
-                    combined = np.vstack(prev_samples + collected_samples) if prev_samples else np.vstack(collected_samples)
+                    combined = (
+                        np.vstack(prev_samples + collected_samples)
+                        if prev_samples
+                        else np.vstack(collected_samples)
+                    )
                     np.save(out_path, combined.astype(np.float32))
 
                     counts[current_sign] = len(combined)
-                    status_msg = f"🎉 Saved {count} samples for '{current_sign}'! (Total: {len(combined)})"
+                    status_msg = (
+                        f"🎉 Saved {count} samples for '{current_sign}'! (Total: {len(combined)})"
+                    )
                     status_msg_expiry = time.time() + 3.5
                     state = "SUCCESS"
                     print(f"\n[Studio] {status_msg}")

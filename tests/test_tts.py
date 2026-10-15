@@ -24,3 +24,29 @@ def test_piper_speak_async():
         assert tts.last_spoken_text == "Signora"
         assert tts.last_spoken_time > 0.0
     tts.close()
+
+
+def test_piper_phonetic_normalization():
+    """Verify that single letters and sign words are phonetically expanded for natural articulation."""
+    from signora.tts.piper import SPOKEN_PHONETICS
+
+    tts = PiperTTS(enabled=False)
+    assert tts._normalize_speech_text("A") == "Aye"
+    assert tts._normalize_speech_text("b") == "Bee"
+    assert tts._normalize_speech_text("SPACE") == "Space"
+    assert tts._normalize_speech_text("THANK_YOU") == "THANK YOU"
+    assert len(SPOKEN_PHONETICS) >= 27
+
+
+def test_piper_smooth_audio():
+    """Verify that _smooth_audio eliminates abrupt clipping with cosine fades."""
+    import numpy as np
+    from signora.tts.piper import _smooth_audio
+
+    raw = np.ones(2205, dtype=np.float32)
+    smoothed = _smooth_audio(raw, 22050)
+    assert len(smoothed) == len(raw)
+    assert smoothed[0] < 0.1  # Smooth fade-in at onset
+    assert smoothed[-1] < 0.1  # Smooth fade-out at end
+    assert np.all(np.isfinite(smoothed))
+

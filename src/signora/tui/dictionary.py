@@ -359,6 +359,25 @@ ISL_GESTURES: Dict[str, Dict[str, str]] = {
     },
 }
 
+# Auto-populate comprehensive 200 daily usage static words into ISL dictionary
+try:
+    from signora.isl.collect import get_sign_guide
+    from signora.isl.config import STATIC_WORDS, get_expected_hands
+
+    for _w in STATIC_WORDS:
+        if _w not in ISL_GESTURES:
+            _h = "1 Hand" if get_expected_hands(_w) == 1 else "2 Hands"
+            _g1, _g2 = get_sign_guide(_w)
+            ISL_GESTURES[_w] = {
+                "hands": _h,
+                "category": "Word",
+                "posture": _g1,
+                "tip": _g2,
+            }
+except Exception:
+    pass
+
+
 # ASL Dynamic Words (Holistic trajectory-based vocabulary)
 WORDS_GESTURES: Dict[str, Dict[str, str]] = {
     "HELLO": {

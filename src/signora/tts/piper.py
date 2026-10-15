@@ -1,6 +1,7 @@
 """Offline Piper neural text-to-speech engine with non-blocking audio playback."""
 
 import atexit
+import os
 import queue
 import threading
 import time
@@ -9,17 +10,68 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-from signora.models.manifest import get_model_path
+from signora.models.manifest import get_default_models_dir, get_model_path
 
 try:
     import sounddevice as sd
     from piper import PiperVoice
+    try:
+        from piper.config import SynthesisConfig
+        _HAS_SYN_CONFIG = True
+    except ImportError:
+        _HAS_SYN_CONFIG = False
 
     _HAS_TTS_LIBS = True
 except (ImportError, OSError):
     _HAS_TTS_LIBS = False
     sd = None
     PiperVoice = None
+    _HAS_SYN_CONFIG = False
+
+# Articulate phonetic pronunciation for fingerspelled single letters & punctuation
+SPOKEN_PHONETICS: Dict[str, str] = {
+    "A": "Aye",
+    "B": "Bee",
+    "C": "See",
+    "D": "Dee",
+    "E": "Ee",
+    "F": "Eff",
+    "G": "Jee",
+    "H": "Aitch",
+    "I": "Eye",
+    "J": "Jay",
+    "K": "Kay",
+    "L": "Ell",
+    "M": "Emm",
+    "N": "Enn",
+    "O": "Oh",
+    "P": "Pee",
+    "Q": "Queue",
+    "R": "Arr",
+    "S": "Ess",
+    "T": "Tee",
+    "U": "You",
+    "V": "Vee",
+    "W": "Double you",
+    "X": "Ex",
+    "Y": "Why",
+    "Z": "Zed",
+    "SPACE": "Space",
+}
+
+
+def _smooth_audio(audio: np.ndarray, sr: int) -> np.ndarray:
+    """Apply raised-cosine window ramps (5ms) to eliminate audio clipping clicks and pops."""
+    if len(audio) < 16:
+        return audio
+    fade_len = min(int(sr * 0.005), len(audio) // 4)
+    if fade_len > 0:
+        fade_in = 0.5 * (1.0 - np.cos(np.linspace(0, np.pi, fade_len)))
+        fade_out = 0.5 * (1.0 + np.cos(np.linspace(0, np.pi, fade_len)))
+        audio = audio.copy()
+        audio[:fade_len] *= fade_in
+        audio[-fade_len:] *= fade_out
+    return audio
 
 
 class PiperTTS:
@@ -41,7 +93,25 @@ class PiperTTS:
             return
 
         try:
-            self.model_path = model_path or get_model_path("piper_voice")
+            # Voice resolution: check custom path, env var, Amy (natural female), or Lessac fallback
+            models_dir = get_default_models_dir()
+            env_voice = os.environ.get("SIGNORA_VOICE", "").strip()
+
+            target_model = model_path
+            if target_model is None and env_voice:
+                candidate = models_dir / f"{env_voice}.onnx"
+                if candidate.exists():
+                    target_model = candidate
+
+            if target_model is None:
+                # Check for high-fidelity Amy voice
+                amy_path = models_dir / "en_US-amy-medium.onnx"
+                if amy_path.exists() and amy_path.with_suffix(".onnx.json").exists():
+                    target_model = amy_path
+                else:
+                    target_model = get_model_path("piper_voice")
+
+            self.model_path = target_model
             self.config_path = self.model_path.with_suffix(".onnx.json")
 
             if self.model_path.exists() and self.config_path.exists():
@@ -57,19 +127,50 @@ class PiperTTS:
         except Exception:
             self.is_ready = False
 
+    def _normalize_speech_text(self, text: str) -> str:
+        """Expand single fingerspelled letters and sign words to clear natural speech."""
+        cleaned = text.strip()
+        upper = cleaned.upper()
+        if upper in SPOKEN_PHONETICS:
+            return SPOKEN_PHONETICS[upper]
+        # Replace underscores with spaces (e.g. THANK_YOU -> Thank You)
+        if "_" in cleaned:
+            cleaned = cleaned.replace("_", " ")
+        return cleaned
+
     def _synthesize_audio(self, text: str) -> Optional[Tuple[np.ndarray, int]]:
         """Synthesize text into raw float32 audio numpy array and sample rate."""
         if not self._voice:
             return None
         try:
+            spoken_text = self._normalize_speech_text(text)
             chunks = []
             sr = 22050
-            for chunk in self._voice.synthesize(text):
+
+            syn_cfg = None
+            if _HAS_SYN_CONFIG:
+                syn_cfg = SynthesisConfig(
+                    length_scale=0.92,
+                    noise_scale=0.45,
+                    noise_w_scale=0.75,
+                    normalize_audio=True,
+                    volume=1.0,
+                )
+
+            kwargs = {}
+            if syn_cfg is not None:
+                kwargs["syn_config"] = syn_cfg
+
+            for chunk in self._voice.synthesize(spoken_text, **kwargs):
                 chunks.append(chunk.audio_float_array)
                 sr = chunk.sample_rate
+
             if not chunks:
                 return None
-            return np.concatenate(chunks), sr
+
+            audio = np.concatenate(chunks)
+            audio = _smooth_audio(audio, sr)
+            return audio, sr
         except Exception:
             return None
 
@@ -98,7 +199,7 @@ class PiperTTS:
                         continue
                     audio, sr = res
                     # Cache short words and characters for instant repeat playback
-                    if len(upper) <= 16 and len(self._cache) < 256:
+                    if len(upper) <= 16 and len(self._cache) < 512:
                         self._cache[upper] = (audio, sr)
 
                 sd.play(audio, samplerate=sr)
@@ -147,3 +248,4 @@ def speak_async(text: str) -> None:
     tts = get_tts()
     if tts:
         tts.speak_async(text)
+
