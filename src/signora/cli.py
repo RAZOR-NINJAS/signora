@@ -30,6 +30,16 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("-v", "--version", action="version", version=f"signora {__version__}")
+    parser.add_argument(
+        "--intro",
+        action="store_true",
+        help="Display futuristic introduction and 'Connecting Hands' startup animation",
+    )
+    parser.add_argument(
+        "--no-intro",
+        action="store_true",
+        help="Skip startup introduction animation",
+    )
 
     subparsers = parser.add_subparsers(
         dest="subcommand", title="Available Subcommands", metavar="<command>"
@@ -263,9 +273,18 @@ def main(argv: Optional[List[str]] = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
 
+    # Explicit --intro flag
+    if "--intro" in argv:
+        from signora.intro import display_intro
+
+        display_intro(speak=True, animate=True, wait=True)
+        return 0
+
     # Default to TUI if run interactively with no arguments
     if not argv:
         if sys.stdin.isatty():
+            from signora.intro import display_intro
+            display_intro(speak=True, animate=True)
             from signora.tui.app import run_tui
 
             return run_tui()
@@ -273,6 +292,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     args = parser.parse_args(argv)
+
+    if args.intro:
+        from signora.intro import display_intro
+        display_intro(speak=True, animate=True)
+        return 0
 
     if args.subcommand in ("live", "asl"):
         from signora.asl.live import run_asl_live

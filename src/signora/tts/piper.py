@@ -122,5 +122,28 @@ class PiperTTS:
     def close(self) -> None:
         """Shut down background TTS thread."""
         self._stop_event.set()
+        if sd is not None:
+            try:
+                sd.stop()
+            except Exception:
+                pass
         if self._worker_thread and self._worker_thread.is_alive():
-            self._worker_thread.join(timeout=1.0)
+            self._worker_thread.join(timeout=0.5)
+
+
+_GLOBAL_TTS_INSTANCE: Optional[PiperTTS] = None
+
+
+def get_tts() -> PiperTTS:
+    """Return shared singleton Piper text-to-speech instance."""
+    global _GLOBAL_TTS_INSTANCE
+    if _GLOBAL_TTS_INSTANCE is None:
+        _GLOBAL_TTS_INSTANCE = PiperTTS()
+    return _GLOBAL_TTS_INSTANCE
+
+
+def speak_async(text: str) -> None:
+    """Enqueue spoken text on the shared global TTS instance."""
+    tts = get_tts()
+    if tts:
+        tts.speak_async(text)

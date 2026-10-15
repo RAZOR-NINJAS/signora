@@ -254,6 +254,12 @@ class SignoraTUI:
             "[bold yellow]---[/bold yellow]",
         )
         table.add_row(
+            "I",
+            "Futuristic Introduction",
+            "Replay 'Connecting Hands' startup animation & voice manifesto",
+            "Instant",
+        )
+        table.add_row(
             "G",
             "Gesture Sign Dictionary",
             "Visual hand postures & motion guide for ASL, ISL & Words",
@@ -988,8 +994,8 @@ class SignoraTUI:
         self.console.print("\n[bold cyan]=== ISL Sample Collection Studio & Neural Trainer ===[/bold cyan]\n")
         self.console.print("Studio highlights:")
         self.console.print("  • [bold green][SPACE][/bold green] : Start 5s countdown & auto-collect 300 samples")
-        self.console.print("  • [bold cyan][← / → or A-Z][/bold cyan] : Select any ISL sign (A-Z, SPACE)")
-        self.console.print("  • [bold yellow][T][/bold yellow] : Train neural network on all collected data")
+        self.console.print("  • [bold cyan][← / → or a-z][/bold cyan] : Select any ISL sign (e.g. 't' selects sign T, SPACE)")
+        self.console.print("  • [bold yellow][Shift + T][/bold yellow] : Train neural network on all collected data")
         self.console.print("  • [bold red][Q][/bold red] : Exit Studio\n")
         from signora.isl.collect import run_isl_collector
 
@@ -1080,6 +1086,10 @@ class SignoraTUI:
                 self.run_game_flow()
             elif choice == "5":
                 self.run_learn_flow()
+            elif choice in ("I", "i"):
+                from signora.intro import display_intro
+                display_intro(speak=True, animate=True)
+                Prompt.ask("\nPress Enter to return to main menu", console=self.console)
             elif choice in ("G", "g"):
                 self.run_guide_flow()
             elif choice in ("S", "s"):

@@ -10,11 +10,120 @@ def now_ms() -> float:
     return time.monotonic() * 1000.0
 
 
+class ConfidenceGuard:
+    """Confidence and stability validator for sign recognition.
+
+    Prevents false guesses by detecting ambiguous predictions, requiring repeated-frame
+    consistency, and prompting the user with 'Not sure, please try again' or an interactive confirmation.
+    """
+
+    def __init__(
+        self,
+        high_threshold: float = 0.82,
+        ambiguous_threshold: float = 0.48,
+        min_stable_frames: int = 4,
+        require_confirmation: bool = False,
+    ):
+        self.high_threshold = high_threshold
+        self.ambiguous_threshold = ambiguous_threshold
+        self.min_stable_frames = min_stable_frames
+        self.require_confirmation = require_confirmation
+
+        self.consecutive_frames: int = 0
+        self.current_label: Optional[str] = None
+        self.pending_candidate: Optional[str] = None
+        self.pending_confidence: float = 0.0
+        self.status: str = "IDLE"  # "CONFIDENT", "AMBIGUOUS", "LOW", "STABILIZING", "IDLE"
+        self.guidance_message: str = ""
+
+    def evaluate(self, label: Optional[str], confidence: float) -> Dict[str, Any]:
+        """Evaluate prediction against multi-tier confidence and stability requirements."""
+        if not label:
+            self.consecutive_frames = 0
+            self.current_label = None
+            self.pending_candidate = None
+            self.status = "IDLE"
+            self.guidance_message = ""
+            return {
+                "status": self.status,
+                "is_confident": False,
+                "is_ambiguous": False,
+                "guidance": "",
+                "pending": None,
+            }
+
+        if label == self.current_label:
+            self.consecutive_frames += 1
+        else:
+            self.current_label = label
+            self.consecutive_frames = 1
+
+        if confidence >= self.high_threshold:
+            if self.consecutive_frames >= self.min_stable_frames:
+                self.status = "CONFIDENT"
+                self.guidance_message = f"✓ Confirmed: {label}"
+                self.pending_candidate = label if self.require_confirmation else None
+                self.pending_confidence = confidence
+                return {
+                    "status": self.status,
+                    "is_confident": True,
+                    "is_ambiguous": False,
+                    "guidance": self.guidance_message,
+                    "pending": self.pending_candidate,
+                }
+            else:
+                self.status = "STABILIZING"
+                self.guidance_message = f"Hold steady ({self.consecutive_frames}/{self.min_stable_frames})..."
+                return {
+                    "status": self.status,
+                    "is_confident": False,
+                    "is_ambiguous": False,
+                    "guidance": self.guidance_message,
+                    "pending": None,
+                }
+        elif confidence >= self.ambiguous_threshold:
+            self.status = "AMBIGUOUS"
+            self.guidance_message = f"Not sure, please try again 🤔 (Maybe: {label}?)"
+            self.pending_candidate = label
+            self.pending_confidence = confidence
+            return {
+                "status": self.status,
+                "is_confident": False,
+                "is_ambiguous": True,
+                "guidance": self.guidance_message,
+                "pending": label,
+            }
+        else:
+            self.status = "LOW"
+            self.guidance_message = "Low confidence. Adjust hand position."
+            self.pending_candidate = None
+            return {
+                "status": self.status,
+                "is_confident": False,
+                "is_ambiguous": False,
+                "guidance": self.guidance_message,
+                "pending": None,
+            }
+
+    def confirm(self) -> Optional[str]:
+        """Manually confirm pending ambiguous candidate."""
+        res = self.pending_candidate
+        self.pending_candidate = None
+        self.guidance_message = f"Confirmed: {res}" if res else ""
+        return res
+
+    def reject(self) -> None:
+        """Reject and clear pending candidate."""
+        self.pending_candidate = None
+        self.guidance_message = "Rejected. Please try again."
+
+
 class DebounceEngine:
     """Temporal smoothing and dwell confirmation state machine for gesture recognition.
 
     Prevents flicker by requiring a prediction to remain stable above a confidence
     threshold for a continuous duration (dwell_ms) before confirming it into the transcript.
+    Includes ConfidenceGuard for ambiguity detection and user confirmation checks.
     """
 
     def __init__(
@@ -27,6 +136,10 @@ class DebounceEngine:
         confirm_threshold: Optional[float] = None,
         repeat_cooldown_ms: float = 550.0,
         space_cooldown_ms: float = 600.0,
+        enable_confidence_check: bool = True,
+        high_threshold: float = 0.82,
+        ambiguous_threshold: float = 0.48,
+        min_stable_frames: int = 3,
     ):
         self.predictor = predictor
         self.smooth_ms = smooth_ms
@@ -35,6 +148,12 @@ class DebounceEngine:
         self.threshold = confirm_threshold if confirm_threshold is not None else threshold
         self.repeat_cooldown_ms = repeat_cooldown_ms
         self.space_cooldown_ms = space_cooldown_ms
+
+        self.confidence_guard = ConfidenceGuard(
+            high_threshold=high_threshold,
+            ambiguous_threshold=ambiguous_threshold,
+            min_stable_frames=min_stable_frames,
+        ) if enable_confidence_check else None
 
         self.buffer = ""
         self._hist = deque()  # (t_ms, label, prob)
@@ -159,6 +278,10 @@ class DebounceEngine:
                 self._active_dwell_cand = None
                 self._dwell_start = None
 
+        guard_res = {"status": "CONFIDENT", "is_ambiguous": False, "guidance": "", "pending": None}
+        if self.confidence_guard:
+            guard_res = self.confidence_guard.evaluate(dominant, confidence if dominant == label else (confidence * 0.8))
+
         return {
             "candidate": self._candidate,
             "dwell_progress": dwell_progress,
@@ -168,7 +291,37 @@ class DebounceEngine:
             "transcript": self.buffer,
             "word_count": self.word_count,
             "char_count": self.char_count,
+            "status": guard_res.get("status", "IDLE"),
+            "is_ambiguous": guard_res.get("is_ambiguous", False),
+            "guidance": guard_res.get("guidance", ""),
+            "pending_confirmation": guard_res.get("pending", None),
         }
+
+    def confirm(self) -> Optional[str]:
+        """Manually confirm currently pending candidate gesture."""
+        token = None
+        if self.confidence_guard:
+            token = self.confidence_guard.confirm()
+        if not token and self._candidate:
+            token = self._candidate
+
+        if token:
+            self._append_to_buffer(token)
+            self._just_emitted = token
+            self._just_emitted_at = time.monotonic() * 1000.0
+            self._last_emit_time[token] = self._just_emitted_at
+            self._candidate = None
+            self._active_dwell_cand = None
+            self._dwell_start = None
+        return token
+
+    def reject(self) -> None:
+        """Reject and clear ambiguous candidate gesture."""
+        if self.confidence_guard:
+            self.confidence_guard.reject()
+        self._candidate = None
+        self._active_dwell_cand = None
+        self._dwell_start = None
 
     def _append_to_buffer(self, token: str) -> None:
         if token == "SPACE":

@@ -4,7 +4,7 @@ Provides an interactive OpenCV studio allowing users to:
 1. Select individual ISL letters (A-Z + SPACE) interactively via keyboard navigation.
 2. View existing sample counts and live posture guidance per letter.
 3. Start a 5-second countdown timer before auto-collecting 300 samples at ~30 FPS.
-4. Train the 164D PyTorch MLP classifier on all collected data in data/isl/ via the [T] button,
+4. Train the 164D PyTorch MLP classifier on all collected data in data/isl/ via [Shift+T],
    updating models/isl_mlp.pt and exporting Android mobile assets automatically.
 """
 
@@ -419,8 +419,8 @@ def draw_hud(
     cv2.rectangle(frame, (0, h - 45), (w, h), (10, 15, 30), -1)
     hotkeys = (
         "[SPACE] Start 5s Timer & Collect   "
-        "[<-/-> or A-Z] Change Sign   "
-        "[T] Train Model   "
+        "[<-/-> or a-z] Change Sign   "
+        "[Shift+T] Train Model   "
         "[P] Pause   "
         "[Q] Quit"
     )
@@ -488,8 +488,8 @@ def run_isl_collector(
     print("  Controls:")
     print("    [SPACE]   : Start 5-second countdown & auto-collect 300 samples")
     print("    [<- / ->] : Previous / Next sign")
-    print("    [A - Z]   : Directly jump to sign")
-    print("    [T]       : Train neural network on all collected data")
+    print("    [a - z]   : Directly jump to sign (e.g. 't' jumps to sign T)")
+    print("    [Shift+T] : Train neural network on all collected data")
     print("    [Q]       : Quit Studio")
     print("=" * 65)
 
@@ -541,14 +541,8 @@ def run_isl_collector(
                 sign_idx = (sign_idx + 1) % len(ISL_LETTERS)
                 state = "IDLE"
                 collected_samples = []
-            elif ord("a") <= key <= ord("z"):
-                char = chr(key).upper()
-                if char in ISL_LETTERS:
-                    sign_idx = ISL_LETTERS.index(char)
-                    state = "IDLE"
-                    collected_samples = []
-            elif key in (ord("t"), ord("T")):
-                # Trigger training
+            elif key == ord("T"):
+                # Shift + T: Trigger neural network training
                 state = "TRAINING"
                 draw_hud(
                     frame=frame,
@@ -582,6 +576,12 @@ def run_isl_collector(
 
                 state = "SUCCESS"
                 status_msg_expiry = time.time() + 4.0
+            elif (ord("a") <= key <= ord("z")) or (ord("A") <= key <= ord("Z") and key != ord("T")):
+                char = chr(key).upper()
+                if char in ISL_LETTERS:
+                    sign_idx = ISL_LETTERS.index(char)
+                    state = "IDLE"
+                    collected_samples = []
             elif key == 32:  # SPACE BAR
                 if state in ("IDLE", "SUCCESS"):
                     state = "COUNTDOWN"

@@ -79,3 +79,52 @@ def test_debounce_holds_transcript_across_updates():
     st3 = engine.update(None, 0.0, now_ms=1500)
     assert engine.buffer == "A"
     assert st3["transcript"] == "A"
+
+
+def test_confidence_guard_ambiguity_and_confirm():
+    from signora.core.debounce import ConfidenceGuard
+
+    guard = ConfidenceGuard(high_threshold=0.85, ambiguous_threshold=0.50, min_stable_frames=3)
+
+    # 1. Low confidence
+    res = guard.evaluate("HELLO", 0.35)
+    assert res["status"] == "LOW"
+    assert not res["is_confident"]
+    assert not res["is_ambiguous"]
+
+    # 2. Ambiguous confidence -> "Not sure, please try again"
+    res = guard.evaluate("HELLO", 0.65)
+    assert res["status"] == "AMBIGUOUS"
+    assert res["is_ambiguous"] is True
+    assert "Not sure, please try again" in res["guidance"]
+    assert res["pending"] == "HELLO"
+
+    # User manually confirms ambiguous word
+    confirmed = guard.confirm()
+    assert confirmed == "HELLO"
+
+    # 3. High confidence over repeated frames
+    guard.evaluate("WORLD", 0.92)  # frame 1
+    guard.evaluate("WORLD", 0.92)  # frame 2
+    res = guard.evaluate("WORLD", 0.92)  # frame 3 -> confirmed!
+    assert res["status"] == "CONFIDENT"
+    assert res["is_confident"] is True
+
+
+def test_debounce_engine_confidence_confirm():
+    engine = DebounceEngine(
+        dwell_ms=500,
+        enable_confidence_check=True,
+        high_threshold=0.85,
+        ambiguous_threshold=0.45,
+    )
+
+    # Ambiguous frame
+    st = engine.update("HELP", 0.60, now_ms=1000)
+    assert st["is_ambiguous"] is True
+    assert "Not sure, please try again" in st["guidance"]
+
+    # User presses confirm
+    token = engine.confirm()
+    assert token == "HELP"
+    assert "HELP" in engine.buffer

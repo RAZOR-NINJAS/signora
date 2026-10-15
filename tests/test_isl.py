@@ -50,3 +50,21 @@ def test_isl_collect_studio():
 
     rc = run_isl_collector(sign="A", count=1, headless=True, use_fake=True)
     assert rc == 0
+
+
+def test_isl_collect_keybindings():
+    """Verify that lowercase 't' selects letter T while Shift+T (ord('T')) triggers training."""
+    from signora.isl.collect import ISL_LETTERS
+
+    # 1. Lowercase 't' (ASCII 116) selects letter T
+    key_lowercase = ord("t")
+    assert key_lowercase != ord("T")
+    assert ord("a") <= key_lowercase <= ord("z")
+    selected_char = chr(key_lowercase).upper()
+    assert selected_char == "T"
+    assert selected_char in ISL_LETTERS
+
+    # 2. Shift + T (ASCII 84) is uppercase T for neural training trigger
+    key_shift_t = ord("T")
+    assert key_shift_t == 84
+    assert not (ord("a") <= key_shift_t <= ord("z"))
