@@ -29,6 +29,7 @@ models/*.pt
 models/*.onnx*
 models/*.npz
 models/*.tflite
+models/*.json
 *.onnx
 *.onnx.json
 *.task

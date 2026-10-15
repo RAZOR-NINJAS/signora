@@ -279,6 +279,145 @@ object FeatureExtractor {
         return feats
     }
 
+    fun extractSpatialFeatures(hands: List<HandLandmarks>, pose: ai.signora.models.PoseLandmarks?): FloatArray {
+        val baseFeats = extractIslFeatures(hands)
+        val out = FloatArray(220)
+        System.arraycopy(baseFeats, 0, out, 0, 164)
+
+        if (pose == null || pose.points.size < 25) {
+            return out
+        }
+
+        val p = pose.points
+        val pNose = p[0]
+        val pMl = p[9]
+        val pMr = p[10]
+        val pLsh = p[11]
+        val pRsh = p[12]
+        val pLwrist = p[15]
+        val pLhip = p[23]
+        val pRhip = p[24]
+
+        val shoulderDist = dist3D(pLsh, pRsh)
+        val scale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
+
+        val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+        val forehead = Point3D(pNose.x, pNose.y - 0.22f * scale, pNose.z)
+        val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
+        val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+        val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
+
+        val anchors = listOf(
+            forehead,
+            pNose,
+            mouthCenter,
+            chin,
+            chestCenter,
+            pLsh,
+            pRsh,
+            pLwrist,
+            waistCenter
+        )
+
+        var rightHand: HandLandmarks? = null
+        var leftHand: HandLandmarks? = null
+        for (h in hands) {
+            if (h.isRightHand && rightHand == null) rightHand = h
+            else if (!h.isRightHand && leftHand == null) leftHand = h
+        }
+
+        var offset = 164
+        val handPair = listOf(rightHand, leftHand)
+
+        for (h in handPair) {
+            if (h != null && h.points.size >= 21) {
+                val wrist = h.points[WRIST]
+                val idxTip = h.points[INDEX_TIP]
+
+                for (anc in anchors) {
+                    val dx = (wrist.x - anc.x) / scale
+                    val dy = (wrist.y - anc.y) / scale
+                    val dz = (wrist.z - anc.z) / scale
+                    val dist = sqrt(dx * dx + dy * dy + dz * dz)
+                    out[offset++] = dx
+                    out[offset++] = dy
+                    out[offset++] = dist
+                }
+
+                val dfMx = (idxTip.x - mouthCenter.x) / scale
+                val dfMy = (idxTip.y - mouthCenter.y) / scale
+                val dfMouth = sqrt(dfMx * dfMx + dfMy * dfMy)
+                out[offset++] = dfMouth
+            } else {
+                offset += 28
+            }
+        }
+
+        return out
+    }
+
+    fun detectBodyAnchor(hand: HandLandmarks, pose: ai.signora.models.PoseLandmarks?): Pair<String, Point3D?> {
+        if (pose == null || pose.points.size < 25 || hand.points.size < 21) {
+            return Pair("OPEN_SPACE", null)
+        }
+
+        val p = pose.points
+        val pNose = p[0]
+        val pMl = p[9]
+        val pMr = p[10]
+        val pLsh = p[11]
+        val pRsh = p[12]
+        val pLwrist = p[15]
+        val pRwrist = p[16]
+        val pLhip = p[23]
+        val pRhip = p[24]
+
+        val shoulderDist = dist3D(pLsh, pRsh)
+        val scale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
+
+        val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+        val forehead = Point3D(pNose.x, pNose.y - 0.22f * scale, pNose.z)
+        val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
+        val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+        val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
+        val temple = Point3D(if (hand.isRightHand) pRsh.x * 0.4f + pNose.x * 0.6f else pLsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+
+        // Contact candidates from hand
+        val wrist = hand.points[WRIST]
+        val indexTip = hand.points[INDEX_TIP]
+        val thumbTip = hand.points[THUMB_TIP]
+        val palm = Point3D((wrist.x + hand.points[MIDDLE_MCP].x) / 2f, (wrist.y + hand.points[MIDDLE_MCP].y) / 2f, (wrist.y + hand.points[MIDDLE_MCP].y) / 2f)
+        val contactPts = listOf(wrist, indexTip, thumbTip, palm)
+
+        val anchorCandidates = listOf(
+            Triple("FOREHEAD", forehead, 0.48f * scale),
+            Triple("CHIN", chin, 0.42f * scale),
+            Triple("MOUTH_LIPS", mouthCenter, 0.40f * scale),
+            Triple("TEMPLE", temple, 0.45f * scale),
+            Triple("CHEST", chestCenter, 0.58f * scale),
+            Triple("WRIST", if (hand.isRightHand) pLwrist else pRwrist, 0.48f * scale),
+            Triple("SHOULDER", if (hand.isRightHand) pLsh else pRsh, 0.52f * scale),
+            Triple("WAIST", waistCenter, 0.55f * scale)
+        )
+
+        var bestName = "OPEN_SPACE"
+        var bestDist = Float.MAX_VALUE
+        var bestPt: Point3D? = null
+
+        for ((name, pt, radius) in anchorCandidates) {
+            for (cPt in contactPts) {
+                val d = dist3D(cPt, pt)
+                if (d < radius && d < bestDist) {
+                    bestDist = d
+                    bestName = name
+                    bestPt = pt
+                }
+            }
+        }
+
+        return Pair(bestName, bestPt)
+    }
+
     private fun dist3D(a: FloatArray, b: FloatArray): Float {
         val dx = a[0] - b[0]
         val dy = a[1] - b[1]

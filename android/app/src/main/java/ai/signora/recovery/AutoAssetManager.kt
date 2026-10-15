@@ -27,6 +27,7 @@ class AutoAssetManager(private val context: Context) {
 
     private val assetUrls = mapOf(
         "hand_landmarker.task" to "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        "pose_landmarker.task" to "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
         "asl_model.json" to "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.2/asl_model.json",
         "isl_model.json" to "https://github.com/RAZOR-NINJAS/signora/releases/download/v0.1.2/isl_model.json"
     )
@@ -34,7 +35,7 @@ class AutoAssetManager(private val context: Context) {
     suspend fun ensureModelAssets(
         onProgress: (AssetStatus) -> Unit
     ): Boolean = withContext(Dispatchers.IO) {
-        val requiredAssets = listOf("hand_landmarker.task", "asl_model.json", "isl_model.json")
+        val requiredAssets = listOf("hand_landmarker.task", "pose_landmarker.task", "asl_model.json", "isl_model.json")
 
         for ((idx, filename) in requiredAssets.withIndex()) {
             val targetFile = File(modelsDir, filename)

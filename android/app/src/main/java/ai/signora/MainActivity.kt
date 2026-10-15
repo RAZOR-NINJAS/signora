@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var speechManager: SpeechManager
     private var cameraManager: CameraXManager? = null
     private var handHelper: HandLandmarkerHelper? = null
+    private var poseHelper: ai.signora.vision.PoseLandmarkerHelper? = null
 
     private var aslMlp: SignoraMLP? = null
     private var islMlp: SignoraMLP? = null
@@ -56,6 +57,7 @@ class MainActivity : ComponentActivity() {
     private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
     private var activeLandmarks by mutableStateOf<List<HandLandmarks>>(emptyList())
+    private var activePose by mutableStateOf<PoseLandmarks?>(null)
 
     private var frameCount = 0
     private var lastFpsTimestamp = System.currentTimeMillis()
@@ -95,6 +97,7 @@ class MainActivity : ComponentActivity() {
                     onRequestCameraPermission = { checkCameraPermission() },
                     debounceState = debounceState,
                     handLandmarks = activeLandmarks,
+                    poseLandmarks = activePose,
                     currentMode = currentMode,
                     dwellProfile = dwellProfile,
                     isMuted = isMuted,
@@ -216,6 +219,7 @@ class MainActivity : ComponentActivity() {
         if (cameraManager != null) return
 
         val landmarkerTaskFile = assetManager.getModelFile("hand_landmarker.task")
+        val poseTaskFile = assetManager.getModelFile("pose_landmarker.task")
 
         handHelper = HandLandmarkerHelper(
             context = this,
@@ -228,12 +232,22 @@ class MainActivity : ComponentActivity() {
             }
         )
 
+        poseHelper = ai.signora.vision.PoseLandmarkerHelper(
+            context = this,
+            modelFile = poseTaskFile,
+            onResults = { pose, _, _ ->
+                activePose = pose
+            },
+            onError = { _ -> }
+        )
+
         cameraManager = CameraXManager(
             context = this,
             lifecycleOwner = this,
             previewView = previewView,
             onFrame = { mpImage, rotationDegrees, isFront, frameId, frameTime ->
                 handHelper?.detectLiveStream(mpImage, rotationDegrees, isFront, frameId, frameTime)
+                poseHelper?.detectLiveStream(mpImage, rotationDegrees, isFront, frameId, frameTime)
             }
         )
         cameraManager?.startCamera()
@@ -271,7 +285,11 @@ class MainActivity : ComponentActivity() {
         val feats = if (currentMode == RecognitionMode.ASL) {
             FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
         } else {
-            FeatureExtractor.extractIslFeatures(hands)
+            if (activeMlp.inDim == 220) {
+                FeatureExtractor.extractSpatialFeatures(hands, activePose)
+            } else {
+                FeatureExtractor.extractIslFeatures(hands)
+            }
         }
         TrackingProfiler.onFeaturesExtracted(frameId)
 
@@ -295,6 +313,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         cameraManager?.stopCamera()
         handHelper?.close()
+        poseHelper?.close()
         speechManager.shutdown()
     }
 }

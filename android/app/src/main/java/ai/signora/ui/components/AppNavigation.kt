@@ -2,9 +2,11 @@ package ai.signora.ui.components
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.ModelTraining
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.*
@@ -20,6 +22,7 @@ enum class AppDestination(
     val unselectedIcon: ImageVector
 ) {
     TRANSLATE("Translate", Icons.Filled.Translate, Icons.Outlined.Translate),
+    STUDIO("Studio", Icons.Filled.ModelTraining, Icons.Outlined.ModelTraining),
     LEARN("Learn", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }

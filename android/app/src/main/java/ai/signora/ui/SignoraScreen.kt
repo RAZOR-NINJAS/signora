@@ -25,6 +25,7 @@ fun SignoraScreen(
     onRequestCameraPermission: () -> Unit,
     debounceState: DebounceState,
     handLandmarks: List<HandLandmarks>,
+    poseLandmarks: PoseLandmarks? = null,
     currentMode: RecognitionMode,
     dwellProfile: DwellProfile,
     isMuted: Boolean,
@@ -121,6 +122,15 @@ fun SignoraScreen(
                             onClear = onClear,
                             onSpace = onSpace,
                             onSpeak = onSpeak
+                        )
+                    }
+
+                    AppDestination.STUDIO -> {
+                        ai.signora.ui.screens.TrainStudioScreen(
+                            previewView = previewView,
+                            hands = handLandmarks,
+                            pose = poseLandmarks,
+                            onToggleCamera = onToggleCamera
                         )
                     }
 

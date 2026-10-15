@@ -256,6 +256,37 @@ def create_parser() -> argparse.ArgumentParser:
     p_train.add_argument(
         "--lr", type=float, default=1e-3, help="Optimizer learning rate (default: 0.001)"
     )
+    p_train.add_argument(
+        "-i", "--import-file", "--import", dest="import_file", default=None, help="Import phone-exported dataset JSON file before training"
+    )
+
+    # 9.6 signora dataset
+    p_dataset = subparsers.add_parser(
+        "dataset",
+        help="Dataset tools: import, inspect, and verify phone-recorded ISL data",
+    )
+    p_dataset.add_argument(
+        "action",
+        choices=["import", "inspect", "info"],
+        default="inspect",
+        nargs="?",
+        help="Dataset action: import or inspect (default: inspect)",
+    )
+    p_dataset.add_argument(
+        "file",
+        nargs="?",
+        default="signora_isl_dataset.json",
+        help="Path to exported signora_isl_dataset.json file",
+    )
+    p_dataset.add_argument(
+        "--train", action="store_true", default=True, help="Automatically train model after import (default: True)"
+    )
+    p_dataset.add_argument(
+        "--no-train", dest="train", action="store_false", help="Import samples without triggering retraining"
+    )
+    p_dataset.add_argument(
+        "--epochs", type=int, default=50, help="Number of training epochs (default: 50)"
+    )
 
     # 10. signora alert (Hear Through Your Eyes)
     p_alert = subparsers.add_parser(
@@ -558,6 +589,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         from pathlib import Path
         from signora.isl.train import DATA_DIR, DATA_SPATIAL_DIR, train_isl_model
 
+        if getattr(args, "import_file", None):
+            from signora.isl.import_dataset import import_phone_dataset
+            res = import_phone_dataset(
+                json_path=Path(args.import_file),
+                epochs=args.epochs,
+                auto_train=True,
+            )
+            return 0 if res.get("success") else 1
+
         if getattr(args, "data_dir", None):
             target_dir = Path(args.data_dir)
             in_dim = 220 if getattr(args, "body", False) else None
@@ -572,6 +612,35 @@ def main(argv: Optional[List[str]] = None) -> int:
             in_dim=in_dim,
         )
         return 0 if res.get("success") else 1
+
+    if args.subcommand == "dataset":
+        from pathlib import Path
+        from signora.isl.import_dataset import import_phone_dataset, inspect_dataset_file
+
+        file_path = Path(args.file)
+        if args.action in ("inspect", "info"):
+            meta = inspect_dataset_file(file_path)
+            print("=" * 60)
+            print(f"  SIGNORA Dataset Inspector: {file_path.name}")
+            print("=" * 60)
+            print(f"Device:            {meta.get('device', 'Android')}")
+            print(f"Feature Dimension: {meta.get('feature_dim')}D")
+            print(f"Total Classes:     {meta.get('total_classes')}")
+            print(f"Total Samples:     {meta.get('total_samples')}")
+            print("-" * 60)
+            print("Classes:")
+            for cls_name, count in sorted(meta.get("classes", {}).items()):
+                print(f"  * {cls_name:16s} : {count:4d} samples")
+            print("=" * 60)
+            return 0
+
+        if args.action == "import":
+            res = import_phone_dataset(
+                json_path=file_path,
+                auto_train=args.train,
+                epochs=args.epochs,
+            )
+            return 0 if res.get("success") else 1
 
     if args.subcommand in ("alert", "listen", "hear"):
         from signora.alert import (

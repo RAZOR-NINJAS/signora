@@ -84,14 +84,14 @@ def test_isl_collect_keybindings():
     assert len(boxes["chips"]) > 0
 
 
-def test_isl_200_static_words():
-    """Verify that exactly 200 unique static words exist with posture guidance and hand expectations."""
+def test_isl_300_static_words():
+    """Verify that exactly 300 unique static words exist with posture guidance and hand expectations."""
     from signora.isl.collect import ISL_ALL_SIGNS, get_sign_guide
     from signora.isl.config import STATIC_WORDS, get_expected_hands
 
-    assert len(STATIC_WORDS) == 200
-    assert len(set(STATIC_WORDS)) == 200
-    assert len(ISL_ALL_SIGNS) >= 227
+    assert len(STATIC_WORDS) == 300
+    assert len(set(STATIC_WORDS)) == 300
+    assert len(ISL_ALL_SIGNS) >= 327
 
     for word in STATIC_WORDS:
         assert word in ISL_ALL_SIGNS
@@ -108,4 +108,43 @@ def test_isl_studio_word_collection():
 
     rc = run_isl_collector(sign="WATER", count=1, headless=True, use_fake=True)
     assert rc == 0
+
+
+def test_isl_phone_dataset_ingestion(tmp_path):
+    """Verify that exported phone dataset JSON can be inspected and ingested."""
+    import json
+    from signora.isl.import_dataset import import_phone_dataset, inspect_dataset_file
+
+    sample_file = tmp_path / "signora_isl_dataset.json"
+    dummy_data = {
+        "format": "signora_isl_dataset",
+        "version": 1,
+        "device": "Android",
+        "feature_dim": 220,
+        "total_classes": 2,
+        "total_samples": 6,
+        "classes": {
+            "NAMASTE": [[0.1] * 220, [0.2] * 220, [0.15] * 220],
+            "HELLO": [[0.3] * 220, [0.35] * 220, [0.4] * 220],
+        },
+    }
+    sample_file.write_text(json.dumps(dummy_data))
+
+    meta = inspect_dataset_file(sample_file)
+    assert meta["total_classes"] == 2
+    assert meta["total_samples"] == 6
+    assert meta["feature_dim"] == 220
+    assert "NAMASTE" in meta["classes"]
+    assert meta["classes"]["NAMASTE"] == 3
+
+    out_dir = tmp_path / "imported"
+    res = import_phone_dataset(sample_file, target_dir=out_dir, auto_train=False)
+    assert res["success"] is True
+    assert len(res["imported_classes"]) == 2
+    assert (out_dir / "NAMASTE.npy").exists()
+    assert (out_dir / "HELLO.npy").exists()
+
+    arr = np.load(out_dir / "NAMASTE.npy")
+    assert arr.shape == (3, 220)
+
 

@@ -12,6 +12,21 @@ data class HandLandmarks(
     val isFrontCamera: Boolean = true
 )
 
+data class PoseLandmarks(
+    val points: List<Point3D>,
+    val isFrontCamera: Boolean = true
+)
+
+data class SignInfo(
+    val name: String,
+    val category: String,
+    val isWord: Boolean,
+    val expectedHands: Int,
+    val targetAnchor: String?,
+    val guidePosture: String,
+    val guideDetail: String
+)
+
 data class RecognitionResult(
     val label: String,
     val confidence: Float,
