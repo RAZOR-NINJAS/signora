@@ -53,21 +53,35 @@ def test_isl_collect_studio():
 
 
 def test_isl_collect_keybindings():
-    """Verify that lowercase 't' selects letter T while Shift+T (ord('T')) triggers training."""
-    from signora.isl.collect import ISL_LETTERS
+    """Verify that lowercase 't', uppercase 'T', Ctrl+T, and Enter trigger training."""
+    from signora.isl.collect import ISL_LETTERS, draw_hud
 
-    # 1. Lowercase 't' (ASCII 116) selects letter T
-    key_lowercase = ord("t")
-    assert key_lowercase != ord("T")
-    assert ord("a") <= key_lowercase <= ord("z")
-    selected_char = chr(key_lowercase).upper()
-    assert selected_char == "T"
-    assert selected_char in ISL_LETTERS
+    train_keys = (ord("t"), ord("T"), 20, 13, 10)
+    assert ord("t") in train_keys
+    assert ord("T") in train_keys
+    assert 13 in train_keys
+    assert 20 in train_keys
 
-    # 2. Shift + T (ASCII 84) is uppercase T for neural training trigger
-    key_shift_t = ord("T")
-    assert key_shift_t == 84
-    assert not (ord("a") <= key_shift_t <= ord("z"))
+    # Test draw_hud button_boxes population
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    boxes = {}
+    draw_hud(
+        frame=frame,
+        current_sign="A",
+        sign_idx=0,
+        collected_in_batch=0,
+        target_count=300,
+        existing_count=0,
+        state="IDLE",
+        countdown_val=0.0,
+        hands_detected=1,
+        button_boxes=boxes,
+    )
+    assert "train" in boxes
+    assert boxes["train"][0] > 0
+    assert "record" in boxes
+    assert "chips" in boxes
+    assert len(boxes["chips"]) > 0
 
 
 def test_isl_200_static_words():

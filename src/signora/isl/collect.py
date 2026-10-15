@@ -360,6 +360,7 @@ def draw_hud(
     enable_body: bool = False,
     active_anchor: str = "OPEN_SPACE",
     target_anchor: Optional[str] = None,
+    button_boxes: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Render interactive Glassmorphic Studio HUD."""
     h, w = frame.shape[:2]
@@ -387,16 +388,69 @@ def draw_hud(
         cv2.LINE_AA,
     )
 
+    # Top right: Total Signs Collected Counter
+    total_ready = sum(1 for v in counts.values() if v >= target_count)
+    summary_text = f"Ready: {total_ready}/{len(ISL_ALL_SIGNS)} Signs"
+    cv2.putText(
+        frame,
+        summary_text,
+        (w - 240, 26),
+        cv2.FONT_HERSHEY_DUPLEX,
+        0.52,
+        (52, 211, 153),
+        1,
+        cv2.LINE_AA,
+    )
+
+    # Top right: Interactive Train Model Button
+    btn_x1 = max(16, w - 240)
+    btn_y1 = 36
+    btn_x2 = w - 16
+    btn_y2 = 86
+    if button_boxes is not None:
+        button_boxes["train"] = (btn_x1, btn_y1, btn_x2, btn_y2)
+
+    if state == "TRAINING":
+        btn_bg = (180, 83, 9)       # Amber
+        btn_border = (245, 158, 11)
+        btn_txt = "⏳ TRAINING..."
+        btn_txt_col = (255, 255, 255)
+    else:
+        btn_bg = (16, 185, 129)     # Vibrant Emerald
+        btn_border = (52, 211, 153)
+        btn_txt = "⚡ TRAIN MODEL [T]"
+        btn_txt_col = (15, 23, 42)
+
+    cv2.rectangle(frame, (btn_x1, btn_y1), (btn_x2, btn_y2), btn_bg, -1)
+    cv2.rectangle(frame, (btn_x1, btn_y1), (btn_x2, btn_y2), btn_border, 2)
+    cv2.putText(
+        frame,
+        btn_txt,
+        (btn_x1 + 14, btn_y1 + 33),
+        cv2.FONT_HERSHEY_DUPLEX,
+        0.58,
+        btn_txt_col,
+        1,
+        cv2.LINE_AA,
+    )
+
     # Alphabet & Word Strip: Show a sliding window of ~9 signs centered around current_sign
     window_size = 9
     start_i = max(0, min(len(ISL_ALL_SIGNS) - window_size, sign_idx - window_size // 2))
     end_i = min(len(ISL_ALL_SIGNS), start_i + window_size)
+
+    if button_boxes is not None:
+        button_boxes["chips"] = []
 
     chip_x = 16
     for i in range(start_i, end_i):
         let = ISL_ALL_SIGNS[i]
         cnt = counts.get(let, 0)
         is_cur = (i == sign_idx)
+
+        chip_w = 46 if len(let) <= 2 else max(68, len(let) * 8 + 12)
+        if chip_x + chip_w > btn_x1 - 12:
+            break
 
         # Color: Green if >= target, Amber if > 0, Gray if 0
         if cnt >= target_count:
@@ -409,10 +463,12 @@ def draw_hud(
             bg_col = (51, 65, 85)   # Slate gray
             txt_col = (203, 213, 225)
 
-        chip_w = 46 if len(let) <= 2 else max(68, len(let) * 8 + 12)
         cv2.rectangle(frame, (chip_x, 38), (chip_x + chip_w, 68), bg_col, -1)
         if is_cur:
             cv2.rectangle(frame, (chip_x - 2, 36), (chip_x + chip_w + 2, 70), (6, 182, 212), 2)  # Cyan border
+
+        if button_boxes is not None:
+            button_boxes["chips"].append((i, (chip_x, 38, chip_x + chip_w, 68)))
 
         label = f"{let}:{cnt}" if cnt < 1000 else f"{let}:999+"
         cv2.putText(
@@ -426,20 +482,6 @@ def draw_hud(
             cv2.LINE_AA,
         )
         chip_x += chip_w + 6
-
-    # Top right: Total Signs Collected Counter
-    total_ready = sum(1 for v in counts.values() if v >= target_count)
-    summary_text = f"Ready: {total_ready}/{len(ISL_ALL_SIGNS)} Signs"
-    cv2.putText(
-        frame,
-        summary_text,
-        (w - 240, 26),
-        cv2.FONT_HERSHEY_DUPLEX,
-        0.55,
-        (52, 211, 153),
-        1,
-        cv2.LINE_AA,
-    )
 
     # 2. Progress fill bar (under ribbon)
     bar_pct = collected_in_batch / max(target_count, 1)
@@ -587,21 +629,26 @@ def draw_hud(
             cv2.LINE_AA,
         )
 
-    elif state == "SUCCESS" and status_msg:
-        # Success popup
-        card_w, card_h = 520, 90
-        cx, cy = w // 2 - card_w // 2, h // 2 - card_h // 2
+    # Status / Notification Toast Banner (visible for IDLE, COUNTDOWN, COLLECTING, SUCCESS)
+    if status_msg and state != "TRAINING":
+        is_err = any(k in status_msg.lower() for k in ("fail", "error", "no sample", "invalid", "warning", "⚠"))
+        is_ok = any(k in status_msg.lower() for k in ("complete", "saved", "success", "✓", "🎉"))
+        card_col = (239, 68, 68) if is_err else ((52, 211, 153) if is_ok else (6, 182, 212))
+
+        card_w = min(w - 32, max(480, len(status_msg) * 9 + 40))
+        card_h = 52
+        cx, cy = w // 2 - card_w // 2, 115
         overlay = frame.copy()
         cv2.rectangle(overlay, (cx, cy), (cx + card_w, cy + card_h), (15, 23, 42), -1)
-        cv2.addWeighted(overlay, 0.9, frame, 0.1, 0, frame)
-        cv2.rectangle(frame, (cx, cy), (cx + card_w, cy + card_h), (52, 211, 153), 2)
+        cv2.addWeighted(overlay, 0.92, frame, 0.08, 0, frame)
+        cv2.rectangle(frame, (cx, cy), (cx + card_w, cy + card_h), card_col, 2)
         cv2.putText(
             frame,
             status_msg,
-            (cx + 25, cy + 52),
+            (cx + 20, cy + 33),
             cv2.FONT_HERSHEY_DUPLEX,
-            0.65,
-            (52, 211, 153),
+            0.50,
+            card_col,
             1,
             cv2.LINE_AA,
         )
@@ -636,12 +683,14 @@ def draw_hud(
 
     # 5. Bottom Hotkey Navigation Bar
     cv2.rectangle(frame, (0, h - 45), (w, h), (10, 15, 30), -1)
+    if button_boxes is not None:
+        button_boxes["record"] = (0, h - 45, 200, h)
     hotkeys = (
         "[SPACE] Record 300   "
         "[<-/->] Change Sign   "
         "[TAB] Jump +10   "
         "[a-z] Jump to Sign   "
-        "[Shift+T] Train Model   "
+        "[t / Enter] ⚡ Train Model   "
         "[P] Pause   "
         "[Q] Quit"
     )
@@ -721,13 +770,14 @@ def run_isl_collector(
     if enable_body:
         print("  Spatial Body Tracking   : ENABLED (33-point Pose + 2-Hand Articulation)")
     print("  Controls:")
-    print("    [SPACE]   : Start 5-second countdown & auto-collect 300 samples")
-    print("    [<- / ->] : Previous / Next sign")
-    print("    [TAB]     : Jump forward 10 signs")
-    print("    [a - z]   : Jump to signs starting with letter")
-    print("    [Shift+T] : Train neural network on all collected data (background worker)")
-    print("    [P]       : Pause / Resume")
-    print("    [Q]       : Quit Studio")
+    print("    [SPACE]         : Start 5-second countdown & auto-collect 300 samples")
+    print("    [<- / ->]       : Previous / Next sign")
+    print("    [TAB]           : Jump forward 10 signs")
+    print("    [a - z]         : Jump to signs starting with letter")
+    print("    [t / T / Enter] : ⚡ Train neural network on all collected data")
+    print("    [Mouse Click]   : Click [ ⚡ TRAIN MODEL ] button with cursor")
+    print("    [P]             : Pause / Resume")
+    print("    [Q]             : Quit Studio")
     print("=" * 65)
 
     if enable_body:
@@ -742,10 +792,11 @@ def run_isl_collector(
         print("[Error] Could not initialize camera.", file=sys.stderr)
         return 1
 
-    win_name = "Signora Spatial Body ISL Studio" if enable_body else "Signora ISL Studio"
-    if not headless:
-        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(win_name, 960, 720)
+    button_boxes: Dict[str, Any] = {
+        "train": (0, 0, 0, 0),
+        "record": (0, 0, 0, 0),
+        "chips": [],
+    }
 
     state = "COLLECTING" if auto_start else "IDLE"  # 'IDLE', 'COUNTDOWN', 'COLLECTING', 'TRAINING', 'SUCCESS'
     countdown_start = 0.0
@@ -764,7 +815,10 @@ def run_isl_collector(
         try:
             from signora.isl.train import train_isl_model
 
-            res = train_isl_model(data_dir=target_data_dir)
+            res = train_isl_model(
+                data_dir=target_data_dir,
+                in_dim=220 if enable_body else 164,
+            )
             train_worker_info["res"] = res
             train_worker_info["success"] = res.get("success", False)
         except Exception as exc:
@@ -772,6 +826,64 @@ def run_isl_collector(
             train_worker_info["success"] = False
         finally:
             train_worker_info["done"] = True
+
+    def _trigger_training() -> None:
+        nonlocal state, status_msg, status_msg_expiry, train_thread
+        if state == "TRAINING":
+            return
+        sample_files = list(target_data_dir.glob("*.npy")) if target_data_dir.exists() else []
+        base_model_file = MODELS_DIR / ("isl_spatial_mlp.pt" if enable_body else "isl_mlp.pt")
+        if not sample_files and not base_model_file.exists():
+            status_msg = f"⚠ No recorded samples in {target_data_dir.name}/! Press [SPACE] to record first."
+            status_msg_expiry = time.time() + 4.5
+            print(f"\n[Studio] {status_msg}")
+            return
+
+        state = "TRAINING"
+        status_msg = "Initiating background neural training..."
+        status_msg_expiry = time.time() + 45.0
+        train_worker_info.clear()
+        train_thread = threading.Thread(target=_train_worker, daemon=True)
+        train_thread.start()
+        print("\n[Studio] ⚡ Initiated neural network training in background worker...")
+
+    def _trigger_record() -> None:
+        nonlocal state, countdown_start, collected_samples
+        if state in ("IDLE", "SUCCESS"):
+            state = "COUNTDOWN"
+            countdown_start = time.time()
+            collected_samples = []
+
+    def _jump_to_sign(idx: int) -> None:
+        nonlocal sign_idx, state, collected_samples
+        sign_idx = idx % len(ISL_ALL_SIGNS)
+        state = "IDLE"
+        collected_samples = []
+
+    def _on_mouse(event: int, x: int, y: int, flags: int, param: Any) -> None:
+        if event == cv2.EVENT_LBUTTONDOWN:
+            tx1, ty1, tx2, ty2 = button_boxes.get("train", (0, 0, 0, 0))
+            if tx1 <= x <= tx2 and ty1 <= y <= ty2:
+                print("\n[Studio] Mouse clicked [ ⚡ TRAIN MODEL ] button!")
+                _trigger_training()
+                return
+
+            rx1, ry1, rx2, ry2 = button_boxes.get("record", (0, 0, 0, 0))
+            if rx1 <= x <= rx2 and ry1 <= y <= ry2:
+                print("\n[Studio] Mouse clicked [ RECORD ] button!")
+                _trigger_record()
+                return
+
+            for chip_idx, (cx1, cy1, cx2, cy2) in button_boxes.get("chips", []):
+                if cx1 <= x <= cx2 and cy1 <= y <= cy2:
+                    _jump_to_sign(chip_idx)
+                    return
+
+    win_name = "Signora Spatial Body ISL Studio" if enable_body else "Signora ISL Studio"
+    if not headless:
+        cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(win_name, 960, 720)
+        cv2.setMouseCallback(win_name, _on_mouse)
 
     try:
         while True:
@@ -866,41 +978,21 @@ def run_isl_collector(
                 if key in (ord("p"), ord("P")):
                     is_paused = not is_paused
                 elif key in (ord("["), 81):  # Previous sign / Left Arrow
-                    sign_idx = (sign_idx - 1) % len(ISL_ALL_SIGNS)
-                    state = "IDLE"
-                    collected_samples = []
+                    _jump_to_sign(sign_idx - 1)
                 elif key in (ord("]"), 83):  # Next sign / Right Arrow
-                    sign_idx = (sign_idx + 1) % len(ISL_ALL_SIGNS)
-                    state = "IDLE"
-                    collected_samples = []
+                    _jump_to_sign(sign_idx + 1)
                 elif key == 9:  # TAB: Jump forward 10 signs
-                    sign_idx = (sign_idx + 10) % len(ISL_ALL_SIGNS)
-                    state = "IDLE"
-                    collected_samples = []
-                elif key in (ord("T"), 84, 20):  # Shift + T (ASCII 84) or Ctrl+T (20)
-                    state = "TRAINING"
-                    status_msg = "Initiating background neural training..."
-                    train_worker_info.clear()
-                    train_thread = threading.Thread(target=_train_worker, daemon=True)
-                    train_thread.start()
-                    print("\n[Studio] Initiated neural network training in background worker...")
+                    _jump_to_sign(sign_idx + 10)
+                elif key in (ord("t"), ord("T"), 20, 13, 10):  # [t], [T], Ctrl+T, Enter, Return
+                    _trigger_training()
                 elif (ord("a") <= key <= ord("z")) or (ord("A") <= key <= ord("Z")):
-                    if key == ord("t"):
-                        status_msg = "ℹ Press [Shift+T] to Train Neural Model"
-                        status_msg_expiry = time.time() + 2.5
-                    else:
-                        char = chr(key).upper()
-                        for idx, s in enumerate(ISL_ALL_SIGNS):
-                            if s == char or s.startswith(char):
-                                sign_idx = idx
-                                state = "IDLE"
-                                collected_samples = []
-                                break
+                    char = chr(key).upper()
+                    for idx, s in enumerate(ISL_ALL_SIGNS):
+                        if s == char or s.startswith(char):
+                            _jump_to_sign(idx)
+                            break
                 elif key == 32:  # SPACE BAR
-                    if state in ("IDLE", "SUCCESS"):
-                        state = "COUNTDOWN"
-                        countdown_start = time.time()
-                        collected_samples = []
+                    _trigger_record()
 
             current_sign = ISL_ALL_SIGNS[sign_idx]
 
@@ -953,10 +1045,10 @@ def run_isl_collector(
                     state = "SUCCESS"
                     print(f"\n[Studio] {status_msg}")
 
-            elif state == "SUCCESS":
-                if time.time() > status_msg_expiry:
+            if status_msg and status_msg_expiry > 0 and time.time() > status_msg_expiry:
+                status_msg = ""
+                if state == "SUCCESS":
                     state = "IDLE"
-                    status_msg = ""
 
             # Render HUD
             draw_hud(
@@ -974,6 +1066,7 @@ def run_isl_collector(
                 enable_body=enable_body,
                 active_anchor=active_anchor_zone if enable_body else "OPEN_SPACE",
                 target_anchor=target_anchor if enable_body else None,
+                button_boxes=button_boxes,
             )
 
             if not headless:
