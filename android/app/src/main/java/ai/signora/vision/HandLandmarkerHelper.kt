@@ -97,9 +97,9 @@ class HandLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinHandDetectionConfidence(0.55f)
-            .setMinTrackingConfidence(0.55f)
-            .setMinHandPresenceConfidence(0.50f)
+            .setMinHandDetectionConfidence(0.35f)
+            .setMinTrackingConfidence(0.35f)
+            .setMinHandPresenceConfidence(0.35f)
             .setNumHands(2)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: HandLandmarkerResult, _ ->

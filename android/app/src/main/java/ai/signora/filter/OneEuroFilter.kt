@@ -76,31 +76,40 @@ class OneEuroFilter(
 }
 
 /**
- * Multi-dimensional One Euro filter for 21 3D hand landmarks.
+ * Multi-dimensional One Euro filter for 3D landmarks (supports 21 hand points or 33 pose points).
  */
 class LandmarkSmoother(
-    minCutoff: Float = 1.2f,
-    beta: Float = 0.008f,
+    val maxPoints: Int = 33,
+    minCutoff: Float = 1.0f,
+    beta: Float = 0.05f,
     dCutoff: Float = 1.0f
 ) {
-    private val xFilters = Array(21) { OneEuroFilter(minCutoff, beta, dCutoff) }
-    private val yFilters = Array(21) { OneEuroFilter(minCutoff, beta, dCutoff) }
-    private val zFilters = Array(21) { OneEuroFilter(minCutoff, beta, dCutoff) }
+    private val xFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
+    private val yFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
+    private val zFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
 
     fun filter(rawPoints: List<Point3D>, timestampMs: Long): List<Point3D> {
-        if (rawPoints.size < 21) return rawPoints
-        return List(21) { i ->
+        val n = minOf(rawPoints.size, maxPoints)
+        if (n == 0) return rawPoints
+        val result = ArrayList<Point3D>(rawPoints.size)
+        for (i in 0 until n) {
             val p = rawPoints[i]
-            Point3D(
-                x = xFilters[i].filter(p.x, timestampMs),
-                y = yFilters[i].filter(p.y, timestampMs),
-                z = zFilters[i].filter(p.z, timestampMs)
+            result.add(
+                Point3D(
+                    x = xFilters[i].filter(p.x, timestampMs),
+                    y = yFilters[i].filter(p.y, timestampMs),
+                    z = zFilters[i].filter(p.z, timestampMs)
+                )
             )
         }
+        for (i in n until rawPoints.size) {
+            result.add(rawPoints[i])
+        }
+        return result
     }
 
     fun reset() {
-        for (i in 0 until 21) {
+        for (i in 0 until maxPoints) {
             xFilters[i].reset()
             yFilters[i].reset()
             zFilters[i].reset()

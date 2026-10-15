@@ -390,14 +390,15 @@ object FeatureExtractor {
         val contactPts = listOf(wrist, indexTip, thumbTip, palm)
 
         val anchorCandidates = listOf(
-            Triple("FOREHEAD", forehead, 0.48f * scale),
-            Triple("CHIN", chin, 0.42f * scale),
-            Triple("MOUTH_LIPS", mouthCenter, 0.40f * scale),
-            Triple("TEMPLE", temple, 0.45f * scale),
-            Triple("CHEST", chestCenter, 0.58f * scale),
-            Triple("WRIST", if (hand.isRightHand) pLwrist else pRwrist, 0.48f * scale),
-            Triple("SHOULDER", if (hand.isRightHand) pLsh else pRsh, 0.52f * scale),
-            Triple("WAIST", waistCenter, 0.55f * scale)
+            Triple("FOREHEAD", forehead, 0.58f * scale),
+            Triple("CHIN", chin, 0.52f * scale),
+            Triple("MOUTH_LIPS", mouthCenter, 0.50f * scale),
+            Triple("TEMPLE", temple, 0.55f * scale),
+            Triple("CHEST", chestCenter, 0.68f * scale),
+            Triple("WRIST", if (hand.isRightHand) pLwrist else pRwrist, 0.58f * scale),
+            Triple("SHOULDER", pRsh, 0.62f * scale),
+            Triple("SHOULDER", pLsh, 0.62f * scale),
+            Triple("WAIST", waistCenter, 0.65f * scale)
         )
 
         var bestName = "OPEN_SPACE"

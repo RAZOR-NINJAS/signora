@@ -129,13 +129,20 @@ fun TrainStudioScreen(
         }
     }
 
-    // Recording collection logic
+    // Recording collection logic (fast capture with online feature augmentation)
     LaunchedEffect(studioState, hands, pose) {
         if (studioState == StudioState.RECORDING && currentSign != null) {
             val expectedHands = currentSign.expectedHands
             if (hands.size >= expectedHands) {
                 val feats = FeatureExtractor.extractSpatialFeatures(hands, pose)
                 collectedBatch.add(feats)
+
+                // Add 1 slight jittered exemplar to double sample throughput without arm fatigue
+                val jittered = FloatArray(feats.size) { i ->
+                    val v = feats[i]
+                    if (i < 164) v + (kotlin.random.Random.nextFloat() - 0.5f) * 0.008f else v
+                }
+                collectedBatch.add(jittered)
 
                 if (collectedBatch.size >= 300) {
                     val total = datasetManager.saveSamples(currentSign.name, collectedBatch)
@@ -322,7 +329,10 @@ fun TrainStudioScreen(
             ) {
                 // Camera Preview
                 AndroidView(
-                    factory = { previewView },
+                    factory = { _ ->
+                        (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
+                        previewView
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
 

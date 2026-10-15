@@ -35,7 +35,7 @@ class PoseLandmarkerHelper(
         private set
 
     // One-Euro smoother for 33 pose landmarks: steady shoulders/face with zero latency
-    private val poseSmoother = LandmarkSmoother(minCutoff = 1.0f, beta = 0.04f)
+    private val poseSmoother = LandmarkSmoother(maxPoints = 33, minCutoff = 1.0f, beta = 0.05f)
     private val frameMetaMap = ConcurrentHashMap<Long, FrameMeta>()
 
     init {
@@ -93,9 +93,9 @@ class PoseLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = PoseLandmarker.PoseLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinPoseDetectionConfidence(0.50f)
-            .setMinTrackingConfidence(0.50f)
-            .setMinPosePresenceConfidence(0.50f)
+            .setMinPoseDetectionConfidence(0.35f)
+            .setMinTrackingConfidence(0.35f)
+            .setMinPosePresenceConfidence(0.35f)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: PoseLandmarkerResult, _ ->
                 val timestamp = result.timestampMs()

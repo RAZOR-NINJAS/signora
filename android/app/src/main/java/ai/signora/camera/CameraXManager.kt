@@ -33,8 +33,9 @@ class CameraXManager(
 
     // Pre-allocated reusable buffers across frames (zero per-frame heap allocation)
     private var rawBitmap: Bitmap? = null
-    private var portraitBitmap: Bitmap? = null
-    private var rotateCanvas: Canvas? = null
+    private var pingPongIndex = 0
+    private val portraitBitmaps = arrayOfNulls<Bitmap>(2)
+    private val rotateCanvases = arrayOfNulls<Canvas>(2)
     private var rotateMatrix: Matrix? = null
 
     var isFrontCamera: Boolean = true
@@ -60,8 +61,10 @@ class CameraXManager(
     fun toggleCamera() {
         isFrontCamera = !isFrontCamera
         isTorchOn = false
-        portraitBitmap = null
-        rotateCanvas = null
+        portraitBitmaps[0] = null
+        portraitBitmaps[1] = null
+        rotateCanvases[0] = null
+        rotateCanvases[1] = null
         rotateMatrix = null
         bindCameraUseCases()
     }
@@ -156,10 +159,15 @@ class CameraXManager(
             }
 
             // Pre-allocate destination upright portrait buffer and transformation matrix
-            if (portraitBitmap == null || portraitBitmap?.width != targetW || portraitBitmap?.height != targetH) {
-                portraitBitmap = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
-                rotateCanvas = Canvas(portraitBitmap!!)
+            val bufIdx = pingPongIndex % 2
+            pingPongIndex++
 
+            if (portraitBitmaps[bufIdx] == null || portraitBitmaps[bufIdx]?.width != targetW || portraitBitmaps[bufIdx]?.height != targetH) {
+                portraitBitmaps[bufIdx] = Bitmap.createBitmap(targetW, targetH, Bitmap.Config.ARGB_8888)
+                rotateCanvases[bufIdx] = Canvas(portraitBitmaps[bufIdx]!!)
+            }
+
+            if (rotateMatrix == null) {
                 val matrix = Matrix()
                 matrix.postTranslate(-width / 2f, -height / 2f)
                 matrix.postRotate(rot.toFloat())
@@ -175,13 +183,16 @@ class CameraXManager(
             buffer.rewind()
             rawBitmap!!.copyPixelsFromBuffer(buffer)
 
+            val destBitmap = portraitBitmaps[bufIdx]!!
+            val destCanvas = rotateCanvases[bufIdx]!!
+
             // Sub-millisecond hardware blit into upright mirrored portrait bitmap
-            rotateCanvas!!.drawBitmap(rawBitmap!!, rotateMatrix!!, null)
+            destCanvas.drawBitmap(rawBitmap!!, rotateMatrix!!, null)
 
             TrackingProfiler.onConversionDone(frameId)
 
             // Wrap in MPImage without copying pixels
-            val mpImage = BitmapImageBuilder(portraitBitmap!!).build()
+            val mpImage = BitmapImageBuilder(destBitmap).build()
 
             TrackingProfiler.onDetectAsyncCalled(frameId)
             onFrame(mpImage, 0, isFrontCamera, frameId, frameTime)
