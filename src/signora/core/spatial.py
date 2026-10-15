@@ -216,10 +216,13 @@ def draw_cyber_spatial(
     hand_lms_list: List[Any],
     handedness_list: List[str],
     pose_landmarks: Optional[List[Any]],
+    target_anchor_name: Optional[str] = None,
+    target_anchor_pt: Optional[Tuple[int, int]] = None,
+    is_matched: bool = False,
     active_anchor_name: Optional[str] = None,
     active_anchor_pt: Optional[Tuple[int, int]] = None,
 ) -> None:
-    """Render high-contrast cybernetic torso skeleton, hand skeletons, and target anchor rings."""
+    """Render high-contrast cybernetic torso skeleton, hand skeletons, and steady target anchor rings."""
     h, w = frame.shape[:2]
 
     # 1. Draw Body Torso & Arms Skeleton
@@ -268,20 +271,24 @@ def draw_cyber_spatial(
         for pt in h_coords:
             cv2.circle(frame, pt, 4, joint_col, -1, cv2.LINE_AA)
 
-    # 3. Draw Active Body Placement Target Ring
-    if active_anchor_pt is not None:
-        ax, ay = active_anchor_pt
-        pulse = int(time.time() * 6) % 3
-        cv2.circle(frame, (ax, ay), 18 + pulse * 3, (6, 182, 212), 2, cv2.LINE_AA)
-        cv2.circle(frame, (ax, ay), 6, (52, 211, 153), -1, cv2.LINE_AA)
-        if active_anchor_name:
+    # 3. Draw Steady Target Body Placement Ring
+    display_pt = target_anchor_pt if target_anchor_pt is not None else active_anchor_pt
+    display_name = target_anchor_name if target_anchor_name else active_anchor_name
+
+    if display_pt is not None and display_name and display_name.upper() not in ("OPEN_SPACE", "NONE"):
+        ax, ay = display_pt
+        if 0 <= ax <= w and 0 <= ay <= h:
+            ring_col = (52, 211, 153) if is_matched else (6, 182, 212)  # Green when matched, Cyan when waiting
+            label_text = f"✓ {display_name}" if is_matched else f"TARGET: {display_name}"
+            cv2.circle(frame, (ax, ay), 22, ring_col, 2, cv2.LINE_AA)
+            cv2.circle(frame, (ax, ay), 5, ring_col, -1, cv2.LINE_AA)
             cv2.putText(
                 frame,
-                f"ANCHOR: {active_anchor_name}",
-                (ax + 24, ay + 5),
+                label_text,
+                (ax + 28, ay + 6),
                 cv2.FONT_HERSHEY_DUPLEX,
                 0.52,
-                (6, 182, 212),
+                ring_col,
                 1,
                 cv2.LINE_AA,
             )

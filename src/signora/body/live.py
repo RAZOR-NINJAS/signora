@@ -21,7 +21,12 @@ from signora.isl.config import (
 )
 from signora.isl.features import extract_features
 from signora.isl.model import Predictor
-from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
+from signora.isl.spatial import (
+    SIGN_ANCHOR_MAP,
+    detect_body_anchor,
+    extract_spatial_features,
+    get_body_anchor_pt,
+)
 from signora.models.manifest import get_default_models_dir
 from signora.tts.piper import PiperTTS
 
@@ -164,14 +169,23 @@ def run_body_live(
                     cand_label = raw_label
                     cand_prob = raw_prob
 
+                target_anchor_pt = None
+                is_anchor_matched = False
+                if required_anchor:
+                    target_anchor_pt = get_body_anchor_pt(
+                        required_anchor, pose_lms, w=frame.shape[1], h=frame.shape[0]
+                    )
+                    is_anchor_matched = (active_anchor_zone == required_anchor)
+
                 if not headless:
                     draw_cyber_spatial(
                         frame=frame,
                         hand_lms_list=lms_list,
                         handedness_list=hnd_list,
                         pose_landmarks=pose_lms,
-                        active_anchor_name=active_anchor_zone if active_anchor_zone != "OPEN_SPACE" else None,
-                        active_anchor_pt=anchor_pt,
+                        target_anchor_name=required_anchor,
+                        target_anchor_pt=target_anchor_pt,
+                        is_matched=is_anchor_matched,
                     )
             else:
                 active_anchor_zone = "OPEN_SPACE"

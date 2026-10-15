@@ -287,3 +287,60 @@ def detect_body_anchor(
         best_zone = "SHOULDER"
 
     return best_zone, min_dist, best_px_pt
+
+
+def get_body_anchor_pt(
+    anchor_name: Optional[str],
+    pose_landmarks: Optional[List[Any]],
+    w: int = 640,
+    h: int = 480,
+) -> Optional[Tuple[int, int]]:
+    """Return stable (x, y) pixel coordinates of a canonical anatomical body anchor target."""
+    if not anchor_name or not pose_landmarks or len(pose_landmarks) < 25:
+        return None
+
+    name = anchor_name.upper().strip()
+    if name in ("OPEN_SPACE", "NONE", ""):
+        return None
+
+    p_nose = _get_point_coords(pose_landmarks[0])
+    p_lsh = _get_point_coords(pose_landmarks[11])
+    p_rsh = _get_point_coords(pose_landmarks[12])
+    p_ml = _get_point_coords(pose_landmarks[9])
+    p_mr = _get_point_coords(pose_landmarks[10])
+    p_lw = _get_point_coords(pose_landmarks[15])
+    p_rw = _get_point_coords(pose_landmarks[16])
+    p_lh = _get_point_coords(pose_landmarks[23])
+    p_rh = _get_point_coords(pose_landmarks[24])
+
+    scale = max(
+        0.15,
+        float(
+            np.sqrt(
+                (p_lsh[0] - p_rsh[0]) ** 2
+                + (p_lsh[1] - p_rsh[1]) ** 2
+                + (p_lsh[2] - p_rsh[2]) ** 2
+            )
+        ),
+    )
+
+    mouth = ((p_ml[0] + p_mr[0]) / 2.0, (p_ml[1] + p_mr[1]) / 2.0)
+    forehead = (p_nose[0], p_nose[1] - 0.22 * scale)
+    chin = (mouth[0], mouth[1] + 0.14 * scale)
+    chest = ((p_lsh[0] + p_rsh[0]) / 2.0, (p_lsh[1] + p_rsh[1]) / 2.0)
+    waist = ((p_lh[0] + p_rh[0]) / 2.0, (p_lh[1] + p_rh[1]) / 2.0)
+
+    anchor_map = {
+        "FOREHEAD": forehead,
+        "CHIN": chin,
+        "MOUTH_LIPS": mouth,
+        "CHEST": chest,
+        "WRIST": p_lw,
+        "SHOULDER": p_lsh,
+        "WAIST": waist,
+    }
+
+    pt = anchor_map.get(name)
+    if pt is None:
+        return None
+    return (int(pt[0] * w), int(pt[1] * h))

@@ -823,23 +823,36 @@ def run_isl_collector(
                 )
 
                 active_anchor_zone = "OPEN_SPACE"
-                anchor_pt = None
                 target_anchor = None
+                target_anchor_pt = None
+                is_anchor_matched = False
                 if enable_body:
-                    from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
+                    from signora.isl.spatial import (
+                        SIGN_ANCHOR_MAP,
+                        detect_body_anchor,
+                        extract_spatial_features,
+                        get_body_anchor_pt,
+                    )
 
                     target_anchor = SIGN_ANCHOR_MAP.get(current_sign.upper())
                     if lms_list:
-                        active_anchor_zone, _, anchor_pt = detect_body_anchor(
+                        active_anchor_zone, _, _ = detect_body_anchor(
                             lms_list[0], pose_lms, w=frame.shape[1], h=frame.shape[0]
                         )
+                    if target_anchor:
+                        target_anchor_pt = get_body_anchor_pt(
+                            target_anchor, pose_lms, w=frame.shape[1], h=frame.shape[0]
+                        )
+                        is_anchor_matched = (active_anchor_zone == target_anchor)
+
                     draw_cyber_spatial(
                         frame=frame,
                         hand_lms_list=lms_list,
                         handedness_list=hnds_list,
                         pose_landmarks=pose_lms,
-                        active_anchor_name=active_anchor_zone if active_anchor_zone != "OPEN_SPACE" else None,
-                        active_anchor_pt=anchor_pt,
+                        target_anchor_name=target_anchor,
+                        target_anchor_pt=target_anchor_pt,
+                        is_matched=is_anchor_matched,
                     )
                 else:
                     draw_skeleton(frame, lms_list, hnds_list)
