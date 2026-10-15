@@ -81,7 +81,8 @@ signora doctor
 | Mode | Launch Command | Input & Tracking | Inference & Output Engine |
 | :--- | :--- | :--- | :--- |
 | **🤲 ASL Fingerspelling** | `signora live` | Single-handed 74D normalized landmarks | Sub-ms MLP • In-air SPACE dwell • Piper neural speech |
-| **🤝 Indian Sign Language (ISL)** | `signora isl` | Dual-handed 164D spatial contact geometry | 26 letters + 10 words • 0.43 ms NumPy MLP • Cybernetic skeletons |
+| **🤝 Indian Sign Language (ISL)** | `signora isl` | Dual-handed 164D spatial contact geometry | 26 letters + 200 static words • 0.43 ms NumPy MLP • Cybernetic skeletons |
+| **🧍 Upper-Body Spatial ISL** | `signora body` (or `isl --body`) | 33-point body pose + dual-hand spatial anchors | Static gestures + anatomical anchors (Forehead, Chin, Chest, Wrist, etc.) |
 | **🌊 ASL Dynamic Words** | `signora words` | 153D upper-body pose & hands trajectory | 16 dynamic signs • FastDTW-kNN sequence matching |
 | **🦖 Shadow-Play Game** | `signora game --kiosk` | Real-time hand posture classification | Browser obstacle runner • Jump/crouch gestures |
 | **🎓 Learning Kiosk** | `signora learn --kiosk` | Real-time posture tracking vs reference signs | Interactive drills • Visual guides • Timed sign quizzes |
@@ -149,6 +150,36 @@ signora lipsync -s 0
 
 # Run in pure visual mode without microphone
 signora lipsync --no-audio
+```
+
+---
+
+## 🧍 Upper-Body Spatial Recognition & Placement Anchors
+
+For Indian Sign Language (ISL) signs where hand articulation is completely static but the intended meaning depends on anatomical placement relative to the body (e.g. `FATHER` at Forehead vs `MOTHER` at Chin vs `TIME` at Wrist):
+
+- **33-Point MediaPipe Pose + 2-Hand Tracking:** Captures body landmarks and hand positions simultaneously in real-time.
+- **Scale-Invariant Anatomical Anchors:** Normalizes distances by shoulder span, remaining rock-solid regardless of how far or close you sit from the camera.
+- **Target Placement Verification:** Boosts confidence when hands align with the expected body zone and suppresses false positives when placed elsewhere.
+  - **Forehead:** `FATHER`, `THINK`, `FEVER`, `STUDENT`, `BOY`, `REMEMBER`
+  - **Mouth / Lips:** `FOOD`, `WATER`, `EAT`, `DRINK`, `THANK_YOU`, `SILENT`, `PROMISE`
+  - **Chin / Jaw:** `MOTHER`, `GIRL`, `SUGAR`, `SWEET`, `TRUE`, `WRONG`
+  - **Chest / Heart:** `PLEASE`, `APOLOGY`, `LOVE`, `NAMASTE`, `HELP`, `HAPPY`, `EMERGENCY`
+  - **Wrist / Pulse:** `TIME`, `WATCH`, `DOCTOR`, `MEDICINE`, `INJURY`, `BUSY`
+  - **Open Space:** `HELLO`, `GOOD`, `BAD`, `OK`, `PEACE`, `STOP`, `READY`
+
+```bash
+# Launch Upper-Body Spatial recognition mode
+signora body
+
+# Or enable body spatial tracking within standard ISL mode
+signora isl --body
+
+# Use iPhone camera over Wi-Fi (e.g. DroidCam)
+signora body -s "http://192.168.1.15:4747/video"
+
+# Use iPhone camera over USB Cable (v4l2loopback index)
+signora body -s 2
 ```
 
 ---

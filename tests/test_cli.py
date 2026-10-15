@@ -18,6 +18,8 @@ def test_cli_subcommands_present():
         "live",
         "asl",
         "isl",
+        "body",
+        "spatial",
         "words",
         "game",
         "learn",
@@ -66,13 +68,27 @@ def test_cli_live_args():
 def test_cli_isl_args():
     parser = create_parser()
     args = parser.parse_args(
-        ["isl", "--source", "1", "--headless", "--no-tts", "--detect-every", "3", "--fake-camera"]
+        ["isl", "--source", "1", "--headless", "--no-tts", "--detect-every", "3", "--fake-camera", "--body"]
     )
     assert args.subcommand == "isl"
     assert args.source == "1"
     assert args.headless is True
     assert args.no_tts is True
     assert args.detect_every == 3
+    assert args.fake_camera is True
+    assert args.body is True
+
+
+def test_cli_body_args():
+    parser = create_parser()
+    args = parser.parse_args(
+        ["body", "--source", "http://192.168.1.15:4747/video", "--headless", "--no-tts", "--detect-every", "2", "--fake-camera"]
+    )
+    assert args.subcommand == "body"
+    assert args.source == "http://192.168.1.15:4747/video"
+    assert args.headless is True
+    assert args.no_tts is True
+    assert args.detect_every == 2
     assert args.fake_camera is True
 
 

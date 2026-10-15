@@ -299,17 +299,30 @@ ISL_WORD_GUIDES: Dict[str, Tuple[str, str]] = {
 def get_sign_guide(sign: str) -> Tuple[str, str]:
     """Retrieve two-line posture guidance for any letter or word sign."""
     s = sign.upper()
+    guide: Tuple[str, str]
     if s in ISL_GUIDES:
-        return ISL_GUIDES[s]
-    if s in ISL_WORD_GUIDES:
-        return ISL_WORD_GUIDES[s]
-    hands = get_expected_hands(s)
-    hand_str = "1 hand" if hands == 1 else "2 hands"
-    clean_name = s.replace("_", " ").title()
-    return (
-        f"ISL '{clean_name}': Hold standard static sign posture ({hand_str}).",
-        "Keep fingers and wrists steady and motionless to record clean 164D features.",
-    )
+        guide = ISL_GUIDES[s]
+    elif s in ISL_WORD_GUIDES:
+        guide = ISL_WORD_GUIDES[s]
+    else:
+        hands = get_expected_hands(s)
+        hand_str = "1 hand" if hands == 1 else "2 hands"
+        clean_name = s.replace("_", " ").title()
+        guide = (
+            f"ISL '{clean_name}': Hold standard static sign posture ({hand_str}).",
+            "Keep fingers and wrists steady and motionless to record clean 164D features.",
+        )
+
+    try:
+        from signora.isl.spatial import SIGN_ANCHOR_MAP
+
+        anchor = SIGN_ANCHOR_MAP.get(s)
+        if anchor:
+            return (guide[0], f"Body Anchor: [{anchor}] | {guide[1]}")
+    except Exception:
+        pass
+
+    return guide
 
 
 def get_existing_counts(data_dir: Path = DATA_DIR) -> Dict[str, int]:

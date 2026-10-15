@@ -66,7 +66,7 @@ def create_parser() -> argparse.ArgumentParser:
         "isl", help="Run Indian Sign Language (ISL) two-handed recognition (A-Z + 200 static words)"
     )
     p_isl.add_argument(
-        "-s", "--source", default="0", help="Camera index or video file (default: 0)"
+        "-s", "--source", default="0", help="Camera index, video file, or IP stream URL (default: 0)"
     )
     p_isl.add_argument("--headless", action="store_true", help="Run without graphical window")
     p_isl.add_argument("--no-tts", action="store_true", help="Disable Piper audio speech feedback")
@@ -74,6 +74,27 @@ def create_parser() -> argparse.ArgumentParser:
         "--detect-every", type=int, default=1, help="Process landmarks every N frames (default: 1)"
     )
     p_isl.add_argument(
+        "--body", action="store_true", help="Enable upper-body pose & spatial placement anchor tracking"
+    )
+    p_isl.add_argument(
+        "--fake-camera", action="store_true", help="Use synthetic camera for testing"
+    )
+
+    # 2.5 signora body / spatial
+    p_body = subparsers.add_parser(
+        "body",
+        aliases=["spatial"],
+        help="Run Upper-Body Pose & Hand Spatial Recognition (static signs with body placement anchors)",
+    )
+    p_body.add_argument(
+        "-s", "--source", default="0", help="Camera index, video file, or IP stream URL (e.g. iPhone DroidCam) (default: 0)"
+    )
+    p_body.add_argument("--headless", action="store_true", help="Run without graphical window")
+    p_body.add_argument("--no-tts", action="store_true", help="Disable Piper audio speech feedback")
+    p_body.add_argument(
+        "--detect-every", type=int, default=1, help="Process landmarks every N frames (default: 1)"
+    )
+    p_body.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
     )
 
@@ -309,7 +330,29 @@ def main(argv: Optional[List[str]] = None) -> int:
             use_fake=args.fake_camera,
         )
 
+    if args.subcommand in ("body", "spatial"):
+        from signora.body.live import run_body_live
+
+        return run_body_live(
+            source=args.source,
+            headless=args.headless,
+            no_tts=args.no_tts,
+            detect_every=args.detect_every,
+            use_fake=args.fake_camera,
+        )
+
     if args.subcommand == "isl":
+        if getattr(args, "body", False):
+            from signora.body.live import run_body_live
+
+            return run_body_live(
+                source=args.source,
+                headless=args.headless,
+                no_tts=args.no_tts,
+                detect_every=args.detect_every,
+                use_fake=args.fake_camera,
+            )
+
         from signora.isl.live import run_isl_live
 
         return run_isl_live(
