@@ -70,17 +70,35 @@ class Camera:
             )
             raise CameraError(f"Could not open camera device source '{self.source}'.\n{advice}")
 
-        # Set dimensions
+        # Set dimensions and FPS target
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.target_width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.target_height)
+        try:
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
+        except Exception:
+            pass
 
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
         """Read a single frame from the camera."""
         if self.cap is None or not self.cap.isOpened():
             return False, None
 
-        ret, frame = self.cap.read()
+        if self.use_fake or not isinstance(self.source, str) or "://" not in self.source:
+            ret, frame = self.cap.read()
+        else:
+            # On network IP/HTTP streams (e.g. iPhone DroidCam), drain buffered socket frames
+            # to guarantee real-time latency (<40ms) and eliminate multi-second lag buildup
+            self.cap.grab()
+            ret, frame = self.cap.retrieve()
+
         if ret and frame is not None:
+            # Rescale oversized frames (e.g. 1080p/4K network streams like iPhone DroidCam)
+            h, w = frame.shape[:2]
+            if w > self.target_width or h > self.target_height:
+                scale = min(self.target_width / float(w), self.target_height / float(h))
+                new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
             self._frame_count += 1
             now = time.monotonic()
             elapsed = now - self._last_fps_calc

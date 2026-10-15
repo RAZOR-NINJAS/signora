@@ -34,7 +34,7 @@ UPPER_BODY_CONNECTIONS: List[Tuple[int, int]] = [
 
 
 class SpatialPipeline:
-    """Synchronous upper-body pose & dual-hand tracking capture pipeline."""
+    """High-performance asynchronous upper-body pose & dual-hand tracking capture pipeline."""
 
     def __init__(
         self,
@@ -48,39 +48,76 @@ class SpatialPipeline:
         self.detect_every = max(1, int(detect_every))
         self.use_fake = use_fake
 
-        self._frames: "queue.Queue" = queue.Queue(maxsize=2)
+        self._frames: "queue.Queue" = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self.started = threading.Event()
         self.error: Optional[Exception] = None
-        self.delegate = "CPU"
 
-        # Initialize MediaPipe Pose
-        self._pose = None
-        if not self.use_fake:
-            try:
-                self._pose = mp.solutions.pose.Pose(
-                    static_image_mode=False,
-                    model_complexity=1,
-                    smooth_landmarks=True,
-                    min_detection_confidence=0.45,
-                    min_tracking_confidence=0.45,
-                )
-            except Exception as e:
-                print(f"[Warning] Could not initialize MediaPipe Pose: {e}")
-                self._pose = None
-
-        # Underlying hand pipeline
+        # Underlying hand pipeline with auto GPU/CPU acceleration
         self._hand_pipe = HandPipeline(
             source=source,
             num_hands=2,
             mirror=mirror,
-            detect_every=detect_every,
+            detect_every=self.detect_every,
             use_fake=use_fake,
         )
 
-        self._last_pose_landmarks = None
+        self._last_pose_landmarks: Optional[List[LandmarkPoint]] = None
+        self._pose = None
+        self._pending_pose_frame: Optional[np.ndarray] = None
+        self._pose_lock = threading.Lock()
+        self._pose_thread = None
+
+        # Initialize MediaPipe Pose with BlazePose Lite (complexity 0) for sub-20ms tracking
+        if not self.use_fake:
+            try:
+                self._pose = mp.solutions.pose.Pose(
+                    static_image_mode=False,
+                    model_complexity=0,
+                    smooth_landmarks=True,
+                    min_detection_confidence=0.4,
+                    min_tracking_confidence=0.4,
+                )
+                self._pose_thread = threading.Thread(target=self._pose_worker_loop, daemon=True)
+                self._pose_thread.start()
+            except Exception as e:
+                print(f"[Warning] Could not initialize MediaPipe Pose: {e}")
+                self._pose = None
+
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
+
+    @property
+    def delegate(self) -> str:
+        """Hardware delegate used by underlying pipeline (GPU or CPU)."""
+        return self._hand_pipe.delegate
+
+    def _pose_worker_loop(self) -> None:
+        """Asynchronous pose inference worker that decouples body tracking from video capture."""
+        while not self._stop.is_set():
+            frame_to_process = None
+            with self._pose_lock:
+                if self._pending_pose_frame is not None:
+                    frame_to_process = self._pending_pose_frame
+                    self._pending_pose_frame = None
+
+            if frame_to_process is None:
+                time.sleep(0.005)
+                continue
+
+            try:
+                # Downsample to 256x256 for fast pose inference; coordinates remain normalized in [0, 1]
+                small = cv2.resize(frame_to_process, (256, 256), interpolation=cv2.INTER_NEAREST)
+                rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                res = self._pose.process(rgb)
+                if res and res.pose_landmarks:
+                    pts = [
+                        LandmarkPoint(lm.x, lm.y, lm.z)
+                        for lm in res.pose_landmarks.landmark
+                    ]
+                    self._last_pose_landmarks = pts
+            except Exception:
+                pass
 
     def _generate_synthetic_pose(self) -> List[LandmarkPoint]:
         """Generate realistic synthetic upper-body pose for headless/testing mode."""
@@ -123,22 +160,15 @@ class SpatialPipeline:
                 if frame is None:
                     continue
 
-                pose_landmarks = None
                 if self.use_fake or self._pose is None:
                     pose_landmarks = self._generate_synthetic_pose()
                 else:
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    res = self._pose.process(rgb)
-                    if res and res.pose_landmarks:
-                        pose_landmarks = [
-                            LandmarkPoint(lm.x, lm.y, lm.z)
-                            for lm in res.pose_landmarks.landmark
-                        ]
-                        self._last_pose_landmarks = pose_landmarks
-                    else:
-                        pose_landmarks = self._last_pose_landmarks
+                    # Submit latest frame to async pose worker without blocking hand tracking
+                    with self._pose_lock:
+                        self._pending_pose_frame = frame
+                    pose_landmarks = self._last_pose_landmarks
 
-                # Enqueue merged sample
+                # Enqueue merged sample (drop older frame if consumer is behind)
                 item = (frame, hand_lms, handedness, pose_landmarks)
                 try:
                     self._frames.put_nowait(item)

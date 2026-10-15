@@ -1,5 +1,6 @@
 """MediaPipe HandLandmarker wrapper with CPU/GPU delegation and landmark visualization."""
 
+import os
 import queue
 import threading
 import time
@@ -74,7 +75,7 @@ class HandPipeline:
         source: Any = 0,
         num_hands: int = 1,
         mirror: bool = True,
-        use_gpu: bool = False,
+        use_gpu: Optional[bool] = None,
         detect_every: int = 1,
         use_fake: bool = False,
     ):
@@ -99,14 +100,21 @@ class HandPipeline:
                     "Run 'signora models fetch' or 'python scripts/fetch_models.py' to download weights."
                 )
 
-            if use_gpu:
+            # Auto-probe GPU acceleration first unless explicitly disabled
+            use_gpu_pref = (
+                use_gpu
+                if use_gpu is not None
+                else (os.environ.get("SIGNORA_FORCE_CPU", "0") not in ("1", "true", "True"))
+            )
+
+            if use_gpu_pref:
                 try:
                     self._landmarker = _create_landmarker(
                         model_path, mpp.BaseOptions.Delegate.GPU, self.num_hands
                     )
                     self.delegate = "GPU"
                 except Exception:
-                    pass
+                    self._landmarker = None
 
             if self._landmarker is None:
                 self._landmarker = _create_landmarker(
