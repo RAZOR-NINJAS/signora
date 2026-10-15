@@ -203,11 +203,19 @@ def detect_body_anchor(
     w: int = 640,
     h: int = 480,
 ) -> Tuple[str, float, Optional[Tuple[int, int]]]:
-    """Identify the nearest active anatomical body target zone for a hand."""
+    """Identify the nearest active anatomical body target zone for a hand using multi-point contact tracking."""
     if not hand_lms or not pose_landmarks or len(pose_landmarks) < 25:
         return "OPEN_SPACE", 1.0, None
 
+    # Key hand contact reference points
     wrist = _get_point_coords(hand_lms[0])
+    idx_tip = _get_point_coords(hand_lms[8]) if len(hand_lms) > 8 else wrist
+    mid_tip = _get_point_coords(hand_lms[12]) if len(hand_lms) > 12 else wrist
+    thumb_tip = _get_point_coords(hand_lms[4]) if len(hand_lms) > 4 else wrist
+    mcp_mid = _get_point_coords(hand_lms[9]) if len(hand_lms) > 9 else wrist
+    palm = ((wrist[0] + mcp_mid[0]) / 2.0, (wrist[1] + mcp_mid[1]) / 2.0, (wrist[2] + mcp_mid[2]) / 2.0)
+
+    # Pose reference points
     p_nose = _get_point_coords(pose_landmarks[0])
     p_lsh = _get_point_coords(pose_landmarks[11])
     p_rsh = _get_point_coords(pose_landmarks[12])
@@ -231,39 +239,51 @@ def detect_body_anchor(
 
     mouth = ((p_ml[0] + p_mr[0]) / 2.0, (p_ml[1] + p_mr[1]) / 2.0, (p_ml[2] + p_mr[2]) / 2.0)
     forehead = (p_nose[0], p_nose[1] - 0.22 * scale, p_nose[2])
-    chin = (mouth[0], mouth[1] + 0.12 * scale, mouth[2])
+    chin = (mouth[0], mouth[1] + 0.14 * scale, mouth[2])
     chest = ((p_lsh[0] + p_rsh[0]) / 2.0, (p_lsh[1] + p_rsh[1]) / 2.0, (p_lsh[2] + p_rsh[2]) / 2.0)
     waist = ((p_lh[0] + p_rh[0]) / 2.0, (p_lh[1] + p_rh[1]) / 2.0, (p_lh[2] + p_rh[2]) / 2.0)
 
+    # Map zones to anatomical target center and the most sensitive hand contact points
     anchor_candidates = {
-        "FOREHEAD": forehead,
-        "CHIN": chin,
-        "MOUTH_LIPS": mouth,
-        "CHEST": chest,
-        "WRIST": p_lw,
-        "SHOULDER": p_lsh,
-        "WAIST": waist,
+        "FOREHEAD": (forehead, [idx_tip, mid_tip, thumb_tip, palm, wrist]),
+        "CHIN": (chin, [idx_tip, mid_tip, thumb_tip, palm, wrist]),
+        "MOUTH_LIPS": (mouth, [idx_tip, mid_tip, thumb_tip, palm, wrist]),
+        "CHEST": (chest, [palm, wrist, idx_tip]),
+        "WRIST_L": (p_lw, [idx_tip, palm, wrist]),
+        "WRIST_R": (p_rw, [idx_tip, palm, wrist]),
+        "SHOULDER_L": (p_lsh, [palm, wrist, idx_tip]),
+        "SHOULDER_R": (p_rsh, [palm, wrist, idx_tip]),
+        "WAIST": (waist, [palm, wrist]),
     }
 
     best_zone = "OPEN_SPACE"
     min_dist = 999.0
     best_px_pt = None
 
-    for zone_name, pt in anchor_candidates.items():
-        d = float(
-            np.sqrt(
-                ((wrist[0] - pt[0]) / scale) ** 2
-                + ((wrist[1] - pt[1]) / scale) ** 2
-                + ((wrist[2] - pt[2]) / scale) ** 2
+    for zone_name, (target_pt, hand_probe_pts) in anchor_candidates.items():
+        # Evaluate closest contact point of the hand to this anatomical zone
+        zone_min_d = min(
+            float(
+                np.sqrt(
+                    ((hp[0] - target_pt[0]) / scale) ** 2
+                    + ((hp[1] - target_pt[1]) / scale) ** 2
+                    + ((hp[2] - target_pt[2]) / scale) ** 2
+                )
             )
+            for hp in hand_probe_pts
         )
-        if d < min_dist:
-            min_dist = d
+        if zone_min_d < min_dist:
+            min_dist = zone_min_d
             best_zone = zone_name
-            best_px_pt = (int(pt[0] * w), int(pt[1] * h))
+            best_px_pt = (int(target_pt[0] * w), int(target_pt[1] * h))
 
-    # Threshold: if further than 0.65 normalized scale, it's open space
-    if min_dist > 0.65:
+    # Adaptive distance threshold for open space classification
+    if min_dist > 0.68:
         return "OPEN_SPACE", min_dist, None
+
+    if best_zone.startswith("WRIST"):
+        best_zone = "WRIST"
+    elif best_zone.startswith("SHOULDER"):
+        best_zone = "SHOULDER"
 
     return best_zone, min_dist, best_px_pt

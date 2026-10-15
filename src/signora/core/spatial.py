@@ -17,19 +17,13 @@ import numpy as np
 from signora.core.camera import Camera
 from signora.core.hands import HAND_CONNECTIONS, HandPipeline, LandmarkPoint
 
-# Core Upper-Body Skeleton Connections (MediaPipe Pose 0-24)
+# Core Upper-Body Skeleton Connections (MediaPipe Pose 11-16)
 UPPER_BODY_CONNECTIONS: List[Tuple[int, int]] = [
     (11, 12),  # Shoulders
     (11, 13),  # Left Shoulder -> Elbow
     (13, 15),  # Left Elbow -> Wrist
     (12, 14),  # Right Shoulder -> Elbow
     (14, 16),  # Right Elbow -> Wrist
-    (11, 23),  # Left Torso (Shoulder -> Hip)
-    (12, 24),  # Right Torso (Shoulder -> Hip)
-    (23, 24),  # Waist (Hip -> Hip)
-    (0, 1), (1, 2), (2, 3), (3, 7),  # Left Eye & Temple
-    (0, 4), (4, 5), (5, 6), (6, 8),  # Right Eye & Temple
-    (9, 10),   # Mouth / Lips
 ]
 
 
@@ -106,16 +100,30 @@ class SpatialPipeline:
                 continue
 
             try:
-                # Downsample to 256x256 for fast pose inference; coordinates remain normalized in [0, 1]
-                small = cv2.resize(frame_to_process, (256, 256), interpolation=cv2.INTER_NEAREST)
+                # Downsample maintaining aspect ratio for clean pose estimation
+                h_orig, w_orig = frame_to_process.shape[:2]
+                target_w = 320
+                target_h = max(160, int(h_orig * (target_w / max(1, w_orig))))
+                small = cv2.resize(frame_to_process, (target_w, target_h), interpolation=cv2.INTER_AREA)
                 rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
                 res = self._pose.process(rgb)
                 if res and res.pose_landmarks:
-                    pts = [
+                    raw_pts = [
                         LandmarkPoint(lm.x, lm.y, lm.z)
                         for lm in res.pose_landmarks.landmark
                     ]
-                    self._last_pose_landmarks = pts
+                    # Temporal exponential moving average (EMA) to eliminate skeleton jitter
+                    alpha = 0.55
+                    if self._last_pose_landmarks is not None and len(self._last_pose_landmarks) == len(raw_pts):
+                        smoothed = []
+                        for old_p, new_p in zip(self._last_pose_landmarks, raw_pts):
+                            sx = alpha * new_p.x + (1.0 - alpha) * old_p.x
+                            sy = alpha * new_p.y + (1.0 - alpha) * old_p.y
+                            sz = alpha * new_p.z + (1.0 - alpha) * old_p.z
+                            smoothed.append(LandmarkPoint(sx, sy, sz))
+                        self._last_pose_landmarks = smoothed
+                    else:
+                        self._last_pose_landmarks = raw_pts
             except Exception:
                 pass
 
@@ -231,8 +239,8 @@ def draw_cyber_spatial(
                     col = arm_color if s in (11, 12, 13, 14, 15, 16) else torso_color
                     cv2.line(frame, p1, p2, col, 2, cv2.LINE_AA)
 
-        # Draw Torso Joints (Shoulders, Elbows, Wrists, Hips)
-        for idx in (11, 12, 13, 14, 15, 16, 23, 24):
+        # Draw Torso Joints (Shoulders, Elbows, Wrists)
+        for idx in (11, 12, 13, 14, 15, 16):
             if idx < len(coords):
                 pt = coords[idx]
                 if 0 <= pt[0] <= w and 0 <= pt[1] <= h:
