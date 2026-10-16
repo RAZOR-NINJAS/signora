@@ -42,6 +42,9 @@ class GameAudioTrack {
     private val streakTrack: AudioTrack
     private val crashTrack: AudioTrack
     private val feverTrack: AudioTrack
+    private val laserTrack: AudioTrack
+    private val hurtTrack: AudioTrack
+    private val powerupTrack: AudioTrack
 
     @Volatile private var released = false
     @Volatile private var feverRunning = false
@@ -54,6 +57,9 @@ class GameAudioTrack {
         streakTrack = createStaticTrack(synthStreak())
         crashTrack = createStaticTrack(synthCrash())
         feverTrack = createStaticTrack(synthFeverLoop(), loop = true)
+        laserTrack = createStaticTrack(synthLaser())
+        hurtTrack = createStaticTrack(synthHurt())
+        powerupTrack = createStaticTrack(synthPowerup())
     }
 
     // ---------------------------------------------------------------------
@@ -66,6 +72,9 @@ class GameAudioTrack {
     fun signBonus() = playOnce(signTrack)
     fun streak() = playOnce(streakTrack)
     fun crash() = playOnce(crashTrack)
+    fun laser() = playOnce(laserTrack)
+    fun hurt() = playOnce(hurtTrack)
+    fun powerup() = playOnce(powerupTrack)
 
     fun startFever() {
         if (released) return
@@ -324,6 +333,46 @@ class GameAudioTrack {
             val kick = sin(TAU * kickFreq * t) * exp(-beatT * 20f) * 0.30f
 
             (bass + arp + kick) * 0.85f
+        }
+    }
+
+    /** Retro sci-fi laser zap: 1400 Hz down to 220 Hz in 0.14s. */
+    private fun synthLaser(): ShortArray {
+        val dur = 0.14f
+        var phase = 0f
+        return build(dur) { t, _ ->
+            val frac = (t / dur).coerceIn(0f, 1f)
+            val freq = 1400f - 1180f * frac * frac
+            phase += TAU * freq / SAMPLE_RATE
+            val env = exp(-t * 18f)
+            (0.6f * saw(phase) + 0.4f * square(phase)) * env * 0.85f
+        }
+    }
+
+    /** Punchy damage crunch: 160 Hz kick with distorted impact noise. */
+    private fun synthHurt(): ShortArray {
+        val dur = 0.25f
+        var phase = 0f
+        return build(dur) { t, _ ->
+            phase += TAU * 120f / SAMPLE_RATE
+            val punch = sin(phase) * exp(-t * 22f) * 0.8f
+            val noise = (Random.nextInt(-1000, 1000) / 1000f) * exp(-t * 14f) * 0.6f
+            (punch + noise) * 0.9f
+        }
+    }
+
+    /** Upward victory chime: G5 -> C6 -> E6 in 0.32s. */
+    private fun synthPowerup(): ShortArray {
+        val dur = 0.32f
+        val notes = floatArrayOf(note(-2), note(3), note(7)) // G5, C6, E6
+        val step = 0.09f
+        return build(dur) { t, _ ->
+            val idx = (t / step).toInt().coerceIn(0, notes.size - 1)
+            val lt = t - idx * step
+            val env = exp(-lt * 8f)
+            val body = sin(TAU * notes[idx] * t)
+            val shimmer = 0.3f * sin(TAU * notes[idx] * 2f * t)
+            (body + shimmer) * env * 0.75f
         }
     }
 }

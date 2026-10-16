@@ -364,6 +364,24 @@ private data class FloatingIndicator(
     val color: Color
 )
 
+private data class LaserBeam(
+    var startX: Float,
+    var endX: Float,
+    var y: Float,
+    var alpha: Float = 1.0f,
+    val color: Color
+)
+
+private enum class PickupKind { HEART, STAR, COIN }
+
+private data class PowerPickup(
+    val id: Long,
+    var x: Float,
+    var y: Float,
+    val kind: PickupKind,
+    var collected: Boolean = false
+)
+
 private data class Star(
     val x: Float,
     val y: Float,
@@ -451,7 +469,13 @@ fun DinoGameScreen(
     var gameState by remember { mutableStateOf(GameState.IDLE) }
     var speed by remember { mutableStateOf(0.40f) }
 
-    // Ducking Mechanics
+    // 3 Hearts Health & Invincibility i-frames
+    val maxHearts = 3
+    var hearts by remember { mutableStateOf(maxHearts) }
+    var invincibilityTimer by remember { mutableStateOf(0f) }
+
+    // Double Jump & Ducking Mechanics
+    var jumpsRemaining by remember { mutableStateOf(2) }
     var isDucking by remember { mutableStateOf(false) }
     var duckHoldActive by remember { mutableStateOf(false) }
     var duckGestureTimer by remember { mutableStateOf(0f) }
@@ -482,17 +506,20 @@ fun DinoGameScreen(
     var isGrounded by remember { mutableStateOf(true) }
     var legFrame by remember { mutableStateOf(0) }
 
-    // Obstacle Stream Pipeline
+    // Obstacle & Pickup Stream Pipeline
     val signList = if (currentMode == RecognitionMode.ISL) ISL_GAME_LETTERS else ASL_GAME_LETTERS
     val activeObstacles = remember { mutableStateListOf<StreamObstacle>() }
+    val powerPickups = remember { mutableStateListOf<PowerPickup>() }
+    var pickupCounter by remember { mutableStateOf(0L) }
     var clearedSigns by remember { mutableStateOf(listOf<String>()) }
     var obstacleCounter by remember { mutableStateOf(0L) }
 
-    // Particles, Ghost Trails & Shockwave Rings
+    // Particles, Ghost Trails, Shockwave Rings & Laser Beams
     val shockParticles = remember { mutableStateListOf<ShockParticle>() }
     val ghostTrails = remember { mutableStateListOf<GhostTrail>() }
     val shockwaveRings = remember { mutableStateListOf<ShockwaveRing>() }
     val floatingIndicators = remember { mutableStateListOf<FloatingIndicator>() }
+    val laserBeams = remember { mutableStateListOf<LaserBeam>() }
 
     // Pre-allocated cosmic stars
     val stars = remember {
@@ -583,7 +610,7 @@ fun DinoGameScreen(
     fun pickObstacleKind(): ObstacleKind {
         // Flyers are introduced gradually and never as the very first obstacles.
         if (score < 120) return ObstacleKind.GROUND
-        val flyChance = (0.12f + score * 0.00006f).coerceAtMost(0.34f)
+        val flyChance = (0.14f + score * 0.00006f).coerceAtMost(0.36f)
         return if (kotlin.random.Random.nextFloat() < flyChance) {
             if (kotlin.random.Random.nextBoolean()) ObstacleKind.FLYING_LOW else ObstacleKind.FLYING_HIGH
         } else {
@@ -591,86 +618,131 @@ fun DinoGameScreen(
         }
     }
 
-    // Function to trigger a physical, physics-driven leap!
-    fun doJump(isSignBonus: Boolean = false, obstacleId: Long? = null) {
-        if (gameState != GameState.RUNNING || !isGrounded) return
-
-        isGrounded = false
-        // Physics jump launch velocity
-        dinoVY = -1.55f
-        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        if (isSignBonus) audio.signBonus() else audio.jump()
-
-        // Geometry Dash Shockwave Ring at Dino feet
+    fun spawnJumpFX(isDouble: Boolean) {
         shockwaveRings.add(
             ShockwaveRing(
                 x = 0.17f,
-                y = 0.73f,
-                radius = 12f,
-                maxRadius = if (feverActive) 130f else 80f,
-                alpha = 0.9f,
+                y = 0.73f - dinoHop,
+                radius = if (isDouble) 8f else 12f,
+                maxRadius = if (feverActive) 140f else (if (isDouble) 70f else 85f),
+                alpha = 0.95f,
                 color = when {
                     feverActive -> FEVER_RAINBOW.random()
-                    isSignBonus -> Color(0xFFFBBF24)
+                    isDouble -> Color(0xFF38BDF8)
                     else -> currentBiome.obstacleColor
                 }
             )
         )
-
-        // Exploding spark particles at launch
-        for (i in 0 until (if (feverActive) 26 else 18)) {
+        for (i in 0 until (if (feverActive) 24 else 14)) {
             shockParticles.add(
                 ShockParticle(
-                    x = 0.17f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.06f,
-                    y = 0.73f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.04f,
-                    vx = (kotlin.random.Random.nextFloat() - 0.5f) * 0.55f,
-                    vy = -(kotlin.random.Random.nextFloat() * 0.65f + 0.10f),
-                    color = if (feverActive) FEVER_RAINBOW.random() else currentBiome.particleColors.random()
+                    x = 0.17f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.05f,
+                    y = 0.73f - dinoHop,
+                    vx = (kotlin.random.Random.nextFloat() - 0.5f) * 0.6f,
+                    vy = if (isDouble) (kotlin.random.Random.nextFloat() * 0.4f + 0.1f) else -(kotlin.random.Random.nextFloat() * 0.6f + 0.1f),
+                    color = if (feverActive) FEVER_RAINBOW.random() else (if (isDouble) Color(0xFF38BDF8) else currentBiome.particleColors.random())
                 )
             )
         }
+    }
 
-        if (isSignBonus) {
-            streak++
-            val pts = (200 + (streak * 20)) * currentMultiplier()
-            score += pts
-            floatingIndicators.add(
-                FloatingIndicator(
-                    text = if (streak > 1) "+$pts SIGN COMBO x$streak!" else "+$pts SIGN!",
-                    x = 0.22f,
-                    y = 0.52f,
-                    color = Color(0xFFFBBF24)
-                )
-            )
-            chargeFever(0.34f)
-        } else {
-            score += 100 * currentMultiplier()
-            floatingIndicators.add(
-                FloatingIndicator(
-                    text = "+${100 * currentMultiplier()} JUMP",
-                    x = 0.20f,
-                    y = 0.55f,
-                    color = currentBiome.groundLineColor
-                )
-            )
-            chargeFever(0.06f)
+    // Function to trigger a physical, physics-driven leap (Single or Double Jump!)
+    fun doJump() {
+        if (gameState != GameState.RUNNING) return
+
+        if (isGrounded) {
+            isGrounded = false
+            jumpsRemaining = 1
+            dinoVY = -1.65f
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            audio.jump()
+            spawnJumpFX(isDouble = false)
+            score += 20 * currentMultiplier()
+        } else if (jumpsRemaining > 0) {
+            jumpsRemaining = 0
+            dinoVY = -1.45f
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            audio.jump()
+            spawnJumpFX(isDouble = true)
+            floatingIndicators.add(FloatingIndicator("DOUBLE JUMP! 🚀", 0.18f, 0.46f, color = Color(0xFF38BDF8)))
+            score += 40 * currentMultiplier()
         }
 
         if (score > highScore) {
             highScore = score
             prefs.edit().putInt("high_score", highScore).apply()
         }
+        checkBiomeWarp()
+    }
 
+    // Laser Blaster: Incinerates upcoming obstacle when user signs correctly!
+    fun fireSignLaser(targetObs: StreamObstacle) {
+        targetObs.cleared = true
+        targetObs.bonusAwarded = true
+        if (targetObs.signItem.first !in clearedSigns) {
+            clearedSigns = clearedSigns + targetObs.signItem.first
+        }
+        streak++
+        val pts = (250 + (streak * 25)) * currentMultiplier()
+        score += pts
+        if (score > highScore) {
+            highScore = score
+            prefs.edit().putInt("high_score", highScore).apply()
+        }
+
+        // 5-streak combo restores a heart!
+        if (streak % 5 == 0 && hearts < maxHearts) {
+            hearts = (hearts + 1).coerceAtMost(maxHearts)
+            audio.powerup()
+            floatingIndicators.add(FloatingIndicator("+1 HEART! ❤️", 0.20f, 0.42f, color = Color(0xFFFF3366)))
+        }
+
+        chargeFever(0.35f)
+        audio.laser()
+        audio.signBonus()
+        screenShake = 12f
+
+        // Blazing Laser Beam
+        laserBeams.add(
+            LaserBeam(
+                startX = 0.17f,
+                endX = targetObs.x + 0.03f,
+                y = 0.72f - (if (targetObs.kind == ObstacleKind.GROUND) 0.05f else 0.12f),
+                color = if (feverActive) FEVER_RAINBOW.random() else Color(0xFFFBBF24)
+            )
+        )
+
+        // Exploding shards
+        for (i in 0 until 24) {
+            shockParticles.add(
+                ShockParticle(
+                    x = targetObs.x + (kotlin.random.Random.nextFloat() - 0.5f) * 0.05f,
+                    y = 0.70f,
+                    vx = (kotlin.random.Random.nextFloat() - 0.5f) * 1.4f,
+                    vy = -(kotlin.random.Random.nextFloat() * 1.1f + 0.1f),
+                    color = if (feverActive) FEVER_RAINBOW.random() else currentBiome.particleColors.random()
+                )
+            )
+        }
+        shockwaveRings.add(
+            ShockwaveRing(targetObs.x, 0.70f, 10f, 100f, 0.9f, Color(0xFFFBBF24))
+        )
+        floatingIndicators.add(
+            FloatingIndicator("+$pts SIGN BLAST! ⚡", targetObs.x.coerceIn(0.20f, 0.75f), 0.48f, color = Color(0xFFFBBF24))
+        )
         checkBiomeWarp()
     }
 
     fun startNewGame() {
         score = 0
         streak = 0
+        hearts = 3
+        invincibilityTimer = 0f
         speed = 0.40f
         dinoHop = 0f
         dinoVY = 0f
         isGrounded = true
+        jumpsRemaining = 2
         isDucking = false
         duckHoldActive = false
         duckGestureTimer = 0f
@@ -680,10 +752,12 @@ fun DinoGameScreen(
         audio.stopFever()
         clearedSigns = emptyList()
         activeObstacles.clear()
+        powerPickups.clear()
         shockParticles.clear()
         ghostTrails.clear()
         shockwaveRings.clear()
         floatingIndicators.clear()
+        laserBeams.clear()
         warpBannerText = null
         warpBannerAlpha = 0f
         biomeTransition = 0f
@@ -692,9 +766,9 @@ fun DinoGameScreen(
 
         // Spawn first 2 streaming obstacles spaced out
         obstacleCounter++
-        activeObstacles.add(StreamObstacle(obstacleCounter, 1.25f, signList.random(), ObstacleKind.GROUND))
+        activeObstacles.add(StreamObstacle(obstacleCounter, 1.30f, signList.random(), ObstacleKind.GROUND))
         obstacleCounter++
-        activeObstacles.add(StreamObstacle(obstacleCounter, 1.95f, signList.random(), ObstacleKind.GROUND))
+        activeObstacles.add(StreamObstacle(obstacleCounter, 2.10f, signList.random(), ObstacleKind.GROUND))
 
         gameState = GameState.RUNNING
     }
@@ -702,32 +776,20 @@ fun DinoGameScreen(
     // Target upcoming obstacle
     val currentUpcomingObstacle = activeObstacles.firstOrNull { it.x > 0.10f }
 
-    // Instant Continuous Gesture Recognition: triggers auto-jump / auto-duck as obstacle approaches!
+    // Instant Continuous Gesture Recognition: triggers sign laser blast as obstacle approaches!
     LaunchedEffect(debounceState.candidate, debounceState.top3, activeObstacles.size) {
         if (gameState == GameState.RUNNING) {
             val upcoming = currentUpcomingObstacle
-            if (upcoming != null && upcoming.x in 0.16f..0.72f && !upcoming.cleared) {
+            if (upcoming != null && upcoming.x in 0.16f..0.80f && !upcoming.cleared) {
                 val target = upcoming.signItem.first.uppercase().trim()
                 val candidateMatch = debounceState.candidate.uppercase().trim() == target
                 val top3Match = debounceState.top3.any { (lbl, prob) ->
-                    lbl.uppercase().trim() == target && prob >= 0.25f
+                    lbl.uppercase().trim() == target && prob >= 0.22f
                 }
                 val lastConfirmedMatch = debounceState.lastConfirmed.uppercase().trim() == target
 
                 if (candidateMatch || top3Match || lastConfirmedMatch) {
-                    upcoming.cleared = true
-                    if (upcoming.signItem.first !in clearedSigns) {
-                        clearedSigns = clearedSigns + upcoming.signItem.first
-                    }
-                    if (upcoming.kind == ObstacleKind.FLYING_LOW) {
-                        // Sign resolves a low flyer with an automatic duck dive.
-                        duckGestureTimer = 0.7f
-                        streak++
-                        addScore(200 + streak * 20, label = "SIGN DUCK!")
-                        chargeFever(0.34f)
-                    } else {
-                        doJump(isSignBonus = true, obstacleId = upcoming.id)
-                    }
+                    fireSignLaser(upcoming)
                 }
             }
         }
@@ -747,7 +809,12 @@ fun DinoGameScreen(
                 if (feverTimeLeft <= 0f) endFever()
             }
 
-            // 0b. Duck resolution (touch hold + swipe + MediaPipe fist/low-wrist gesture)
+            // 0b. Invincibility i-frames decay
+            if (invincibilityTimer > 0f) {
+                invincibilityTimer = (invincibilityTimer - dt).coerceAtLeast(0f)
+            }
+
+            // 0c. Duck resolution (touch hold + swipe + MediaPipe fist/low-wrist gesture)
             if (duckGestureTimer > 0f) duckGestureTimer = (duckGestureTimer - dt).coerceAtLeast(0f)
             val gestureDuck = detectDuckGesture(latestHands)
             val shouldDuck = duckHoldActive || duckGestureTimer > 0f || gestureDuck
@@ -765,6 +832,7 @@ fun DinoGameScreen(
                     dinoHop = 0f
                     dinoVY = 0f
                     isGrounded = true
+                    jumpsRemaining = 2 // Reset double jump
                     // Touchdown dust kickback
                     spawnDust()
                 }
@@ -778,20 +846,22 @@ fun DinoGameScreen(
             for (obs in activeObstacles) {
                 obs.x -= speed * dt
 
-                // Collision Detection against Dino
-                // Dino occupies x in 0.13f..0.20f. Obstacle is at obs.x.
+                // Collision Detection against Dino (Dino x roughly 0.13f..0.20f)
                 if (obs.x in 0.13f..0.20f && !obs.cleared) {
-                    val passed = when {
+                    val dodged = when {
                         feverActive -> true
-                        obs.kind == ObstacleKind.GROUND -> dinoHop >= 0.08f
+                        obs.kind == ObstacleKind.GROUND -> dinoHop >= 0.07f
                         obs.kind == ObstacleKind.FLYING_LOW -> isDucking
                         obs.kind == ObstacleKind.FLYING_HIGH -> dinoHop < 0.12f
                         else -> false
                     }
-                    if (passed) {
+                    if (dodged) {
                         obs.cleared = true
                         if (feverActive) {
                             // Smash through obstacles -> rainbow shatter shards.
+                            obs.bonusAwarded = true
+                            score += 150 * currentMultiplier()
+                            audio.streak()
                             for (i in 0 until 24) {
                                 shockParticles.add(
                                     ShockParticle(
@@ -804,7 +874,6 @@ fun DinoGameScreen(
                                 )
                             }
                             shockwaveRings.add(ShockwaveRing(obs.x, 0.70f, 8f, 95f, 0.9f, FEVER_RAINBOW.random()))
-                            score += 150 * currentMultiplier()
                         } else if (!obs.bonusAwarded) {
                             obs.bonusAwarded = true
                             streak++
@@ -814,24 +883,47 @@ fun DinoGameScreen(
                             screenShake = 5f
                         }
                     } else {
-                        // CRASH!
-                        gameState = GameState.GAME_OVER
-                        screenShake = 22f
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        audio.stopFever()
-                        audio.crash()
-                        for (i in 0 until 36) {
-                            shockParticles.add(
-                                ShockParticle(
-                                    x = 0.17f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.06f,
-                                    y = 0.72f,
-                                    vx = (kotlin.random.Random.nextFloat() - 0.5f) * 1.5f,
-                                    vy = -(kotlin.random.Random.nextFloat() * 1.0f + 0.10f),
-                                    color = currentBiome.particleColors.random()
-                                )
-                            )
+                        // Impact!
+                        if (invincibilityTimer <= 0f) {
+                            obs.cleared = true
+                            hearts--
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            screenShake = 22f
+
+                            if (hearts > 0) {
+                                invincibilityTimer = 1.8f
+                                audio.hurt()
+                                floatingIndicators.add(FloatingIndicator("-1 HEART! 💔", 0.18f, 0.45f, color = Color(0xFFEF4444)))
+                                for (i in 0 until 20) {
+                                    shockParticles.add(
+                                        ShockParticle(
+                                            x = 0.17f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.05f,
+                                            y = 0.72f,
+                                            vx = (kotlin.random.Random.nextFloat() - 0.5f) * 1.2f,
+                                            vy = -(kotlin.random.Random.nextFloat() * 0.8f + 0.1f),
+                                            color = Color(0xFFEF4444)
+                                        )
+                                    )
+                                }
+                            } else {
+                                // Final CRASH!
+                                gameState = GameState.GAME_OVER
+                                audio.stopFever()
+                                audio.crash()
+                                for (i in 0 until 36) {
+                                    shockParticles.add(
+                                        ShockParticle(
+                                            x = 0.17f + (kotlin.random.Random.nextFloat() - 0.5f) * 0.06f,
+                                            y = 0.72f,
+                                            vx = (kotlin.random.Random.nextFloat() - 0.5f) * 1.5f,
+                                            vy = -(kotlin.random.Random.nextFloat() * 1.0f + 0.10f),
+                                            color = currentBiome.particleColors.random()
+                                        )
+                                    )
+                                }
+                                break
+                            }
                         }
-                        break
                     }
                 }
 
@@ -840,6 +932,45 @@ fun DinoGameScreen(
                 }
             }
             activeObstacles.removeAll(deadObs)
+
+            // 2b. PowerPickups streaming and collection
+            val deadPickups = mutableListOf<PowerPickup>()
+            for (pup in powerPickups) {
+                pup.x -= speed * dt
+                if (pup.x in 0.13f..0.21f && !pup.collected) {
+                    val closeY = abs((0.74f - dinoHop) - pup.y) < 0.14f
+                    if (closeY) {
+                        pup.collected = true
+                        when (pup.kind) {
+                            PickupKind.HEART -> {
+                                hearts = (hearts + 1).coerceAtMost(maxHearts)
+                                audio.powerup()
+                                floatingIndicators.add(FloatingIndicator("+1 HEART! ❤️", 0.18f, 0.44f, color = Color(0xFFFF3366)))
+                            }
+                            PickupKind.STAR -> {
+                                activateFever()
+                                audio.powerup()
+                                floatingIndicators.add(FloatingIndicator("STAR OVERDRIVE! ⭐", 0.18f, 0.44f, color = Color(0xFFFDE047)))
+                            }
+                            PickupKind.COIN -> {
+                                score += 500 * currentMultiplier()
+                                audio.streak()
+                                floatingIndicators.add(FloatingIndicator("+${500 * currentMultiplier()} COIN! 💎", 0.18f, 0.44f, color = Color(0xFF38BDF8)))
+                            }
+                        }
+                    }
+                }
+                if (pup.x < -0.2f) deadPickups.add(pup)
+            }
+            powerPickups.removeAll(deadPickups)
+
+            // Spawn occasional PowerPickup
+            if (activeObstacles.size > 0 && kotlin.random.Random.nextFloat() < 0.007f && powerPickups.size < 2) {
+                pickupCounter++
+                val k = if (hearts < maxHearts && kotlin.random.Random.nextFloat() < 0.45f) PickupKind.HEART
+                        else if (kotlin.random.Random.nextFloat() < 0.35f) PickupKind.STAR else PickupKind.COIN
+                powerPickups.add(PowerPickup(pickupCounter, 1.25f, 0.54f, k))
+            }
 
             // Spawn next obstacle dynamically to maintain continuous stream
             val lastObstacle = activeObstacles.maxByOrNull { it.x }
@@ -899,6 +1030,14 @@ fun DinoGameScreen(
                 if (p.alpha <= 0f) deadParticles.add(p)
             }
             shockParticles.removeAll(deadParticles)
+
+            // 5b. Laser Beams decay
+            val deadBeams = mutableListOf<LaserBeam>()
+            for (b in laserBeams) {
+                b.alpha -= 5.0f * dt
+                if (b.alpha <= 0f) deadBeams.add(b)
+            }
+            laserBeams.removeAll(deadBeams)
 
             // 6. Floating Indicators
             val deadIndicators = mutableListOf<FloatingIndicator>()
@@ -979,40 +1118,25 @@ fun DinoGameScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .pointerInput(gameState) {
-                    // Instant controls: tap anywhere = jump, hold lower half / swipe down = duck,
-                    // tap on idle/game-over = start or replay.
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val downTime = System.currentTimeMillis()
                         val startY = down.position.y
-                        val viewportH = size.height
-                        val lowerHalf = startY > viewportH * 0.55f
-                        var ducking = false
-                        var totalDy = 0f
 
-                        if (lowerHalf && gameState == GameState.RUNNING) {
-                            duckHoldActive = true
-                            ducking = true
+                        // Instant 0ms action on touch down!
+                        when (gameState) {
+                            GameState.IDLE, GameState.GAME_OVER -> startNewGame()
+                            GameState.RUNNING -> doJump()
                         }
 
+                        // Swipe down detection while finger is pressed
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            totalDy = change.position.y - startY
-                            if (gameState == GameState.RUNNING && totalDy > 45f && !ducking) {
-                                duckGestureTimer = 0.55f
-                                ducking = true
+                            val dy = change.position.y - startY
+                            if (gameState == GameState.RUNNING && dy > 45f) {
+                                duckGestureTimer = 0.65f
                             }
                             if (!change.pressed) break
-                        }
-
-                        if (duckHoldActive) duckHoldActive = false
-                        val heldMs = System.currentTimeMillis() - downTime
-                        if (!ducking && heldMs < 320 && abs(totalDy) < 45f) {
-                            when (gameState) {
-                                GameState.IDLE, GameState.GAME_OVER -> startNewGame()
-                                GameState.RUNNING -> doJump(isSignBonus = false)
-                            }
                         }
                     }
                 }
@@ -1196,6 +1320,27 @@ fun DinoGameScreen(
                     )
                 }
 
+                // 4b. Laser Beams (Sign Blaster Energy Ray!)
+                for (b in laserBeams) {
+                    val startX = b.startX * canvasW + shakeX
+                    val endX = b.endX * canvasW + shakeX
+                    val ly = b.y * canvasH + shakeY
+                    drawLine(
+                        color = b.color.copy(alpha = b.alpha.coerceIn(0f, 1f)),
+                        start = Offset(startX, ly),
+                        end = Offset(endX, ly),
+                        strokeWidth = 9f * b.alpha,
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        color = Color.White.copy(alpha = b.alpha.coerceIn(0f, 1f)),
+                        start = Offset(startX, ly),
+                        end = Offset(endX, ly),
+                        strokeWidth = 3f * b.alpha,
+                        cap = StrokeCap.Round
+                    )
+                }
+
                 // 5. Streaming Obstacles, Aerial Flyers & Floating Target Badges!
                 for (obs in activeObstacles) {
                     val obstacleScreenX = obs.x * canvasW + shakeX
@@ -1271,6 +1416,33 @@ fun DinoGameScreen(
                     }
                 }
 
+                // 5b. PowerPickups (Heart ❤️, Star ⭐, Coin 💎)
+                for (pup in powerPickups) {
+                    if (pup.collected) continue
+                    val px = pup.x * canvasW + shakeX
+                    val py = pup.y * canvasH + shakeY
+                    val bob = sin((frameNow % 1000L) / 1000f * 2f * PI.toFloat()) * 4f
+                    val cy = py + bob
+
+                    when (pup.kind) {
+                        PickupKind.HEART -> {
+                            drawCircle(Color(0x66FF3366), 14f * u, Offset(px, cy))
+                            drawCircle(Color(0xFFFF3366), 8f * u, Offset(px, cy))
+                            drawCircle(Color.White, 3f * u, Offset(px - 2f * u, cy - 2f * u))
+                        }
+                        PickupKind.STAR -> {
+                            drawCircle(Color(0x66FDE047), 16f * u, Offset(px, cy))
+                            drawCircle(Color(0xFFFDE047), 9f * u, Offset(px, cy))
+                            drawCircle(Color.White, 4f * u, Offset(px, cy))
+                        }
+                        PickupKind.COIN -> {
+                            drawCircle(Color(0x6638BDF8), 12f * u, Offset(px, cy))
+                            drawCircle(Color(0xFF38BDF8), 8f * u, Offset(px, cy))
+                            drawCircle(Color.White, 3f * u, Offset(px, cy))
+                        }
+                    }
+                }
+
                 // 6. Ghost Trails
                 for (trail in ghostTrails) {
                     val trailY = groundY - 22 * u - (0.74f - trail.y) * canvasH
@@ -1292,7 +1464,7 @@ fun DinoGameScreen(
                     )
                 }
 
-                // 8. Dinosaur Rendering (duck posture + Fever overdrive aura)
+                // 8. Dinosaur Rendering (duck posture + Fever overdrive aura + i-frame flashing)
                 val dinoX = canvasW * 0.15f + shakeX
                 val hopPx = dinoHop * canvasH * 0.95f
                 val duckPose = isDucking && gameState != GameState.GAME_OVER
@@ -1300,10 +1472,12 @@ fun DinoGameScreen(
                 val dinoBodyRows = if (duckPose) 10 else 17
                 val dinoTotalRows = if (duckPose) 12 else 22
                 val dinoY = groundY - dinoTotalRows * u - hopPx
-                val dinoBodyColor = if (feverActive) {
-                    FEVER_RAINBOW[((frameNow / 70).toInt()) % FEVER_RAINBOW.size]
-                } else {
-                    currentBiome.dinoColor
+
+                val isInvincibleBlink = (invincibilityTimer > 0f) && ((frameNow / 80) % 2 == 0L)
+                val dinoBodyColor = when {
+                    isInvincibleBlink -> Color.White.copy(alpha = 0.35f)
+                    feverActive -> FEVER_RAINBOW[((frameNow / 70).toInt()) % FEVER_RAINBOW.size]
+                    else -> currentBiome.dinoColor
                 }
 
                 // Fever rainbow overdrive aura
@@ -1381,7 +1555,7 @@ fun DinoGameScreen(
                 }
             }
 
-            // Top HUD Overlay (Scoreboard & Biome Pills)
+            // Top HUD Overlay (Scoreboard, Hearts & Streak Multiplier)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1389,31 +1563,58 @@ fun DinoGameScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // High Score & Current Score Pill
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color.Black.copy(alpha = 0.65f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, currentBiome.groundLineColor.copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 3 Hearts Health Bar
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.65f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF3366).copy(alpha = 0.6f))
                     ) {
-                        Text(
-                            text = "HI ${highScore.toString().padStart(5, '0')}",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = score.toString().padStart(5, '0'),
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp,
-                            color = Color.White
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            for (i in 1..maxHearts) {
+                                val isFull = i <= hearts
+                                Icon(
+                                    imageVector = if (isFull) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = "Heart $i",
+                                    tint = if (isFull) Color(0xFFFF3366) else Color.White.copy(alpha = 0.28f),
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // High Score & Current Score Pill
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.65f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, currentBiome.groundLineColor.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "HI ${highScore.toString().padStart(5, '0')}",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = score.toString().padStart(5, '0'),
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                        }
                     }
                 }
 
@@ -1705,11 +1906,11 @@ fun DinoGameScreen(
                 }
             }
 
-            // Bottom Biome Selector & Cleared Signs Trail
+            // Bottom Biome Selector & Cleared Signs Trail (Positioned safely above controls)
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .padding(start = 16.dp, bottom = if (gameState == GameState.RUNNING) 80.dp else 16.dp)
             ) {
                 // Biome Switcher Chips
                 LazyRow(
@@ -1769,6 +1970,76 @@ fun DinoGameScreen(
                 }
             }
 
+            // Floating Arcade Virtual Controls (Dual Thumb Buttons: Duck on Left, Jump on Right)
+            if (gameState == GameState.RUNNING) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    // Left Thumb: DUCK Button
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = if (isDucking) Color(0xFFEC4899) else Color.Black.copy(alpha = 0.70f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            2.dp,
+                            if (isDucking) Color.White else Color(0xFFEC4899).copy(alpha = 0.85f)
+                        ),
+                        modifier = Modifier
+                            .size(width = 110.dp, height = 56.dp)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    duckHoldActive = true
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        if (ev.changes.all { !it.pressed }) break
+                                    }
+                                    duckHoldActive = false
+                                }
+                            }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = "Duck", tint = Color.White, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("DUCK", fontWeight = FontWeight.Black, fontSize = 15.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+
+                    // Right Thumb: JUMP Button
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = currentBiome.obstacleColor.copy(alpha = 0.90f),
+                        border = androidx.compose.foundation.BorderStroke(2.dp, Color.White),
+                        modifier = Modifier
+                            .size(width = 110.dp, height = 56.dp)
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    doJump()
+                                }
+                            }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = "Jump", tint = Color.White, modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("JUMP", fontWeight = FontWeight.Black, fontSize = 15.sp, color = Color.White, fontFamily = FontFamily.Monospace)
+                        }
+                    }
+                }
+            }
+
             // Floating PiP Camera Viewport in Top-Right
             Card(
                 shape = RoundedCornerShape(22.dp),
@@ -1791,7 +2062,7 @@ fun DinoGameScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Cybernetic Hand Skeleton Overlay inside PiP
+                    // Cybernetic Hand Skeleton Overlay inside PiP (True Mirror for Front Camera!)
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val w = size.width
                         val h = size.height
@@ -1810,21 +2081,24 @@ fun DinoGameScreen(
                             val boneColor = if (hand.isRightHand) Color(0xFF06B6D4) else Color(0xFFF43F5E)
                             val jointColor = if (hand.isRightHand) Color(0xFF34D399) else Color(0xFFFB923C)
 
-                            // Bones
+                            // Bones with mirror correction
                             for ((s, e) in HAND_CONNECTIONS) {
                                 if (s < pts.size && e < pts.size) {
-                                    val p1 = Offset(pts[s].x * scaledW + offX, pts[s].y * scaledH + offY)
-                                    val p2 = Offset(pts[e].x * scaledW + offX, pts[e].y * scaledH + offY)
+                                    val sx = if (hand.isFrontCamera) (1.0f - pts[s].x) else pts[s].x
+                                    val ex = if (hand.isFrontCamera) (1.0f - pts[e].x) else pts[e].x
+                                    val p1 = Offset(sx * scaledW + offX, pts[s].y * scaledH + offY)
+                                    val p2 = Offset(ex * scaledW + offX, pts[e].y * scaledH + offY)
                                     drawLine(boneColor, p1, p2, strokeWidth = 3f, cap = StrokeCap.Round)
                                 }
                             }
 
-                            // Joints
+                            // Joints with mirror correction
                             for (p in pts) {
+                                val px = if (hand.isFrontCamera) (1.0f - p.x) else p.x
                                 drawCircle(
                                     jointColor,
                                     radius = 3.5f,
-                                    center = Offset(p.x * scaledW + offX, p.y * scaledH + offY)
+                                    center = Offset(px * scaledW + offX, p.y * scaledH + offY)
                                 )
                             }
                         }
