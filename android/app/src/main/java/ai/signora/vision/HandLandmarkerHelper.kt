@@ -35,9 +35,9 @@ class HandLandmarkerHelper(
     var activeDelegateName: String = "CPU"
         private set
 
-    // Landmark smoothers tuned for zero lag: beta = 0.05f allows rapid motion without lag, minCutoff = 1.0f keeps still hands steady
-    private val rightSmoother = LandmarkSmoother(minCutoff = 1.0f, beta = 0.05f)
-    private val leftSmoother = LandmarkSmoother(minCutoff = 1.0f, beta = 0.05f)
+    // Landmark smoothers tuned for zero lag: beta = 0.08f allows rapid motion without lag, minCutoff = 1.2f keeps still hands steady
+    private val rightSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.08f)
+    private val leftSmoother = LandmarkSmoother(minCutoff = 1.2f, beta = 0.08f)
 
     private val frameMetaMap = ConcurrentHashMap<Long, FrameMeta>()
 
@@ -97,9 +97,9 @@ class HandLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = HandLandmarker.HandLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinHandDetectionConfidence(0.35f)
-            .setMinTrackingConfidence(0.35f)
-            .setMinHandPresenceConfidence(0.35f)
+            .setMinHandDetectionConfidence(0.30f)
+            .setMinTrackingConfidence(0.30f)
+            .setMinHandPresenceConfidence(0.30f)
             .setNumHands(2)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: HandLandmarkerResult, _ ->
@@ -152,11 +152,15 @@ class HandLandmarkerHelper(
                 Point3D(lm.x(), lm.y(), lm.z())
             }
 
-            val isRight = if (i < allHandedness.size && allHandedness[i].isNotEmpty()) {
+            val rawIsRight = if (i < allHandedness.size && allHandedness[i].isNotEmpty()) {
                 allHandedness[i][0].categoryName() == "Right"
             } else {
                 true
             }
+
+            // Mirrored front camera feed matches MediaPipe's mirror expectation.
+            // Unmirrored back camera needs inverted handedness.
+            val isRight = if (isFrontCamera) rawIsRight else !rawIsRight
 
             // Apply One-Euro filter to eliminate jitter while keeping instant zero-lag response
             val smoothedPoints = if (isRight) {

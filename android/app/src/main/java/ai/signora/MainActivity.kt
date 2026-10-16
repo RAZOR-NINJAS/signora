@@ -38,15 +38,16 @@ class MainActivity : ComponentActivity() {
     private var aslMlp: SignoraMLP? = null
     private var islMlp: SignoraMLP? = null
 
-    private val debounceEngine = DebounceEngine()
+    private val debounceEngine = DebounceEngine(threshold = 0.40f, minMargin = 0.05f, voteWindowSize = 4)
 
     private var hasCameraPermission by mutableStateOf(false)
     private var assetStatus by mutableStateOf(AutoAssetManager.AssetStatus(isReady = false, message = "Initializing..."))
     private var currentMode by mutableStateOf(RecognitionMode.ASL)
     private var dwellProfile by mutableStateOf(DwellProfile.STANDARD)
     private var customDwellMs by mutableStateOf(1000L)
-    private var confidenceThreshold by mutableStateOf(0.70f)
-    private var minMargin by mutableStateOf(0.10f)
+    private var confidenceThreshold by mutableStateOf(0.40f)
+    private var minMargin by mutableStateOf(0.05f)
+    private var cameraResolution by mutableStateOf(Pair(480, 640))
     private var isMuted by mutableStateOf(false)
     private var isFrontCamera by mutableStateOf(true)
     private var isTorchOn by mutableStateOf(false)
@@ -113,6 +114,7 @@ class MainActivity : ComponentActivity() {
                     customDwellMs = customDwellMs,
                     confidenceThreshold = confidenceThreshold,
                     minMargin = minMargin,
+                    cameraResolution = cameraResolution,
                     assetStatus = assetStatus,
                     onModeChange = { newMode -> currentMode = newMode },
                     onDwellProfileChange = { newProfile ->
@@ -249,7 +251,13 @@ class MainActivity : ComponentActivity() {
                 handHelper?.detectLiveStream(mpImage, rotationDegrees, isFront, frameId, frameTime)
                 poseHelper?.detectLiveStream(mpImage, rotationDegrees, isFront, frameId, frameTime)
             }
-        )
+        ).apply {
+            onResolutionChanged = { w, h ->
+                runOnUiThread {
+                    cameraResolution = Pair(w, h)
+                }
+            }
+        }
         cameraManager?.startCamera()
     }
 
@@ -283,7 +291,16 @@ class MainActivity : ComponentActivity() {
         }
 
         val feats = if (currentMode == RecognitionMode.ASL) {
-            FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
+            if (hands.size == 1) {
+                FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
+            } else {
+                // If multiple hands, evaluate both and pick whichever hand produces higher confidence
+                val f0 = FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
+                val f1 = FeatureExtractor.extractAslFeatures(hands[1].points, hands[1].isRightHand)
+                val r0 = activeMlp.predict(f0)
+                val r1 = activeMlp.predict(f1)
+                if ((r1?.confidence ?: 0f) > (r0?.confidence ?: 0f)) f1 else f0
+            }
         } else {
             if (activeMlp.inDim == 220) {
                 FeatureExtractor.extractSpatialFeatures(hands, activePose)

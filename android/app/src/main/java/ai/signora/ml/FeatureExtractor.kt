@@ -386,7 +386,7 @@ object FeatureExtractor {
         val wrist = hand.points[WRIST]
         val indexTip = hand.points[INDEX_TIP]
         val thumbTip = hand.points[THUMB_TIP]
-        val palm = Point3D((wrist.x + hand.points[MIDDLE_MCP].x) / 2f, (wrist.y + hand.points[MIDDLE_MCP].y) / 2f, (wrist.y + hand.points[MIDDLE_MCP].y) / 2f)
+        val palm = Point3D((wrist.x + hand.points[MIDDLE_MCP].x) / 2f, (wrist.y + hand.points[MIDDLE_MCP].y) / 2f, (wrist.z + hand.points[MIDDLE_MCP].z) / 2f)
         val contactPts = listOf(wrist, indexTip, thumbTip, palm)
 
         val anchorCandidates = listOf(

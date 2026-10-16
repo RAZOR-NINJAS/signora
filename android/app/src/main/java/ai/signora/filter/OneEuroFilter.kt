@@ -53,8 +53,9 @@ class OneEuroFilter(
     }
 
     fun filter(x: Float, timestampMs: Long): Float {
-        if (lastTimestampMs < 0L) {
+        if (lastTimestampMs < 0L || (timestampMs - lastTimestampMs) > 180L) {
             lastTimestampMs = timestampMs
+            dxFilter.reset()
             return xFilter.filter(x, 1f)
         }
         val dt = (timestampMs - lastTimestampMs) / 1000f
@@ -80,8 +81,8 @@ class OneEuroFilter(
  */
 class LandmarkSmoother(
     val maxPoints: Int = 33,
-    minCutoff: Float = 1.0f,
-    beta: Float = 0.05f,
+    minCutoff: Float = 1.2f,
+    beta: Float = 0.08f,
     dCutoff: Float = 1.0f
 ) {
     private val xFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }

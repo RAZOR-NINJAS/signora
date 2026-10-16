@@ -69,6 +69,7 @@ fun TranslateScreen(
     onClear: () -> Unit,
     onSpace: () -> Unit,
     onSpeak: () -> Unit,
+    cameraResolution: Pair<Int, Int> = Pair(480, 640),
     modifier: Modifier = Modifier
 ) {
     var isDebugOpen by remember { mutableStateOf(false) }
@@ -127,9 +128,9 @@ fun TranslateScreen(
             val canvasW = size.width
             val canvasH = size.height
 
-            // 640x480 analysis resolution in portrait (aspect ratio 480:640 = 3:4)
-            val camW = 480f
-            val camH = 640f
+            // Dynamic analysis resolution in portrait
+            val camW = cameraResolution.first.toFloat().coerceAtLeast(1f)
+            val camH = cameraResolution.second.toFloat().coerceAtLeast(1f)
 
             // Exact FILL_CENTER transformation matching PreviewView
             val scale = maxOf(canvasW / camW, canvasH / camH)

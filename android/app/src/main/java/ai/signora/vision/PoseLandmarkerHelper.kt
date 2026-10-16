@@ -93,9 +93,9 @@ class PoseLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = PoseLandmarker.PoseLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinPoseDetectionConfidence(0.35f)
-            .setMinTrackingConfidence(0.35f)
-            .setMinPosePresenceConfidence(0.35f)
+            .setMinPoseDetectionConfidence(0.30f)
+            .setMinTrackingConfidence(0.30f)
+            .setMinPosePresenceConfidence(0.30f)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: PoseLandmarkerResult, _ ->
                 val timestamp = result.timestampMs()

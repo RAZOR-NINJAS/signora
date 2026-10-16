@@ -46,6 +46,10 @@ class CameraXManager(
 
     var isPaused: Boolean = false
 
+    var onResolutionChanged: ((Int, Int) -> Unit)? = null
+    private var reportedW = 0
+    private var reportedH = 0
+
     fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
         cameraProviderFuture.addListener({
@@ -152,6 +156,12 @@ class CameraXManager(
             val isRotated = rot == 90 || rot == 270
             val targetW = if (isRotated) height else width
             val targetH = if (isRotated) width else height
+
+            if (targetW != reportedW || targetH != reportedH) {
+                reportedW = targetW
+                reportedH = targetH
+                onResolutionChanged?.invoke(targetW, targetH)
+            }
 
             // Pre-allocate raw input buffer
             if (rawBitmap == null || rawBitmap?.width != width || rawBitmap?.height != height) {

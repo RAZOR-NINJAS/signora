@@ -46,15 +46,16 @@ fun SpatialOverlay(
     targetAnchor: String?,
     targetAnchorPt: Point3D?,
     isAnchorMatched: Boolean,
+    cameraResolution: Pair<Int, Int> = Pair(480, 640),
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val canvasWidth = size.width
         val canvasHeight = size.height
 
-        // Camera analysis resolution in portrait (aspect ratio 480:640 = 3:4)
-        val camW = 480f
-        val camH = 640f
+        // Dynamic camera analysis resolution in portrait
+        val camW = cameraResolution.first.toFloat().coerceAtLeast(1f)
+        val camH = cameraResolution.second.toFloat().coerceAtLeast(1f)
 
         // Exact FILL_CENTER transformation matching PreviewView
         val scale = maxOf(canvasWidth / camW, canvasHeight / camH)

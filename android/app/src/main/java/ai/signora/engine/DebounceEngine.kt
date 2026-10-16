@@ -16,11 +16,11 @@ import ai.signora.models.RecognitionResult
  */
 class DebounceEngine(
     var dwellMs: Long = 1000L,
-    var threshold: Float = 0.52f,
-    var minMargin: Float = 0.10f,
-    private val voteWindowSize: Int = 7,
-    private val maxDropoutMs: Long = 150L,
-    private val spaceDwellMs: Long = 800L
+    var threshold: Float = 0.40f,
+    var minMargin: Float = 0.05f,
+    private val voteWindowSize: Int = 4,
+    private val maxDropoutMs: Long = 200L,
+    private val spaceDwellMs: Long = 700L
 ) {
     var confidenceThreshold: Float
         get() = threshold

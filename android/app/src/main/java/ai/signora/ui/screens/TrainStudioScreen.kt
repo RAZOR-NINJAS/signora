@@ -52,6 +52,7 @@ fun TrainStudioScreen(
     hands: List<HandLandmarks>,
     pose: PoseLandmarks?,
     onToggleCamera: () -> Unit,
+    cameraResolution: Pair<Int, Int> = Pair(480, 640),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -87,11 +88,20 @@ fun TrainStudioScreen(
 
     val currentSign: SignInfo? = currentSignList.getOrNull(currentSignIndex) ?: currentSignList.firstOrNull()
 
-    // Active anchor detection & matching
+    // Active anchor detection & matching across all detected hands
     val activeAnchorZone = remember(hands, pose) {
         if (hands.isNotEmpty() && pose != null) {
-            val (zone, _) = FeatureExtractor.detectBodyAnchor(hands[0], pose)
-            zone
+            var matched = "OPEN_SPACE"
+            for (hand in hands) {
+                val (zone, _) = FeatureExtractor.detectBodyAnchor(hand, pose)
+                if (zone != "OPEN_SPACE") {
+                    matched = zone
+                    if (currentSign?.targetAnchor != null && zone == currentSign.targetAnchor) {
+                        break
+                    }
+                }
+            }
+            matched
         } else "OPEN_SPACE"
     }
 
@@ -343,6 +353,7 @@ fun TrainStudioScreen(
                     targetAnchor = currentSign?.targetAnchor,
                     targetAnchorPt = targetAnchorPt,
                     isAnchorMatched = isAnchorMatched,
+                    cameraResolution = cameraResolution,
                     modifier = Modifier.fillMaxSize()
                 )
 

@@ -39,8 +39,9 @@ fun SignoraScreen(
     autoCollapseEnabled: Boolean = true,
     latestFrameId: Long = 0L,
     customDwellMs: Long = 1000L,
-    confidenceThreshold: Float = 0.70f,
-    minMargin: Float = 0.10f,
+    confidenceThreshold: Float = 0.40f,
+    minMargin: Float = 0.05f,
+    cameraResolution: Pair<Int, Int> = Pair(480, 640),
     assetStatus: AutoAssetManager.AssetStatus,
     onModeChange: (RecognitionMode) -> Unit,
     onDwellProfileChange: (DwellProfile) -> Unit,
@@ -121,7 +122,8 @@ fun SignoraScreen(
                             onBackspace = onBackspace,
                             onClear = onClear,
                             onSpace = onSpace,
-                            onSpeak = onSpeak
+                            onSpeak = onSpeak,
+                            cameraResolution = cameraResolution
                         )
                     }
 
@@ -130,7 +132,8 @@ fun SignoraScreen(
                             previewView = previewView,
                             hands = handLandmarks,
                             pose = poseLandmarks,
-                            onToggleCamera = onToggleCamera
+                            onToggleCamera = onToggleCamera,
+                            cameraResolution = cameraResolution
                         )
                     }
 
