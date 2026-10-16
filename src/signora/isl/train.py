@@ -275,21 +275,24 @@ def train_isl_model(
         except Exception as me:
             print(f"[Warning] Could not update models.json manifest: {me}")
 
-    # Automatically export for Android APK
-    mobile_out = ROOT_DIR / "android" / "app" / "src" / "main" / "assets" / "models" / "isl_model.json"
-    if mobile_out.parent.exists() or (ROOT_DIR / "android").exists():
-        try:
-            print(f"\n⚡ Exporting mobile assets ({actual_dim}D) for Android Signora app...")
-            export_model_to_json(ckpt_path, "isl", mobile_out)
-        except Exception as e:
-            print(f"[Warning] Mobile asset export skipped: {e}")
+    # Automatically export for Android APK only when training production models
+    is_production_ckpt = (ckpt_path.parent.resolve() == MODELS_DIR.resolve())
+    if is_production_ckpt and actual_dim == 220:
+        mobile_out = ROOT_DIR / "android" / "app" / "src" / "main" / "assets" / "models" / "isl_model.json"
+        if mobile_out.parent.exists() or (ROOT_DIR / "android").exists():
+            try:
+                print(f"\n⚡ Exporting mobile assets ({actual_dim}D) for Android Signora app...")
+                export_model_to_json(ckpt_path, "isl", mobile_out)
+            except Exception as e:
+                print(f"[Warning] Mobile asset export skipped: {e}")
 
-    # Also save a copy in models/ directory
-    try:
-        models_json_out = MODELS_DIR / ("isl_spatial_model.json" if actual_dim == 220 else "isl_mobile_model.json")
-        export_model_to_json(ckpt_path, "isl", models_json_out)
-    except Exception:
-        pass
+    # Also save a copy in models/ directory if production
+    if is_production_ckpt:
+        try:
+            models_json_out = MODELS_DIR / ("isl_spatial_model.json" if actual_dim == 220 else "isl_mobile_model.json")
+            export_model_to_json(ckpt_path, "isl", models_json_out)
+        except Exception:
+            pass
 
     print("\n" + "=" * 65)
     print("✅ TRAINING COMPLETE!")

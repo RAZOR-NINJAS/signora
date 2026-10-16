@@ -126,10 +126,30 @@ def import_phone_dataset(
         sample_stats[clean_name] = len(arr)
         print(f"  ✓ {clean_name:12s} : {len(arr)} samples -> {npy_path.name}")
 
+        # If 220D spatial dataset, also populate 164D hand features into data/isl/
+        if feature_dim == 220:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            isl_164_path = DATA_DIR / f"{clean_name}.npy"
+            arr_164 = arr[:, :164]
+            if append and isl_164_path.exists():
+                try:
+                    existing_164 = np.load(isl_164_path).astype(np.float32)
+                    if existing_164.ndim == 1:
+                        existing_164 = existing_164.reshape(1, -1)
+                    if existing_164.shape[1] == 164:
+                        combined_164 = np.vstack([existing_164, arr_164])
+                        _, u_idx = np.unique(np.round(combined_164, decimals=5), axis=0, return_index=True)
+                        u_idx.sort()
+                        arr_164 = combined_164[u_idx]
+                except Exception as e:
+                    print(f"[Warning] Could not merge with existing 164D {isl_164_path.name}: {e}")
+            np.save(isl_164_path, arr_164)
+
     print("-" * 65)
     print(f"🎉 Successfully ingested {len(imported_classes)} classes into {target_dir.name}/")
 
     train_result = None
+    train_164_result = None
     if auto_train:
         print("\n🚀 Initiating neural network retraining with newly ingested phone dataset...")
         train_result = train_isl_model(
@@ -137,6 +157,13 @@ def import_phone_dataset(
             epochs=epochs,
             in_dim=feature_dim,
         )
+        if feature_dim == 220:
+            print("\n⚡ Retraining desktop 164D standard ISL neural model (data/isl/)...")
+            train_164_result = train_isl_model(
+                data_dir=DATA_DIR,
+                epochs=epochs,
+                in_dim=164,
+            )
 
     return {
         "success": True,
@@ -145,4 +172,5 @@ def import_phone_dataset(
         "sample_stats": sample_stats,
         "target_dir": str(target_dir),
         "train_result": train_result,
+        "train_164_result": train_164_result,
     }
