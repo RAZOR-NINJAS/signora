@@ -256,7 +256,7 @@ fun TranslateScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "ISL model recognizes A, B, C, D and Space (5 of 26)",
+                                text = "ISL model recognizes 15 signs (A-E, Namaste, Hello, Help, Doctor, Emergency, etc.)",
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }

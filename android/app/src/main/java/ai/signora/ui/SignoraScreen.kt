@@ -89,12 +89,12 @@ fun SignoraScreen(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             modifier = Modifier.weight(1f)
         ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = if (!isWideScreen) innerPadding.calculateBottomPadding() else 0.dp)
-            ) {
-                when (currentDestination) {
+            Crossfade(
+                targetState = currentDestination,
+                animationSpec = androidx.compose.animation.core.tween(220, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                label = "ScreenCrossfade"
+            ) { destination ->
+                when (destination) {
                     AppDestination.TRANSLATE -> {
                         TranslateScreen(
                             previewView = previewView,

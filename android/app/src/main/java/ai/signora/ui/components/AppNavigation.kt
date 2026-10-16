@@ -13,7 +13,9 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import ai.signora.ui.theme.SignoraTheme
@@ -43,13 +45,25 @@ fun AppNavigationBar(
     ) {
         AppDestination.values().forEach { destination ->
             val isSelected = currentDestination == destination
+            val iconScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isSelected) 1.18f else 1.0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                ),
+                label = "NavIconScale"
+            )
             NavigationBarItem(
                 selected = isSelected,
                 onClick = { onNavigate(destination) },
                 icon = {
                     Icon(
                         imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
-                        contentDescription = destination.title
+                        contentDescription = destination.title,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        }
                     )
                 },
                 label = {

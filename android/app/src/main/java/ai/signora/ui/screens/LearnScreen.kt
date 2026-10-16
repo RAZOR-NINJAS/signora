@@ -67,11 +67,21 @@ private val ASL_GUIDES = listOf(
 )
 
 private val ISL_GUIDES = listOf(
-    SignGuide("A", "Make a fist with thumb resting alongside index finger", "Recognized in current 5-letter model"),
-    SignGuide("B", "Extend 4 fingers upright together with thumb folded across palm", "Recognized in current 5-letter model"),
-    SignGuide("C", "Curve all fingers and thumb to form a C shape", "Recognized in current 5-letter model"),
-    SignGuide("D", "Point index finger straight up, thumb and remaining fingers in a ring", "Recognized in current 5-letter model"),
-    SignGuide("SPACE", "Open flat palm held horizontally", "Recognized in current 5-letter model")
+    SignGuide("A", "Make a fist with thumb resting alongside index finger", "Single hand upright fist"),
+    SignGuide("B", "Extend 4 fingers upright together with thumb folded across palm", "Fingers upright together"),
+    SignGuide("C", "Curve all fingers and thumb to form a C shape", "Crescent open hand"),
+    SignGuide("D", "Point index finger straight up, thumb and remaining fingers in a ring", "Index pointing upwards"),
+    SignGuide("E", "Curl all fingers down to touch thumb tip", "Closed fingertips touching thumb"),
+    SignGuide("NAMASTE", "Join both flat palms together at the chest", "Traditional Indian greeting"),
+    SignGuide("HELLO", "Salute / wave hand outward from forehead", "Common greeting sign"),
+    SignGuide("HELP", "Place closed fist on top of open flat palm", "Universal assistance sign"),
+    SignGuide("EMERGENCY", "Wave both hands rapidly across chest", "Urgent alert gesture"),
+    SignGuide("DOCTOR", "Tap wrist pulse with index and middle fingers", "Medical pulse gesture"),
+    SignGuide("THANK_YOU", "Move flat open hand forward from chin", "Gratitude sign"),
+    SignGuide("PLEASE", "Rub flat palm in a circle over your chest", "Polite request sign"),
+    SignGuide("CONGRATS", "Clap both hands together in celebration", "Celebratory applause"),
+    SignGuide("RESPECT", "Bow hands joined forward respectfully", "Reverence gesture"),
+    SignGuide("PEACE", "Extend index and middle in a V peace gesture", "Victory / peace sign")
 )
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

@@ -15,12 +15,12 @@ import ai.signora.models.RecognitionResult
  * 5. Live-configurable dwell duration, confidence threshold, and margin
  */
 class DebounceEngine(
-    var dwellMs: Long = 1000L,
-    var threshold: Float = 0.40f,
-    var minMargin: Float = 0.05f,
-    private val voteWindowSize: Int = 4,
-    private val maxDropoutMs: Long = 200L,
-    private val spaceDwellMs: Long = 700L
+    var dwellMs: Long = 900L,
+    var threshold: Float = 0.35f,
+    var minMargin: Float = 0.02f,
+    private val voteWindowSize: Int = 3,
+    private val maxDropoutMs: Long = 350L,
+    private val spaceDwellMs: Long = 650L
 ) {
     var confidenceThreshold: Float
         get() = threshold

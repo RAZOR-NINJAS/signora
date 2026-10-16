@@ -61,7 +61,7 @@ data class DebounceState(
 
 enum class RecognitionMode(val displayName: String, val description: String) {
     ASL("ASL", "Single-hand static alphabet (A-Z + SPACE)"),
-    ISL("ISL", "ISL model currently recognizes A, B, C, D and Space only (5 of 26)"),
+    ISL("ISL", "Indian Sign Language (15 signs: A-E + Namaste, Hello, Help, Doctor, Emergency, etc.)"),
     FINGERSPELLING("Fingerspelling", "Continuous fingerspelling stream")
 }
 

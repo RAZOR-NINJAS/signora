@@ -376,7 +376,17 @@ private val ISL_GAME_LETTERS = listOf(
     "B" to "4 fingers upright together",
     "C" to "Curved open hand",
     "D" to "Index pointing upwards",
-    "SPACE" to "Flat open horizontal palm"
+    "E" to "Curled fingers touching thumb",
+    "NAMASTE" to "Two palms joined at chest",
+    "HELLO" to "Salute / wave from forehead",
+    "HELP" to "Closed fist on open palm",
+    "EMERGENCY" to "Wave hands across chest",
+    "DOCTOR" to "Tap wrist pulse with 2 fingers",
+    "THANK_YOU" to "Flat hand moved forward from chin",
+    "PLEASE" to "Circular rubbing motion over chest",
+    "CONGRATS" to "Clapping hands celebration",
+    "RESPECT" to "Bowed hands salute",
+    "PEACE" to "Two fingers peace V gesture"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1754,24 +1764,28 @@ fun DinoGameScreen(
                             val boneColor = if (hand.isRightHand) Color(0xFF06B6D4) else Color(0xFFF43F5E)
                             val jointColor = if (hand.isRightHand) Color(0xFF34D399) else Color(0xFFFB923C)
 
-                            // Bones with mirror correction
+                            // Bones
                             for ((s, e) in HAND_CONNECTIONS) {
                                 if (s < pts.size && e < pts.size) {
-                                    val sx = if (hand.isFrontCamera) (1.0f - pts[s].x) else pts[s].x
-                                    val ex = if (hand.isFrontCamera) (1.0f - pts[e].x) else pts[e].x
-                                    val p1 = Offset(sx * scaledW + offX, pts[s].y * scaledH + offY)
-                                    val p2 = Offset(ex * scaledW + offX, pts[e].y * scaledH + offY)
+                                    val p1 = Offset(pts[s].x * scaledW + offX, pts[s].y * scaledH + offY)
+                                    val p2 = Offset(pts[e].x * scaledW + offX, pts[e].y * scaledH + offY)
                                     drawLine(boneColor, p1, p2, strokeWidth = 3f, cap = StrokeCap.Round)
                                 }
                             }
 
-                            // Joints with mirror correction
+                            // Joints with glow
                             for (p in pts) {
-                                val px = if (hand.isFrontCamera) (1.0f - p.x) else p.x
+                                val center = Offset(p.x * scaledW + offX, p.y * scaledH + offY)
                                 drawCircle(
                                     jointColor,
                                     radius = 3.5f,
-                                    center = Offset(px * scaledW + offX, p.y * scaledH + offY)
+                                    center = center
+                                )
+                                drawCircle(
+                                    jointColor.copy(alpha = 0.35f),
+                                    radius = 7f,
+                                    center = center,
+                                    style = Stroke(width = 1.5f)
                                 )
                             }
                         }

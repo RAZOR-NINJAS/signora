@@ -4,7 +4,11 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.hardware.camera2.CaptureRequest
+import android.util.Range
 import android.util.Size
+import androidx.camera.camera2.interop.Camera2Interop
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -107,25 +111,31 @@ class CameraXManager(
         // while matching MediaPipe HandLandmarker internal receptive field without downsampling artifacts.
         val targetSize = Size(640, 480)
 
+        @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
         @Suppress("DEPRECATION")
-        val preview = Preview.Builder()
+        val previewBuilder = Preview.Builder()
             .setTargetResolution(targetSize)
-            .build()
-            .also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+        Camera2Interop.Extender(previewBuilder)
+            .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(30, 60))
+            .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+        val preview = previewBuilder.build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
 
+        @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
         @Suppress("DEPRECATION")
-        val imageAnalysis = ImageAnalysis.Builder()
+        val analysisBuilder = ImageAnalysis.Builder()
             .setTargetResolution(targetSize)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-            .build()
-            .also {
-                it.setAnalyzer(cameraExecutor) { imageProxy ->
-                    processImageProxy(imageProxy)
-                }
+        Camera2Interop.Extender(analysisBuilder)
+            .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(30, 60))
+            .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+        val imageAnalysis = analysisBuilder.build().also {
+            it.setAnalyzer(cameraExecutor) { imageProxy ->
+                processImageProxy(imageProxy)
             }
+        }
 
         try {
             camera = provider.bindToLifecycle(
