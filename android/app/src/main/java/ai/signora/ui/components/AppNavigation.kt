@@ -4,10 +4,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.ModelTraining
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.ModelTraining
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ enum class AppDestination(
 ) {
     TRANSLATE("Translate", Icons.Filled.Translate, Icons.Outlined.Translate),
     STUDIO("Studio", Icons.Filled.ModelTraining, Icons.Outlined.ModelTraining),
+    GAME("Dino", Icons.Filled.SportsEsports, Icons.Outlined.SportsEsports),
     LEARN("Learn", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 }

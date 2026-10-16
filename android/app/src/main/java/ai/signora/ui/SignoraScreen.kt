@@ -134,6 +134,17 @@ fun SignoraScreen(
                         )
                     }
 
+                    AppDestination.GAME -> {
+                        ai.signora.ui.screens.DinoGameScreen(
+                            previewView = previewView,
+                            debounceState = debounceState,
+                            handLandmarks = handLandmarks,
+                            currentMode = currentMode,
+                            onModeChange = onModeChange,
+                            onToggleCamera = onToggleCamera
+                        )
+                    }
+
                     AppDestination.LEARN -> {
                         LearnScreen(
                             currentMode = currentMode,
