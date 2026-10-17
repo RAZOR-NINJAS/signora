@@ -21,6 +21,7 @@ from signora.isl.config import (
 )
 from signora.isl.features import extract_features
 from signora.isl.model import Predictor
+from signora.nlp import GlossToken, IslGrammarSynthesizer, SentenceBuffer
 from signora.tts.piper import PiperTTS
 
 WINDOW_NAME = "Signora - ISL Two-Handed Mode"
@@ -64,6 +65,22 @@ def run_isl_live(
     )
 
     tts = PiperTTS(enabled=not no_tts)
+
+    last_synthesized = ""
+
+    def on_sentence_complete(tokens: List[GlossToken]) -> None:
+        nonlocal last_synthesized
+        sentence = IslGrammarSynthesizer.synthesize(tokens)
+        if sentence:
+            last_synthesized = sentence
+            print(f"[Synthesized Sentence] {sentence}")
+            if tts.is_ready:
+                tts.speak_async(sentence)
+
+    sentence_buffer = SentenceBuffer(
+        sentence_pause_s=1.5,
+        on_sentence_complete=on_sentence_complete,
+    )
 
     pipe = HandPipeline(
         source=source,
@@ -120,6 +137,7 @@ def run_isl_live(
 
             frame_count += 1
             now = time.monotonic()
+            sentence_buffer.tick(now=now)
             if frame_count % 30 == 0:
                 elapsed = now - t0
                 if elapsed > 0:
@@ -150,17 +168,21 @@ def run_isl_live(
             if st.get("confirmed"):
                 confirmed = st["confirmed"]
                 print(f"[Confirmed] {confirmed} -> Transcript: {engine.buffer}")
-                if tts.is_ready:
-                    if len(confirmed) == 1:
-                        tts.speak_async(confirmed)
-                    elif confirmed == "SPACE":
-                        words = engine.buffer.strip().split()
-                        if words:
-                            tts.speak_async(words[-1])
-                        else:
-                            tts.speak_async("space")
-                    else:
-                        tts.speak_async(confirmed)
+                if confirmed == "SPACE":
+                    sentence_buffer.flush()
+                else:
+                    sentence_buffer.push(
+                        GlossToken(
+                            label=confirmed,
+                            timestamp=now,
+                            confidence=cand_prob,
+                        )
+                    )
+
+            pending_tokens = sentence_buffer.peek()
+            pending_labels = [t.label for t in pending_tokens]
+            live_preview = IslGrammarSynthesizer.synthesize(pending_tokens) if pending_tokens else ""
+            display_sentence = live_preview if live_preview else last_synthesized
 
             if not headless:
                 shown = render_flagship_hud(
@@ -174,6 +196,8 @@ def run_isl_live(
                     last_spoken=tts.last_spoken_text,
                     last_spoken_time=tts.last_spoken_time,
                     window_name=WINDOW_NAME,
+                    pending_glosses=pending_labels,
+                    synthesized_sentence=display_sentence,
                 )
                 cv2.imshow(WINDOW_NAME, shown)
 
@@ -183,11 +207,19 @@ def run_isl_live(
                         break
                     elif k in (ord("c"), ord("C")):
                         engine.clear()
+                        sentence_buffer.clear()
+                        last_synthesized = ""
                     elif k in (32, 10, 13, ord("r"), ord("R"), ord("s"), ord("S")):
-                        if tts.is_ready and engine.buffer:
+                        if sentence_buffer.peek():
+                            sentence_buffer.flush()
+                        elif tts.is_ready and display_sentence:
+                            tts.speak_async(display_sentence)
+                        elif tts.is_ready and engine.buffer:
                             tts.speak_async(engine.buffer)
                     elif k in (8, 127):  # Backspace & Delete (8=Win Bksp, 127=Linux Bksp)
                         engine.backspace()
+                        if sentence_buffer.tokens:
+                            sentence_buffer.tokens.pop()
                     elif k in (ord("f"), ord("F")):
                         fullscreen = not fullscreen
                         prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL

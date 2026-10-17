@@ -5,7 +5,7 @@ smooth dwell progress animations, audio speech indicators, and sleek keyboard to
 """
 
 import time
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -316,6 +316,8 @@ def render_flagship_hud(
     last_spoken: str = "",
     last_spoken_time: float = 0.0,
     window_name: Optional[str] = None,
+    pending_glosses: Optional[List[str]] = None,
+    synthesized_sentence: str = "",
 ) -> np.ndarray:
     """Render high-polish cyberpunk glassmorphic HUD over camera frame."""
     if window_name:
@@ -514,74 +516,180 @@ def render_flagship_hud(
         )
 
     # --------------------------------------------------------------------------
-    # 4. Bottom Floating Transcript Console
+    # 4. Bottom Floating Transcript Console (Dual-Layer or Single-Layer)
     # --------------------------------------------------------------------------
+    has_dual_layer = (pending_glosses is not None and len(pending_glosses) > 0) or bool(synthesized_sentence)
     card_w = min(w - 32, 880)
-    card_h = 105
+    card_h = 138 if has_dual_layer else 105
     bx = (w - card_w) // 2
     by = h - card_h - 14
 
-    draw_glass_card(frame, bx, by, card_w, card_h, alpha=0.86, radius=16)
+    draw_glass_card(frame, bx, by, card_w, card_h, alpha=0.88, radius=16)
 
-    # Transcript Header with Status Dot and Metrics
-    cv2.circle(frame, (bx + 20, by + 24), 4, COLOR_EMERALD, -1, cv2.LINE_AA)
-    cv2.putText(
-        frame,
-        "LIVE TRANSCRIPT",
-        (bx + 32, by + 28),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.42,
-        COLOR_TEXT_DIM,
-        1,
-        cv2.LINE_AA,
-    )
-
-    words = transcript.strip().split()
-    w_count = len(words)
-    c_count = len(transcript)
-    meta_str = f"{w_count} {'WORD' if w_count == 1 else 'WORDS'}   |   {c_count} CHARS"
-    cv2.putText(
-        frame,
-        meta_str,
-        (bx + card_w - 200, by + 28),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.38,
-        COLOR_TEXT_DIM,
-        1,
-        cv2.LINE_AA,
-    )
-
-    # Transcript Text with glowing cursor
-    char_count = len(transcript)
-    if char_count > 0:
-        disp_txt = transcript[-45:] if char_count > 45 else transcript
-        cursor = "_" if int(now * 2.5) % 2 == 0 else ""
+    if has_dual_layer:
+        # Header Row: Indicator + "GLOSS STREAM" + Chips
+        cv2.circle(frame, (bx + 20, by + 22), 4, COLOR_CYAN_NEON, -1, cv2.LINE_AA)
         cv2.putText(
             frame,
-            f"{disp_txt}{cursor}",
-            (bx + 24, by + 60),
+            "GLOSS STREAM",
+            (bx + 32, by + 26),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.88,
-            COLOR_EMERALD,
-            2,
+            0.40,
+            COLOR_CYAN_NEON,
+            1,
             cv2.LINE_AA,
         )
-    else:
-        cursor = "_" if int(now * 2) % 2 == 0 else ""
-        hint = f"Present hand gestures in camera view to dictate transcript{cursor}"
+
+        # Draw Gloss Chips
+        chip_x = bx + 160
+        gloss_list = pending_glosses[-5:] if pending_glosses else []
+        for g in gloss_list:
+            clean_g = g.upper()
+            gw = max(45, len(clean_g) * 9 + 16)
+            if chip_x + gw < bx + card_w - 140:
+                draw_rounded_rectangle(
+                    frame,
+                    (chip_x, by + 12),
+                    (chip_x + gw, by + 32),
+                    COLOR_KEYCAP_BG,
+                    radius=4,
+                    thickness=-1,
+                )
+                draw_rounded_rectangle(
+                    frame,
+                    (chip_x, by + 12),
+                    (chip_x + gw, by + 32),
+                    COLOR_BORDER_GLASS,
+                    radius=4,
+                    thickness=1,
+                )
+                cv2.putText(
+                    frame,
+                    clean_g,
+                    (chip_x + 8, by + 26),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.38,
+                    COLOR_WHITE,
+                    1,
+                    cv2.LINE_AA,
+                )
+                chip_x += gw + 6
+
+        # Metrics on right
+        g_count = len(pending_glosses) if pending_glosses else 0
+        meta_str = f"{g_count} {'SIGN' if g_count == 1 else 'SIGNS'}"
         cv2.putText(
             frame,
-            hint,
-            (bx + 24, by + 60),
+            meta_str,
+            (bx + card_w - 110, by + 26),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.56,
+            0.38,
             COLOR_TEXT_DIM,
             1,
             cv2.LINE_AA,
         )
 
+        # Middle Row: Subtitle + Synthesized Natural Sentence
+        cv2.putText(
+            frame,
+            "NEURAL GRAMMAR",
+            (bx + 24, by + 56),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            COLOR_EMERALD,
+            1,
+            cv2.LINE_AA,
+        )
+
+        if synthesized_sentence:
+            disp_txt = synthesized_sentence[-50:] if len(synthesized_sentence) > 50 else synthesized_sentence
+            cursor = "_" if int(now * 2.5) % 2 == 0 else ""
+            cv2.putText(
+                frame,
+                f'"{disp_txt}"{cursor}',
+                (bx + 24, by + 86),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.78,
+                COLOR_WHITE,
+                2,
+                cv2.LINE_AA,
+            )
+        else:
+            cursor = "_" if int(now * 2) % 2 == 0 else ""
+            hint = f"Present gestures to synthesize natural English sentence{cursor}"
+            cv2.putText(
+                frame,
+                hint,
+                (bx + 24, by + 86),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.54,
+                COLOR_TEXT_DIM,
+                1,
+                cv2.LINE_AA,
+            )
+
+        ky = by + 106
+    else:
+        # Standard Single-layer transcript
+        cv2.circle(frame, (bx + 20, by + 24), 4, COLOR_EMERALD, -1, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            "LIVE TRANSCRIPT",
+            (bx + 32, by + 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.42,
+            COLOR_TEXT_DIM,
+            1,
+            cv2.LINE_AA,
+        )
+
+        words = transcript.strip().split()
+        w_count = len(words)
+        c_count = len(transcript)
+        meta_str = f"{w_count} {'WORD' if w_count == 1 else 'WORDS'}   |   {c_count} CHARS"
+        cv2.putText(
+            frame,
+            meta_str,
+            (bx + card_w - 200, by + 28),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.38,
+            COLOR_TEXT_DIM,
+            1,
+            cv2.LINE_AA,
+        )
+
+        # Transcript Text with glowing cursor
+        char_count = len(transcript)
+        if char_count > 0:
+            disp_txt = transcript[-45:] if char_count > 45 else transcript
+            cursor = "_" if int(now * 2.5) % 2 == 0 else ""
+            cv2.putText(
+                frame,
+                f"{disp_txt}{cursor}",
+                (bx + 24, by + 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.88,
+                COLOR_EMERALD,
+                2,
+                cv2.LINE_AA,
+            )
+        else:
+            cursor = "_" if int(now * 2) % 2 == 0 else ""
+            hint = f"Present hand gestures in camera view to dictate transcript{cursor}"
+            cv2.putText(
+                frame,
+                hint,
+                (bx + 24, by + 60),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.56,
+                COLOR_TEXT_DIM,
+                1,
+                cv2.LINE_AA,
+            )
+
+        ky = by + 74
+
     # Hotkey Badges in Footer Row
-    ky = by + 74
     kx = bx + 20
     kx += draw_keycap(frame, kx, ky, "Space", "Speak")
     kx += draw_keycap(frame, kx, ky, "C", "Clear")
