@@ -158,10 +158,8 @@ class HandLandmarkerHelper(
                 true
             }
 
-            // Front camera bitmap is horizontally mirrored, so MediaPipe's categoryName is inverted
-            // (a mirrored right hand looks like a left hand).
-            // Unmirrored back camera directly matches MediaPipe's categoryName.
-            val isRight = if (isFrontCamera) !rawIsRight else rawIsRight
+            // MediaPipe correctly identifies anatomical handedness on the mirrored frame.
+            val isRight = rawIsRight
 
             // Apply One-Euro filter to eliminate jitter while keeping instant zero-lag response
             val smoothedPoints = if (isRight) {

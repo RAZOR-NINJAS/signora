@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import ai.signora.engine.HandPresenceDetector
@@ -70,6 +71,7 @@ fun TranslateScreen(
     onSpace: () -> Unit,
     onSpeak: () -> Unit,
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
+    bottomBarPadding: androidx.compose.ui.unit.Dp = 0.dp,
     modifier: Modifier = Modifier
 ) {
     var isDebugOpen by remember { mutableStateOf(false) }
@@ -256,7 +258,7 @@ fun TranslateScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "ISL model recognizes 15 signs (A-E, Namaste, Hello, Help, Doctor, Emergency, etc.)",
+                                text = "ISL model recognizes 17 signs (A-F, Namaste, Hello, Help, Doctor, Emergency, Peace, Space, etc.)",
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
@@ -270,6 +272,42 @@ fun TranslateScreen(
                                 modifier = Modifier.size(14.dp)
                             )
                         }
+                    }
+                }
+            }
+
+            // Prominent Real-time Candidate Floating Badge
+            AnimatedVisibility(
+                visible = debounceState.candidate.isNotBlank(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shadowElevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = debounceState.candidate,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black)
+                        )
+                        Text(
+                            text = "${(debounceState.confidence * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        CircularProgressIndicator(
+                            progress = { debounceState.dwellProgress },
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.5.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -303,7 +341,9 @@ fun TranslateScreen(
             onDelete = onBackspace,
             onClear = onClear,
             onSpeak = onSpeak,
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = bottomBarPadding)
         )
 
         // 6. Camera Permission Required Screen

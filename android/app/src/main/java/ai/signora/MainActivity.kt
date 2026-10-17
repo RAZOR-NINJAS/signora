@@ -38,15 +38,15 @@ class MainActivity : ComponentActivity() {
     private var aslMlp: SignoraMLP? = null
     private var islMlp: SignoraMLP? = null
 
-    private val debounceEngine = DebounceEngine(threshold = 0.40f, minMargin = 0.05f, voteWindowSize = 4)
+    private val debounceEngine = DebounceEngine(threshold = 0.30f, minMargin = 0.02f, voteWindowSize = 2)
 
     private var hasCameraPermission by mutableStateOf(false)
     private var assetStatus by mutableStateOf(AutoAssetManager.AssetStatus(isReady = false, message = "Initializing..."))
-    private var currentMode by mutableStateOf(RecognitionMode.ASL)
+    private var currentMode by mutableStateOf(RecognitionMode.ISL)
     private var dwellProfile by mutableStateOf(DwellProfile.STANDARD)
-    private var customDwellMs by mutableStateOf(1000L)
-    private var confidenceThreshold by mutableStateOf(0.40f)
-    private var minMargin by mutableStateOf(0.05f)
+    private var customDwellMs by mutableStateOf(900L)
+    private var confidenceThreshold by mutableStateOf(0.30f)
+    private var minMargin by mutableStateOf(0.02f)
     private var cameraResolution by mutableStateOf(Pair(480, 640))
     private var isMuted by mutableStateOf(false)
     private var isFrontCamera by mutableStateOf(true)
@@ -116,7 +116,11 @@ class MainActivity : ComponentActivity() {
                     minMargin = minMargin,
                     cameraResolution = cameraResolution,
                     assetStatus = assetStatus,
-                    onModeChange = { newMode -> currentMode = newMode },
+                    onModeChange = { newMode ->
+                        currentMode = newMode
+                        debounceEngine.clear()
+                        debounceState = debounceState.copy(candidate = "", confidence = 0f, dwellProgress = 0f)
+                    },
                     onDwellProfileChange = { newProfile ->
                         dwellProfile = newProfile
                         customDwellMs = newProfile.dwellMs

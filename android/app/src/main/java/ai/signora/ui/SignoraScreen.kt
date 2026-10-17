@@ -123,7 +123,8 @@ fun SignoraScreen(
                             onClear = onClear,
                             onSpace = onSpace,
                             onSpeak = onSpeak,
-                            cameraResolution = cameraResolution
+                            cameraResolution = cameraResolution,
+                            bottomBarPadding = innerPadding.calculateBottomPadding()
                         )
                     }
 
