@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,6 +27,7 @@ import ai.signora.ui.components.SettingsItem
 import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.AppThemeMode
 import ai.signora.ui.theme.AppPalette
+import ai.signora.ui.theme.extractWallpaperPrimaryColor
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -54,6 +56,9 @@ fun SettingsScreen(
     onTestVoice: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val detectedWallpaperColor = remember(context) { extractWallpaperPrimaryColor(context) }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -142,6 +147,20 @@ fun SettingsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppPalette.values().forEach { palette ->
                         val isSelected = selectedPalette == palette
+                        val swatchColor = if (palette == AppPalette.WALLPAPER && detectedWallpaperColor != null) {
+                            detectedWallpaperColor
+                        } else {
+                            palette.previewColor
+                        }
+                        val subtitleText = if (palette == AppPalette.WALLPAPER) {
+                            if (detectedWallpaperColor != null) {
+                                "Live wallpaper tone detected • Dynamic Material You"
+                            } else {
+                                palette.subtitle
+                            }
+                        } else {
+                            palette.subtitle
+                        }
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -162,8 +181,8 @@ fun SettingsScreen(
                                     Box(
                                         modifier = Modifier
                                             .size(24.dp)
-                                            .background(palette.previewColor, androidx.compose.foundation.shape.CircleShape)
-                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                                            .background(swatchColor, CircleShape)
+                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
                                     )
                                     Column {
                                         Text(
@@ -172,7 +191,7 @@ fun SettingsScreen(
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = palette.subtitle,
+                                            text = subtitleText,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )

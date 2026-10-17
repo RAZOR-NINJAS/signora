@@ -1,5 +1,7 @@
 package ai.signora.ui.theme
 
+import android.app.WallpaperManager
+import android.content.Context
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +13,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -144,72 +147,103 @@ val ExpressiveDarkColorScheme = darkColorScheme(
 )
 
 // ============================================================================
-// EXPRESSIVE PALETTES (Pink Sakura, Neon Synthwave, Emerald Matrix, Solar Amber)
+// WALLPAPER-ADAPTIVE DYNAMIC COLOR SCHEME SYNTHESIZER
+// Automatically extracts dominant tones from user's wallpaper (API 27+)
+// and dynamically creates a harmonized Material 3 palette matching their wallpaper!
 // ============================================================================
 
-val PinkSakuraDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFFF6090),
-    onPrimary = Color(0xFF5A0025),
-    primaryContainer = Color(0xFF831843),
-    onPrimaryContainer = Color(0xFFFFD9E2),
-    secondary = Color(0xFFFB7185),
-    onSecondary = Color(0xFF5A001F),
-    secondaryContainer = Color(0xFF9F1239),
-    onSecondaryContainer = Color(0xFFFFD9DF),
-    tertiary = Color(0xFFF472B6),
-    onTertiary = Color(0xFF4C0030),
-    tertiaryContainer = Color(0xFF701A51),
-    onTertiaryContainer = Color(0xFFFFD8EB),
-    background = Color(0xFF160910),
-    onBackground = Color(0xFFFDE8F0),
-    surface = Color(0xFF1A0C13),
-    onSurface = Color(0xFFFDE8F0),
-    surfaceVariant = Color(0xFF331625),
-    onSurfaceVariant = Color(0xFFE2B8CA),
-    surfaceContainerLowest = Color(0xFF0F050A),
-    surfaceContainerLow = Color(0xFF1F0E17),
-    surfaceContainer = Color(0xFF27121D),
-    surfaceContainerHigh = Color(0xFF321726),
-    surfaceContainerHighest = Color(0xFF3E1D2F),
-    outline = Color(0xFFA66E87),
-    outlineVariant = Color(0xFF592D43),
-    inverseSurface = Color(0xFFFDE8F0),
-    inverseOnSurface = Color(0xFF1A0C13),
-    inversePrimary = Color(0xFFBE123C),
-    scrim = PureBlack
-)
+/**
+ * Extracts the primary color from the current system wallpaper using WallpaperManager.
+ */
+fun extractWallpaperPrimaryColor(context: Context): Color? {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+        try {
+            val wm = WallpaperManager.getInstance(context)
+            val colors = wm.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+            val primary = colors?.primaryColor
+            if (primary != null) {
+                return Color(primary.toArgb())
+            }
+        } catch (_: Throwable) {
+            // Gracefully handled if restricted by OEM or device policy
+        }
+    }
+    return null
+}
 
-val PinkSakuraLightColorScheme = lightColorScheme(
-    primary = Color(0xFFDB2777),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFFCE7F3),
-    onPrimaryContainer = Color(0xFF831843),
-    secondary = Color(0xFFE11D48),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFFE4E6),
-    onSecondaryContainer = Color(0xFF881337),
-    tertiary = Color(0xFFC026D3),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFFAE8FF),
-    onTertiaryContainer = Color(0xFF701A75),
-    background = Color(0xFFFFF5F7),
-    onBackground = Color(0xFF26101B),
-    surface = Color(0xFFFFF5F7),
-    onSurface = Color(0xFF26101B),
-    surfaceVariant = Color(0xFFF8E0EB),
-    onSurfaceVariant = Color(0xFF6B485A),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFFFF0F5),
-    surfaceContainer = Color(0xFFFCE7EE),
-    surfaceContainerHigh = Color(0xFFF7DDE6),
-    surfaceContainerHighest = Color(0xFFF2D3DF),
-    outline = Color(0xFFA66E87),
-    outlineVariant = Color(0xFFDAB0C3),
-    inverseSurface = Color(0xFF381B2A),
-    inverseOnSurface = Color(0xFFFCE7EE),
-    inversePrimary = Color(0xFFFF6090),
-    scrim = PureBlack
-)
+/**
+ * Builds a complete Material 3 ColorScheme dynamically derived from any wallpaper seed color.
+ * Works for any wallpaper color (pink, cyan, purple, amber, emerald, midnight, etc.).
+ */
+fun buildSchemeFromWallpaper(seed: Color, isDark: Boolean): ColorScheme {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(seed.toArgb(), hsv)
+    val hue = hsv[0]
+    val sat = hsv[1].coerceIn(0.20f, 0.85f)
+
+    fun colorFromHsv(h: Float, s: Float, v: Float): Color {
+        val rgb = android.graphics.Color.HSVToColor(floatArrayOf((h + 360f) % 360f, s.coerceIn(0f, 1f), v.coerceIn(0f, 1f)))
+        return Color(rgb)
+    }
+
+    return if (isDark) {
+        darkColorScheme(
+            primary = colorFromHsv(hue, sat * 0.70f, 0.88f),
+            onPrimary = colorFromHsv(hue, sat, 0.15f),
+            primaryContainer = colorFromHsv(hue, sat * 0.90f, 0.30f),
+            onPrimaryContainer = colorFromHsv(hue, sat * 0.25f, 0.95f),
+            secondary = colorFromHsv((hue + 25f) % 360f, sat * 0.65f, 0.82f),
+            onSecondary = colorFromHsv(hue, sat, 0.18f),
+            secondaryContainer = colorFromHsv((hue + 25f) % 360f, sat * 0.80f, 0.28f),
+            onSecondaryContainer = colorFromHsv((hue + 25f) % 360f, sat * 0.20f, 0.92f),
+            background = colorFromHsv(hue, sat * 0.15f, 0.08f),
+            onBackground = Color(0xFFF1F5F9),
+            surface = colorFromHsv(hue, sat * 0.18f, 0.10f),
+            onSurface = Color(0xFFF1F5F9),
+            surfaceVariant = colorFromHsv(hue, sat * 0.25f, 0.16f),
+            onSurfaceVariant = Color(0xFFCBD5E1),
+            surfaceContainerLowest = colorFromHsv(hue, sat * 0.12f, 0.05f),
+            surfaceContainerLow = colorFromHsv(hue, sat * 0.15f, 0.08f),
+            surfaceContainer = colorFromHsv(hue, sat * 0.18f, 0.11f),
+            surfaceContainerHigh = colorFromHsv(hue, sat * 0.22f, 0.15f),
+            surfaceContainerHighest = colorFromHsv(hue, sat * 0.26f, 0.20f),
+            outline = colorFromHsv(hue, sat * 0.40f, 0.50f),
+            outlineVariant = colorFromHsv(hue, sat * 0.25f, 0.25f),
+            inverseSurface = Color(0xFFF1F5F9),
+            inverseOnSurface = colorFromHsv(hue, sat * 0.18f, 0.10f),
+            inversePrimary = colorFromHsv(hue, sat, 0.50f),
+            scrim = PureBlack
+        )
+    } else {
+        lightColorScheme(
+            primary = colorFromHsv(hue, sat, 0.45f),
+            onPrimary = PureWhite,
+            primaryContainer = colorFromHsv(hue, sat * 0.30f, 0.92f),
+            onPrimaryContainer = colorFromHsv(hue, sat, 0.18f),
+            secondary = colorFromHsv((hue + 25f) % 360f, sat * 0.80f, 0.45f),
+            onSecondary = PureWhite,
+            secondaryContainer = colorFromHsv((hue + 25f) % 360f, sat * 0.25f, 0.93f),
+            onSecondaryContainer = colorFromHsv((hue + 25f) % 360f, sat, 0.20f),
+            background = colorFromHsv(hue, sat * 0.08f, 0.98f),
+            onBackground = Color(0xFF0F172A),
+            surface = colorFromHsv(hue, sat * 0.10f, 0.98f),
+            onSurface = Color(0xFF0F172A),
+            surfaceVariant = colorFromHsv(hue, sat * 0.18f, 0.92f),
+            onSurfaceVariant = Color(0xFF475569),
+            surfaceContainerLowest = PureWhite,
+            surfaceContainerLow = colorFromHsv(hue, sat * 0.06f, 0.96f),
+            surfaceContainer = colorFromHsv(hue, sat * 0.10f, 0.94f),
+            surfaceContainerHigh = colorFromHsv(hue, sat * 0.14f, 0.90f),
+            surfaceContainerHighest = colorFromHsv(hue, sat * 0.18f, 0.86f),
+            outline = colorFromHsv(hue, sat * 0.40f, 0.50f),
+            outlineVariant = colorFromHsv(hue, sat * 0.20f, 0.80f),
+            inverseSurface = Color(0xFF0F172A),
+            inverseOnSurface = PureWhite,
+            inversePrimary = colorFromHsv(hue, sat * 0.70f, 0.88f),
+            scrim = PureBlack
+        )
+    }
+}
 
 val NeonSynthwaveDarkColorScheme = darkColorScheme(
     primary = Color(0xFF06B6D4),
@@ -535,12 +569,11 @@ enum class AppThemeMode(val displayName: String) {
 }
 
 enum class AppPalette(val displayName: String, val subtitle: String, val previewColor: Color) {
-    WALLPAPER("Wallpaper Adaptive", "Auto-detect colors from system wallpaper", Color(0xFF6750A4)),
-    PINK_SAKURA("Sakura Rose Pink", "Cyberpunk bubblegum & pastel rose", Color(0xFFFF4081)),
+    WALLPAPER("Wallpaper Adaptive", "Auto-detects colors from system wallpaper (Material You)", Color(0xFF6750A4)),
+    EXPRESSIVE_INDIGO("Expressive Indigo", "Classic Signora brand deep indigo", Color(0xFF6366F1)),
     NEON_CYBER("Neon Synthwave", "Electric cyan & hot magenta", Color(0xFF06B6D4)),
     EMERALD_MATRIX("Matrix Emerald", "Cyber emerald & fresh mint", Color(0xFF10B981)),
-    SOLAR_AMBER("Solar Gold", "Radiant gold & warm amber", Color(0xFFF59E0B)),
-    EXPRESSIVE_INDIGO("Expressive Indigo", "Classic expressive deep indigo", Color(0xFF6366F1))
+    SOLAR_AMBER("Solar Gold", "Radiant gold & warm amber", Color(0xFFF59E0B))
 }
 
 // ============================================================================
@@ -567,17 +600,22 @@ fun SignoraTheme(
 
     val colorScheme = when (selectedPalette) {
         AppPalette.WALLPAPER -> {
-            if (dynamicColor && supportsDynamic) {
-                if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            } else {
-                if (isDark) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
+            val detectedColor = extractWallpaperPrimaryColor(context)
+            when {
+                dynamicColor && supportsDynamic -> {
+                    if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                }
+                detectedColor != null -> {
+                    buildSchemeFromWallpaper(detectedColor, isDark)
+                }
+                isDark -> ExpressiveDarkColorScheme
+                else -> ExpressiveLightColorScheme
             }
         }
-        AppPalette.PINK_SAKURA -> if (isDark) PinkSakuraDarkColorScheme else PinkSakuraLightColorScheme
+        AppPalette.EXPRESSIVE_INDIGO -> if (isDark) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
         AppPalette.NEON_CYBER -> if (isDark) NeonSynthwaveDarkColorScheme else ExpressiveLightColorScheme
         AppPalette.EMERALD_MATRIX -> if (isDark) EmeraldMatrixDarkColorScheme else ExpressiveLightColorScheme
         AppPalette.SOLAR_AMBER -> if (isDark) SolarAmberDarkColorScheme else ExpressiveLightColorScheme
-        AppPalette.EXPRESSIVE_INDIGO -> if (isDark) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
     }
 
     val semanticColors = if (isDark) DarkSemanticColors else LightSemanticColors
