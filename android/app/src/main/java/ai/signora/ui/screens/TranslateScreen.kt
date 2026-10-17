@@ -19,12 +19,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import ai.signora.engine.HandPresenceDetector
+import ai.signora.ml.FeatureExtractor
 import ai.signora.models.*
 import ai.signora.profiler.TrackingProfiler
 import ai.signora.recovery.AutoAssetManager
@@ -42,6 +45,14 @@ private val HAND_CONNECTIONS = listOf(
     0 to 17, 17 to 18, 18 to 19, 19 to 20 // Pinky
 )
 
+private val UPPER_BODY_CONNECTIONS = listOf(
+    11 to 12, // Shoulders
+    11 to 13, 13 to 15, // Left Arm
+    12 to 14, 14 to 16, // Right Arm
+    11 to 23, 12 to 24, // Torso sides
+    23 to 24 // Waist
+)
+
 @Composable
 fun TranslateScreen(
     previewView: PreviewView,
@@ -49,6 +60,7 @@ fun TranslateScreen(
     onRequestCameraPermission: () -> Unit,
     debounceState: DebounceState,
     handLandmarks: List<HandLandmarks>,
+    poseLandmarks: PoseLandmarks? = null,
     currentMode: RecognitionMode,
     isMuted: Boolean,
     isFrontCamera: Boolean,
@@ -126,6 +138,23 @@ fun TranslateScreen(
         val rightJoint = AppTheme.semantic.handRightJoint
         val leftJoint = AppTheme.semantic.handLeftJoint
 
+        // Active anatomical anchor zone computation across detected hands
+        val (activeAnchorZone, activeAnchorPt) = remember(handLandmarks, poseLandmarks) {
+            if (handLandmarks.isNotEmpty() && poseLandmarks != null) {
+                var zone = "OPEN_SPACE"
+                var pt: Point3D? = null
+                for (h in handLandmarks) {
+                    val (z, p) = FeatureExtractor.detectBodyAnchor(h, poseLandmarks)
+                    if (z != "OPEN_SPACE") {
+                        zone = z
+                        pt = p
+                        break
+                    }
+                }
+                Pair(zone, pt)
+            } else Pair("OPEN_SPACE", null)
+        }
+
         Canvas(modifier = Modifier.fillMaxSize()) {
             val canvasW = size.width
             val canvasH = size.height
@@ -141,6 +170,150 @@ fun TranslateScreen(
             val offsetX = (canvasW - scaledW) / 2f
             val offsetY = (canvasH - scaledH) / 2f
 
+            val toScreen: (Point3D) -> Offset = { p ->
+                Offset(p.x * scaledW + offsetX, p.y * scaledH + offsetY)
+            }
+
+            // 1. Draw Upper Body Skeleton & Anatomical Body Map Anchors
+            if (poseLandmarks != null && poseLandmarks.points.size >= 25) {
+                val pts = poseLandmarks.points
+                val boneColor = Color(0xFF6366F1).copy(alpha = 0.65f) // Electric Indigo
+                val jointColor = Color(0xFFA5B4FC) // Soft Violet glow
+
+                // Draw Upper Body Bones
+                for ((s, e) in UPPER_BODY_CONNECTIONS) {
+                    if (s < pts.size && e < pts.size) {
+                        drawLine(
+                            color = boneColor,
+                            start = toScreen(pts[s]),
+                            end = toScreen(pts[e]),
+                            strokeWidth = 4.5f,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
+                // Head/Neck lines (Nose to Shoulders)
+                if (pts.isNotEmpty()) {
+                    val pNose = toScreen(pts[0])
+                    if (11 < pts.size) drawLine(boneColor.copy(alpha = 0.40f), pNose, toScreen(pts[11]), strokeWidth = 3f, cap = StrokeCap.Round)
+                    if (12 < pts.size) drawLine(boneColor.copy(alpha = 0.40f), pNose, toScreen(pts[12]), strokeWidth = 3f, cap = StrokeCap.Round)
+                }
+
+                // Key Body Joints
+                val keyJoints = intArrayOf(11, 12, 13, 14, 15, 16, 23, 24)
+                for (idx in keyJoints) {
+                    if (idx < pts.size) {
+                        val center = toScreen(pts[idx])
+                        drawCircle(color = jointColor.copy(alpha = 0.35f), radius = 9f, center = center)
+                        drawCircle(color = jointColor, radius = 5.5f, center = center)
+                    }
+                }
+
+                // Anatomical Body Map Zones (Anchors)
+                val pNose = pts[0]
+                val pMl = pts[9]
+                val pMr = pts[10]
+                val pLsh = pts[11]
+                val pRsh = pts[12]
+                val pLhip = pts[23]
+                val pRhip = pts[24]
+                val pLwrist = pts[15]
+                val pRwrist = pts[16]
+
+                val shoulderDist = kotlin.math.sqrt((pLsh.x - pRsh.x) * (pLsh.x - pRsh.x) + (pLsh.y - pRsh.y) * (pLsh.y - pRsh.y))
+                val sScale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
+
+                val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+                val forehead = Point3D(pNose.x, pNose.y - 0.22f * sScale, pNose.z)
+                val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * sScale, mouthCenter.z)
+                val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+                val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
+                val templeR = Point3D(pRsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+                val templeL = Point3D(pLsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+
+                val anchors = listOf(
+                    Triple("FOREHEAD", forehead, 22f),
+                    Triple("TEMPLE", templeR, 20f),
+                    Triple("TEMPLE", templeL, 20f),
+                    Triple("CHIN", chin, 20f),
+                    Triple("MOUTH_LIPS", mouthCenter, 20f),
+                    Triple("CHEST", chestCenter, 30f),
+                    Triple("WAIST", waistCenter, 26f),
+                    Triple("WRIST", pLwrist, 18f),
+                    Triple("WRIST", pRwrist, 18f)
+                )
+
+                val emeraldColor = Color(0xFF10B981)
+                val indigoColor = Color(0xFF818CF8)
+
+                for ((name, pt, baseRadius) in anchors) {
+                    val center = toScreen(pt)
+                    val isAnchorActive = (name == activeAnchorZone)
+
+                    if (isAnchorActive) {
+                        // High-tech Glowing Active Target Reticle
+                        drawCircle(
+                            color = emeraldColor.copy(alpha = 0.28f),
+                            radius = baseRadius * 1.8f,
+                            center = center
+                        )
+                        drawCircle(
+                            color = emeraldColor,
+                            radius = baseRadius * 1.3f,
+                            center = center,
+                            style = Stroke(
+                                width = 3.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
+                            )
+                        )
+                        drawCircle(
+                            color = emeraldColor,
+                            radius = baseRadius * 0.6f,
+                            center = center,
+                            style = Stroke(width = 2.5f)
+                        )
+                        drawCircle(
+                            color = emeraldColor,
+                            radius = 4.5f,
+                            center = center
+                        )
+
+                        // Crosshairs
+                        val tick = 10f
+                        val cx = center.x
+                        val cy = center.y
+                        val reach = baseRadius * 1.6f
+                        drawLine(color = emeraldColor, start = Offset(cx - reach, cy), end = Offset(cx - reach + tick, cy), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        drawLine(color = emeraldColor, start = Offset(cx + reach - tick, cy), end = Offset(cx + reach, cy), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        drawLine(color = emeraldColor, start = Offset(cx, cy - reach), end = Offset(cx, cy - reach + tick), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                        drawLine(color = emeraldColor, start = Offset(cx, cy + reach - tick), end = Offset(cx, cy + reach), strokeWidth = 2.5f, cap = StrokeCap.Round)
+                    } else if (currentMode == RecognitionMode.ISL) {
+                        // Subtle Anatomical Anchor Map Nodes
+                        drawCircle(
+                            color = indigoColor.copy(alpha = 0.18f),
+                            radius = baseRadius,
+                            center = center
+                        )
+                        drawCircle(
+                            color = indigoColor.copy(alpha = 0.55f),
+                            radius = baseRadius * 0.85f,
+                            center = center,
+                            style = Stroke(
+                                width = 1.5f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                            )
+                        )
+                        drawCircle(
+                            color = indigoColor.copy(alpha = 0.70f),
+                            radius = 3.5f,
+                            center = center
+                        )
+                    }
+                }
+            }
+
+            // 2. Draw Hand Skeletons
             for (hand in handLandmarks) {
                 val pts = hand.points
                 if (pts.size < 21) continue
@@ -298,6 +471,21 @@ fun TranslateScreen(
                             text = debounceState.candidate,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black)
                         )
+                        if (activeAnchorZone != "OPEN_SPACE") {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF10B981).copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = "⚓ $activeAnchorZone",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF10B981)
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Text(
                             text = "${(debounceState.confidence * 100).toInt()}%",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
@@ -307,6 +495,40 @@ fun TranslateScreen(
                             modifier = Modifier.size(18.dp),
                             strokeWidth = 2.5.dp,
                             color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            // Real-time Anatomical Body Map Active Anchor Pill (when candidate is accumulating)
+            AnimatedVisibility(
+                visible = activeAnchorZone != "OPEN_SPACE" && debounceState.candidate.isBlank(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF0F172A).copy(alpha = 0.88f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.7f)),
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(Color(0xFF10B981), CircleShape)
+                        )
+                        Text(
+                            text = "BODY MAP: $activeAnchorZone",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE2E8F0)
+                            )
                         )
                     }
                 }

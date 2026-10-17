@@ -39,11 +39,8 @@ class AutoAssetManager(private val context: Context) {
 
         for ((idx, filename) in requiredAssets.withIndex()) {
             val targetFile = File(modelsDir, filename)
-            if (targetFile.exists() && targetFile.length() > 0) {
-                continue
-            }
 
-            // 1. Attempt extraction from APK bundled assets
+            // 1. Attempt extraction from APK bundled assets (always update local cache with bundled asset)
             var copiedFromApk = false
             try {
                 context.assets.open("models/$filename").use { input ->
@@ -57,6 +54,11 @@ class AutoAssetManager(private val context: Context) {
             }
 
             if (copiedFromApk && targetFile.length() > 0) {
+                continue
+            }
+
+            // Fallback: If target already exists from previous verified download
+            if (targetFile.exists() && targetFile.length() > 0) {
                 continue
             }
 
@@ -91,25 +93,31 @@ class AutoAssetManager(private val context: Context) {
 
     fun getModelFile(filename: String): File {
         val f = File(modelsDir, filename)
-        if (f.exists() && f.length() > 0) return f
 
-        // Fallback: try copy directly from assets
+        // Always prioritize fresh extraction from bundled APK assets
         try {
             context.assets.open("models/$filename").use { input ->
                 FileOutputStream(f).use { output ->
                     input.copyTo(output)
                 }
             }
+            return f
         } catch (_: Exception) {}
+
+        if (f.exists() && f.length() > 0) return f
         return f
     }
 
     fun loadModelJsonString(filename: String): String {
-        val f = getModelFile(filename)
-        if (f.exists() && f.length() > 0) {
-            return f.readText(Charsets.UTF_8)
+        try {
+            return context.assets.open("models/$filename").bufferedReader().use { it.readText() }
+        } catch (_: Exception) {
+            val f = getModelFile(filename)
+            if (f.exists() && f.length() > 0) {
+                return f.readText(Charsets.UTF_8)
+            }
+            throw IllegalStateException("Model asset $filename not found in APK assets or local storage")
         }
-        return context.assets.open("models/$filename").bufferedReader().use { it.readText() }
     }
 
     private fun downloadFile(urlStr: String, destination: File): Boolean {

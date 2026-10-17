@@ -102,6 +102,7 @@ fun SignoraScreen(
                             onRequestCameraPermission = onRequestCameraPermission,
                             debounceState = debounceState,
                             handLandmarks = handLandmarks,
+                            poseLandmarks = poseLandmarks,
                             currentMode = currentMode,
                             isMuted = isMuted,
                             isFrontCamera = isFrontCamera,
