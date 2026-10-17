@@ -26,7 +26,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.graphics.Paint
+import android.graphics.Typeface
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import ai.signora.engine.HandPresenceDetector
+import ai.signora.ml.BodySegmentation
+import ai.signora.ml.BodySegmentZone
 import ai.signora.ml.FeatureExtractor
 import ai.signora.models.*
 import ai.signora.profiler.TrackingProfiler
@@ -138,9 +146,25 @@ fun TranslateScreen(
         val rightJoint = AppTheme.semantic.handRightJoint
         val leftJoint = AppTheme.semantic.handLeftJoint
 
+        val segmentTextPaint = remember {
+            Paint().apply {
+                isAntiAlias = true
+                textSize = 24f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+        }
+
+        // Active anatomical body segment computation
+        val activeSegment = remember(handLandmarks, poseLandmarks) {
+            BodySegmentation.detectActiveSegment(handLandmarks, poseLandmarks)
+        }
+
         // Active anatomical anchor zone computation across detected hands
-        val (activeAnchorZone, activeAnchorPt) = remember(handLandmarks, poseLandmarks) {
-            if (handLandmarks.isNotEmpty() && poseLandmarks != null) {
+        val (activeAnchorZone, activeAnchorPt) = remember(handLandmarks, poseLandmarks, activeSegment) {
+            if (activeSegment != null) {
+                Pair(activeSegment.id, activeSegment.center)
+            } else if (handLandmarks.isNotEmpty() && poseLandmarks != null) {
                 var zone = "OPEN_SPACE"
                 var pt: Point3D? = null
                 for (h in handLandmarks) {
@@ -210,119 +234,74 @@ fun TranslateScreen(
                     }
                 }
 
-                // Anatomical Body Map Zones (Anchors)
-                val pNose = pts[0]
-                val pMl = pts[9]
-                val pMr = pts[10]
-                val pLsh = pts[11]
-                val pRsh = pts[12]
-                val pLhip = pts[23]
-                val pRhip = pts[24]
-                val pLwrist = pts[15]
-                val pRwrist = pts[16]
+                // 1. Draw Anatomical Body Segmentation Zones
+                val segments = BodySegmentation.computeSegments(poseLandmarks)
+                for (seg in segments) {
+                    val center = toScreen(seg.center)
+                    val w = seg.width * scaledW
+                    val h = seg.height * scaledH
+                    val left = center.x - w / 2f
+                    val top = center.y - h / 2f
+                    val right = left + w
+                    val bottom = top + h
 
-                val shoulderDist = kotlin.math.sqrt((pLsh.x - pRsh.x) * (pLsh.x - pRsh.x) + (pLsh.y - pRsh.y) * (pLsh.y - pRsh.y))
-                val sScale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
+                    val isActive = (activeSegment?.id == seg.id)
 
-                val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
-                val crown = Point3D(pNose.x, pNose.y - 0.45f * sScale, pNose.z)
-                val forehead = Point3D(pNose.x, pNose.y - 0.22f * sScale, pNose.z)
-                val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * sScale, mouthCenter.z)
-                val throat = Point3D(mouthCenter.x, mouthCenter.y + 0.30f * sScale, mouthCenter.z)
-                val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
-                val chestLeft = Point3D(pLsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
-                val chestRight = Point3D(pRsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
-                val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
-                val midTorso = Point3D(chestCenter.x, (chestCenter.y + waistCenter.y) / 2f, chestCenter.z)
-                val templeR = Point3D(pRsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
-                val templeL = Point3D(pLsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+                    val strokeColor = if (isActive) Color(0xFF10B981) else Color(0xFF818CF8).copy(alpha = 0.40f)
+                    val fillColor = if (isActive) Color(0xFF10B981).copy(alpha = 0.24f) else Color(0xFF818CF8).copy(alpha = 0.05f)
 
-                val anchors = listOf(
-                    Triple("CROWN", crown, 22f),
-                    Triple("FOREHEAD", forehead, 22f),
-                    Triple("TEMPLE", templeR, 20f),
-                    Triple("TEMPLE", templeL, 20f),
-                    Triple("CHIN", chin, 20f),
-                    Triple("MOUTH_LIPS", mouthCenter, 20f),
-                    Triple("THROAT", throat, 20f),
-                    Triple("CHEST", chestCenter, 28f),
-                    Triple("CHEST_LEFT", chestLeft, 22f),
-                    Triple("CHEST_RIGHT", chestRight, 22f),
-                    Triple("MID_TORSO", midTorso, 24f),
-                    Triple("WAIST", waistCenter, 26f),
-                    Triple("WRIST", pLwrist, 18f),
-                    Triple("WRIST", pRwrist, 18f)
-                )
+                    val cornerRadius = CornerRadius(16f, 16f)
 
-                val emeraldColor = Color(0xFF10B981)
-                val indigoColor = Color(0xFF818CF8)
+                    // Semi-transparent segment background
+                    drawRoundRect(
+                        color = fillColor,
+                        topLeft = Offset(left, top),
+                        size = Size(w, h),
+                        cornerRadius = cornerRadius
+                    )
 
-                for ((name, pt, baseRadius) in anchors) {
-                    val center = toScreen(pt)
-                    val isAnchorActive = (name == activeAnchorZone) ||
-                        (name == "CHEST" && (activeAnchorZone == "CHEST" || activeAnchorZone == "CHEST_CENTER")) ||
-                        (name == "CHEST_LEFT" && activeAnchorZone == "HEART") ||
-                        (name == "MID_TORSO" && activeAnchorZone == "STOMACH")
+                    // High-tech border
+                    drawRoundRect(
+                        color = strokeColor,
+                        topLeft = Offset(left, top),
+                        size = Size(w, h),
+                        cornerRadius = cornerRadius,
+                        style = Stroke(
+                            width = if (isActive) 3.5f else 1.5f,
+                            pathEffect = if (isActive) null else PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                        )
+                    )
 
-                    if (isAnchorActive) {
-                        // High-tech Glowing Active Target Reticle
-                        drawCircle(
-                            color = emeraldColor.copy(alpha = 0.28f),
-                            radius = baseRadius * 1.8f,
-                            center = center
-                        )
-                        drawCircle(
-                            color = emeraldColor,
-                            radius = baseRadius * 1.3f,
-                            center = center,
-                            style = Stroke(
-                                width = 3.5f,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
-                            )
-                        )
-                        drawCircle(
-                            color = emeraldColor,
-                            radius = baseRadius * 0.6f,
-                            center = center,
-                            style = Stroke(width = 2.5f)
-                        )
-                        drawCircle(
-                            color = emeraldColor,
-                            radius = 4.5f,
-                            center = center
-                        )
+                    // Cybernetic corner brackets
+                    val bracketLen = minOf(14f, w * 0.22f, h * 0.22f)
+                    val bracketColor = if (isActive) Color(0xFF10B981) else Color(0xFF06B6D4).copy(alpha = 0.70f)
+                    val bWidth = if (isActive) 3.5f else 2.2f
 
-                        // Crosshairs
-                        val tick = 10f
-                        val cx = center.x
-                        val cy = center.y
-                        val reach = baseRadius * 1.6f
-                        drawLine(color = emeraldColor, start = Offset(cx - reach, cy), end = Offset(cx - reach + tick, cy), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(color = emeraldColor, start = Offset(cx + reach - tick, cy), end = Offset(cx + reach, cy), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(color = emeraldColor, start = Offset(cx, cy - reach), end = Offset(cx, cy - reach + tick), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                        drawLine(color = emeraldColor, start = Offset(cx, cy + reach - tick), end = Offset(cx, cy + reach), strokeWidth = 2.5f, cap = StrokeCap.Round)
-                    } else if (currentMode == RecognitionMode.ISL) {
-                        // Subtle Anatomical Anchor Map Nodes
-                        drawCircle(
-                            color = indigoColor.copy(alpha = 0.18f),
-                            radius = baseRadius,
-                            center = center
-                        )
-                        drawCircle(
-                            color = indigoColor.copy(alpha = 0.55f),
-                            radius = baseRadius * 0.85f,
-                            center = center,
-                            style = Stroke(
-                                width = 1.5f,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
-                            )
-                        )
-                        drawCircle(
-                            color = indigoColor.copy(alpha = 0.70f),
-                            radius = 3.5f,
-                            center = center
-                        )
-                    }
+                    // Top-Left
+                    drawLine(bracketColor, Offset(left - 2f, top + bracketLen), Offset(left - 2f, top - 2f), bWidth, StrokeCap.Round)
+                    drawLine(bracketColor, Offset(left - 2f, top - 2f), Offset(left + bracketLen, top - 2f), bWidth, StrokeCap.Round)
+
+                    // Top-Right
+                    drawLine(bracketColor, Offset(right + 2f - bracketLen, top - 2f), Offset(right + 2f, top - 2f), bWidth, StrokeCap.Round)
+                    drawLine(bracketColor, Offset(right + 2f, top - 2f), Offset(right + 2f, top + bracketLen), bWidth, StrokeCap.Round)
+
+                    // Bottom-Left
+                    drawLine(bracketColor, Offset(left - 2f, bottom - bracketLen), Offset(left - 2f, bottom + 2f), bWidth, StrokeCap.Round)
+                    drawLine(bracketColor, Offset(left - 2f, bottom + 2f), Offset(left + bracketLen, bottom + 2f), bWidth, StrokeCap.Round)
+
+                    // Bottom-Right
+                    drawLine(bracketColor, Offset(right + 2f - bracketLen, bottom + 2f), Offset(right + 2f, bottom + 2f), bWidth, StrokeCap.Round)
+                    drawLine(bracketColor, Offset(right + 2f, bottom + 2f), Offset(right + 2f, bottom - bracketLen), bWidth, StrokeCap.Round)
+
+                    // Segment Tag Label
+                    segmentTextPaint.color = strokeColor.toArgb()
+                    val tag = if (isActive) "▶ ${seg.shortTag} ◀" else seg.shortTag
+                    drawContext.canvas.nativeCanvas.drawText(
+                        tag,
+                        center.x,
+                        top + 22f,
+                        segmentTextPaint
+                    )
                 }
             }
 

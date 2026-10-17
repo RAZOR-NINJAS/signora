@@ -1,15 +1,24 @@
 package ai.signora.ui.components
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import ai.signora.ml.BodySegmentation
+import ai.signora.ml.BodySegmentZone
 import ai.signora.models.HandLandmarks
 import ai.signora.models.Point3D
 import ai.signora.models.PoseLandmarks
@@ -49,23 +58,37 @@ fun SpatialOverlay(
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
     modifier: Modifier = Modifier
 ) {
+    val textPaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+    }
+
+    val hudPaint = remember {
+        Paint().apply {
+            isAntiAlias = true
+            textSize = 28f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+    }
+
     Canvas(modifier = modifier.fillMaxSize()) {
         val canvasWidth = size.width
         val canvasHeight = size.height
 
-        // Dynamic camera analysis resolution in portrait
         val camW = cameraResolution.first.toFloat().coerceAtLeast(1f)
         val camH = cameraResolution.second.toFloat().coerceAtLeast(1f)
 
-        // Exact FILL_CENTER transformation matching PreviewView
         val scale = maxOf(canvasWidth / camW, canvasHeight / camH)
         val scaledW = camW * scale
         val scaledH = camH * scale
         val offsetX = (canvasWidth - scaledW) / 2f
         val offsetY = (canvasHeight - scaledH) / 2f
 
-        // CameraXManager already produces upright, front-camera mirrored frames,
-        // so landmark normalized (x, y) map directly to camera image coordinates.
         val toScreen: (Point3D) -> Offset = { p ->
             Offset(
                 x = p.x * scaledW + offsetX,
@@ -73,9 +96,34 @@ fun SpatialOverlay(
             )
         }
 
-        // 1. Draw Upper Body Skeleton
+        // 1. Compute and Draw Anatomical Body Segments
         if (pose != null && pose.points.size >= 25) {
+            val segments = BodySegmentation.computeSegments(pose)
+            val activeSegment = BodySegmentation.detectActiveSegment(hands, pose)
+            val targetSegment = BodySegmentation.matchTargetSegment(targetAnchor, segments)
+
+            drawBodySegments(
+                segments = segments,
+                activeSegment = activeSegment,
+                targetSegment = targetSegment,
+                isTargetMatched = isAnchorMatched,
+                toScreen = toScreen,
+                scaledW = scaledW,
+                scaledH = scaledH,
+                textPaint = textPaint
+            )
+
+            // Draw Upper Body Skeleton Lines
             drawBodyPose(pose, toScreen)
+
+            // Draw Top Active Segment Cybernetic HUD Pill
+            drawSegmentHud(
+                activeSegment = activeSegment,
+                targetSegment = targetSegment,
+                isMatched = isAnchorMatched,
+                canvasWidth = canvasWidth,
+                hudPaint = hudPaint
+            )
         }
 
         // 2. Draw Hand Skeletons
@@ -83,7 +131,7 @@ fun SpatialOverlay(
             drawHandSkeleton(hand, toScreen)
         }
 
-        // 3. Draw Cybernetic Target Reticle if targetAnchor is set
+        // 3. Draw Target Reticle if targetAnchorPt is provided
         if (targetAnchorPt != null && targetAnchor != null) {
             drawAnchorReticle(
                 targetAnchor = targetAnchor,
@@ -95,10 +143,158 @@ fun SpatialOverlay(
     }
 }
 
+private fun DrawScope.drawBodySegments(
+    segments: List<BodySegmentZone>,
+    activeSegment: BodySegmentZone?,
+    targetSegment: BodySegmentZone?,
+    isTargetMatched: Boolean,
+    toScreen: (Point3D) -> Offset,
+    scaledW: Float,
+    scaledH: Float,
+    textPaint: Paint
+) {
+    val emerald = Color(0xFF10B981)
+    val amber = Color(0xFFF59E0B)
+    val indigo = Color(0xFF818CF8)
+    val cyan = Color(0xFF06B6D4)
+
+    for (seg in segments) {
+        val center = toScreen(seg.center)
+        val w = seg.width * scaledW
+        val h = seg.height * scaledH
+        val left = center.x - w / 2f
+        val top = center.y - h / 2f
+        val right = left + w
+        val bottom = top + h
+
+        val isActive = (activeSegment?.id == seg.id)
+        val isTarget = (targetSegment?.id == seg.id)
+
+        val strokeColor = when {
+            isActive -> emerald
+            isTarget -> if (isTargetMatched) emerald else amber
+            else -> indigo.copy(alpha = 0.40f)
+        }
+
+        val fillColor = when {
+            isActive -> emerald.copy(alpha = 0.24f)
+            isTarget -> (if (isTargetMatched) emerald else amber).copy(alpha = 0.18f)
+            else -> indigo.copy(alpha = 0.05f)
+        }
+
+        val cornerRadius = CornerRadius(16f, 16f)
+
+        // 1. Semi-transparent segment background
+        drawRoundRect(
+            color = fillColor,
+            topLeft = Offset(left, top),
+            size = Size(w, h),
+            cornerRadius = cornerRadius
+        )
+
+        // 2. High-tech border
+        drawRoundRect(
+            color = strokeColor,
+            topLeft = Offset(left, top),
+            size = Size(w, h),
+            cornerRadius = cornerRadius,
+            style = Stroke(
+                width = if (isActive || isTarget) 3.5f else 1.5f,
+                pathEffect = if (isActive || (isTarget && isTargetMatched)) null else PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+            )
+        )
+
+        // 3. Cybernetic corner brackets
+        val bracketLen = minOf(14f, w * 0.22f, h * 0.22f)
+        val bracketColor = if (isActive || isTarget) strokeColor else cyan.copy(alpha = 0.70f)
+        val bWidth = if (isActive || isTarget) 3.5f else 2.2f
+
+        // Top-Left
+        drawLine(bracketColor, Offset(left - 2f, top + bracketLen), Offset(left - 2f, top - 2f), bWidth, StrokeCap.Round)
+        drawLine(bracketColor, Offset(left - 2f, top - 2f), Offset(left + bracketLen, top - 2f), bWidth, StrokeCap.Round)
+
+        // Top-Right
+        drawLine(bracketColor, Offset(right + 2f - bracketLen, top - 2f), Offset(right + 2f, top - 2f), bWidth, StrokeCap.Round)
+        drawLine(bracketColor, Offset(right + 2f, top - 2f), Offset(right + 2f, top + bracketLen), bWidth, StrokeCap.Round)
+
+        // Bottom-Left
+        drawLine(bracketColor, Offset(left - 2f, bottom - bracketLen), Offset(left - 2f, bottom + 2f), bWidth, StrokeCap.Round)
+        drawLine(bracketColor, Offset(left - 2f, bottom + 2f), Offset(left + bracketLen, bottom + 2f), bWidth, StrokeCap.Round)
+
+        // Bottom-Right
+        drawLine(bracketColor, Offset(right + 2f - bracketLen, bottom + 2f), Offset(right + 2f, bottom + 2f), bWidth, StrokeCap.Round)
+        drawLine(bracketColor, Offset(right + 2f, bottom + 2f), Offset(right + 2f, bottom - bracketLen), bWidth, StrokeCap.Round)
+
+        // 4. Segment Tag Label
+        textPaint.color = strokeColor.toArgb()
+        val tag = when {
+            isActive -> "▶ ${seg.shortTag} ◀"
+            isTarget -> if (isTargetMatched) "✓ ${seg.shortTag}" else "🎯 ${seg.shortTag}"
+            else -> seg.shortTag
+        }
+        drawContext.canvas.nativeCanvas.drawText(
+            tag,
+            center.x,
+            top + 22f,
+            textPaint
+        )
+    }
+}
+
+private fun DrawScope.drawSegmentHud(
+    activeSegment: BodySegmentZone?,
+    targetSegment: BodySegmentZone?,
+    isMatched: Boolean,
+    canvasWidth: Float,
+    hudPaint: Paint
+) {
+    if (activeSegment == null && targetSegment == null) return
+
+    val hudWidth = 440f
+    val hudHeight = 44f
+    val hudLeft = (canvasWidth - hudWidth) / 2f
+    val hudTop = 16f
+
+    val emerald = Color(0xFF10B981)
+    val amber = Color(0xFFF59E0B)
+
+    val activeColor = if (isMatched || (activeSegment != null && activeSegment == targetSegment)) emerald else if (activeSegment != null) emerald else amber
+
+    drawRoundRect(
+        color = Color(0xFF0F172A).copy(alpha = 0.85f),
+        topLeft = Offset(hudLeft, hudTop),
+        size = Size(hudWidth, hudHeight),
+        cornerRadius = CornerRadius(22f, 22f)
+    )
+
+    drawRoundRect(
+        color = activeColor.copy(alpha = 0.70f),
+        topLeft = Offset(hudLeft, hudTop),
+        size = Size(hudWidth, hudHeight),
+        cornerRadius = CornerRadius(22f, 22f),
+        style = Stroke(width = 2f)
+    )
+
+    hudPaint.color = activeColor.toArgb()
+    val hudText = when {
+        isMatched -> "✓ TARGET MATCHED: ${targetSegment?.shortTag ?: ""}"
+        activeSegment != null -> "📍 ZONE: ${activeSegment.displayName.uppercase()}"
+        targetSegment != null -> "🎯 TARGET: ${targetSegment.shortTag}"
+        else -> ""
+    }
+
+    drawContext.canvas.nativeCanvas.drawText(
+        hudText,
+        canvasWidth / 2f,
+        hudTop + 31f,
+        hudPaint
+    )
+}
+
 private fun DrawScope.drawBodyPose(pose: PoseLandmarks, toScreen: (Point3D) -> Offset) {
     val pts = pose.points
-    val boneColor = Color(0xFF6366F1).copy(alpha = 0.65f) // Electric Indigo
-    val jointColor = Color(0xFFA5B4FC) // Soft Violet glow
+    val boneColor = Color(0xFF6366F1).copy(alpha = 0.65f)
+    val jointColor = Color(0xFFA5B4FC)
 
     // Bones
     for ((s, e) in UPPER_BODY_CONNECTIONS) {
@@ -120,13 +316,11 @@ private fun DrawScope.drawBodyPose(pose: PoseLandmarks, toScreen: (Point3D) -> O
     for (idx in keyJoints) {
         if (idx < pts.size) {
             val center = toScreen(pts[idx])
-            // Outer glow
             drawCircle(
                 color = jointColor.copy(alpha = 0.35f),
                 radius = 9f,
                 center = center
             )
-            // Inner core
             drawCircle(
                 color = jointColor,
                 radius = 5.5f,
@@ -141,11 +335,9 @@ private fun DrawScope.drawHandSkeleton(hand: HandLandmarks, toScreen: (Point3D) 
     if (pts.size < 21) return
     val isRight = hand.isRightHand
 
-    // Cyan for right hand, Magenta for left hand
     val boneColor = if (isRight) Color(0xFF06B6D4) else Color(0xFFF43F5E)
     val jointColor = if (isRight) Color(0xFF34D399) else Color(0xFFFB923C)
 
-    // Bones
     for ((s, e) in HAND_CONNECTIONS) {
         if (s < pts.size && e < pts.size) {
             val p1 = toScreen(pts[s])
@@ -160,7 +352,6 @@ private fun DrawScope.drawHandSkeleton(hand: HandLandmarks, toScreen: (Point3D) 
         }
     }
 
-    // Joints
     for (p in pts) {
         val center = toScreen(p)
         drawCircle(
@@ -186,17 +377,10 @@ private fun DrawScope.drawAnchorReticle(
     val cx = center.x
     val cy = center.y
 
-    val reticleColor = if (isMatched) Color(0xFF10B981) else Color(0xFFF59E0B) // Emerald vs Amber
+    val reticleColor = if (isMatched) Color(0xFF10B981) else Color(0xFFF59E0B)
     val glowColor = reticleColor.copy(alpha = 0.28f)
 
-    // Outer glow halo
-    drawCircle(
-        color = glowColor,
-        radius = 48f,
-        center = center
-    )
-
-    // Outer dashed target ring
+    drawCircle(color = glowColor, radius = 48f, center = center)
     drawCircle(
         color = reticleColor,
         radius = 34f,
@@ -206,23 +390,9 @@ private fun DrawScope.drawAnchorReticle(
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 8f), 0f)
         )
     )
+    drawCircle(color = reticleColor, radius = 16f, center = center, style = Stroke(width = 2.5f))
+    drawCircle(color = reticleColor, radius = 4.5f, center = center)
 
-    // Inner target ring
-    drawCircle(
-        color = reticleColor,
-        radius = 16f,
-        center = center,
-        style = Stroke(width = 2.5f)
-    )
-
-    // Center focal point
-    drawCircle(
-        color = reticleColor,
-        radius = 4.5f,
-        center = center
-    )
-
-    // Crosshair ticks
     val tickLen = 12f
     drawLine(color = reticleColor, start = Offset(cx - 40f, cy), end = Offset(cx - 40f + tickLen, cy), strokeWidth = 3f, cap = StrokeCap.Round)
     drawLine(color = reticleColor, start = Offset(cx + 40f - tickLen, cy), end = Offset(cx + 40f, cy), strokeWidth = 3f, cap = StrokeCap.Round)

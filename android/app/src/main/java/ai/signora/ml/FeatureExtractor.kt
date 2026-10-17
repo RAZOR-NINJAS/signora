@@ -360,6 +360,10 @@ object FeatureExtractor {
         if (pose == null || pose.points.size < 25 || hand.points.size < 21) {
             return Pair("OPEN_SPACE", null)
         }
+        val seg = BodySegmentation.detectActiveSegment(listOf(hand), pose)
+        if (seg != null) {
+            return Pair(seg.id, seg.center)
+        }
 
         val p = pose.points
         val pNose = p[0]

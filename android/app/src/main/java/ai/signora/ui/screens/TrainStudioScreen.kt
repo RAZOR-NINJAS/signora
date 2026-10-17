@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import ai.signora.ml.BodySegmentation
 import ai.signora.ml.FeatureExtractor
 import ai.signora.models.HandLandmarks
 import ai.signora.models.Point3D
@@ -99,9 +100,16 @@ fun TrainStudioScreen(
 
     val currentSign: SignInfo? = currentSignList.getOrNull(currentSignIndex) ?: currentSignList.firstOrNull()
 
+    // Active anatomical body segment
+    val activeSegment = remember(hands, pose) {
+        BodySegmentation.detectActiveSegment(hands, pose)
+    }
+
     // Active anchor detection & matching across all detected hands
-    val activeAnchorZone = remember(hands, pose) {
-        if (hands.isNotEmpty() && pose != null) {
+    val activeAnchorZone = remember(hands, pose, activeSegment) {
+        if (activeSegment != null) {
+            activeSegment.id
+        } else if (hands.isNotEmpty() && pose != null) {
             var matched = "OPEN_SPACE"
             for (hand in hands) {
                 val (zone, _) = FeatureExtractor.detectBodyAnchor(hand, pose)
@@ -116,8 +124,9 @@ fun TrainStudioScreen(
         } else "OPEN_SPACE"
     }
 
-    val isAnchorMatched = remember(activeAnchorZone, currentSign) {
+    val isAnchorMatched = remember(activeAnchorZone, activeSegment, currentSign) {
         val target = currentSign?.targetAnchor ?: return@remember false
+        if (activeSegment != null && activeSegment.matches(target)) return@remember true
         if (activeAnchorZone == target) return@remember true
         when (target) {
             "CHEST" -> activeAnchorZone in listOf("CHEST", "CHEST_CENTER", "CHEST_LEFT", "CHEST_RIGHT")
@@ -444,6 +453,20 @@ fun TrainStudioScreen(
                                             text = if (isAnchorMatched) "✓ [${currentSign.targetAnchor}]" else "[${currentSign.targetAnchor}]",
                                             fontSize = 11.sp,
                                             color = if (isAnchorMatched) Color(0xFF34D399) else Color(0xFFFBBF24)
+                                        )
+                                    },
+                                    shape = CircleShape
+                                )
+                            }
+                            if (activeSegment != null) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                AssistChip(
+                                    onClick = {},
+                                    label = {
+                                        Text(
+                                            text = "📍 ${activeSegment.displayName}",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF38BDF8)
                                         )
                                     },
                                     shape = CircleShape
