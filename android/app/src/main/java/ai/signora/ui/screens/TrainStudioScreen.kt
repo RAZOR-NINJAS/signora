@@ -7,6 +7,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -231,57 +233,71 @@ fun TrainStudioScreen(
         recordedCounts.values.count { it >= TARGET_SAMPLES }
     }
 
+    // Ensure Studio uses full-sensor FIT_CENTER without cropping
+    DisposableEffect(previewView) {
+        previewView.scaleType = PreviewView.ScaleType.FIT_CENTER
+        onDispose {
+            previewView.scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Text(
-                            text = "ISL Training Studio",
+                            text = "ISL Studio",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Black
                         )
-                        Text(
-                            text = "220D Hand + Body Articulation • Ready: $totalReady / ${IslVocabulary.ALL_SIGNS.size}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "$totalReady/${IslVocabulary.ALL_SIGNS.size} Ready",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                 },
                 actions = {
-                    // Retrain On-Device ISL Model Button
-                    Button(
-                        onClick = { showRetrainDialog = true },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(Icons.Filled.Bolt, contentDescription = "Retrain ISL Model", modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Retrain", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = { showRetrainDialog = true }) {
+                        Icon(
+                            Icons.Filled.Bolt,
+                            contentDescription = "Retrain On-Device Model",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Export Dataset Button
-                    FilledTonalButton(
+                    IconButton(
                         onClick = {
                             val file = datasetManager.exportCompleteDataset()
                             if (file != null) {
                                 exportedFile = file
                                 showExportDialog = true
                             }
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        }
                     ) {
-                        Icon(Icons.Filled.Share, contentDescription = "Export Dataset", modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Export File", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            Icons.Filled.Share,
+                            contentDescription = "Export Dataset",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
-
                     IconButton(onClick = onToggleCamera) {
-                        Icon(Icons.Filled.Cameraswitch, contentDescription = "Switch Camera")
+                        Icon(
+                            Icons.Filled.Cameraswitch,
+                            contentDescription = "Switch Camera",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -296,62 +312,117 @@ fun TrainStudioScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Mode Selector Tabs (Letters vs 300 Words)
-            PrimaryTabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            // ─── Streamlined Sign Selector Strip ──────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = {
-                        selectedTab = 0
-                        currentSignIndex = 0
-                        selectedCategory = "All"
-                    },
-                    text = { Text("Letters (${IslVocabulary.LETTERS.size})", fontWeight = FontWeight.SemiBold) }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        currentSignIndex = 0
-                        selectedCategory = "All"
-                    },
-                    text = { Text("300 Static Words", fontWeight = FontWeight.SemiBold) }
-                )
-            }
-
-            // Word Category Filter Chips
-            if (selectedTab == 1) {
-                LazyRow(
+                // Segmented Pill Toggle: Letters vs 300 Words
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+                        .padding(2.dp)
                 ) {
-                    items(IslVocabulary.CATEGORIES) { cat ->
-                        FilterChip(
-                            selected = selectedCategory == cat,
-                            onClick = {
-                                selectedCategory = cat
-                                currentSignIndex = 0
-                            },
-                            label = { Text(cat, fontSize = 12.sp) },
-                            shape = RoundedCornerShape(14.dp)
+                    val tabLettersSelected = selectedTab == 0
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (tabLettersSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        modifier = Modifier.clickable {
+                            selectedTab = 0
+                            currentSignIndex = 0
+                            selectedCategory = "All"
+                        }
+                    ) {
+                        Text(
+                            text = "Letters (27)",
+                            fontSize = 12.sp,
+                            fontWeight = if (tabLettersSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (tabLettersSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
+                    }
+                    val tabWordsSelected = selectedTab == 1
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (tabWordsSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        modifier = Modifier.clickable {
+                            selectedTab = 1
+                            currentSignIndex = 0
+                            selectedCategory = "All"
+                        }
+                    ) {
+                        Text(
+                            text = "300 Words",
+                            fontSize = 12.sp,
+                            fontWeight = if (tabWordsSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (tabWordsSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                // Category Dropdown Filter (Words mode)
+                if (selectedTab == 1) {
+                    Box {
+                        AssistChip(
+                            onClick = { categoryMenuExpanded = true },
+                            label = {
+                                Text(
+                                    text = if (selectedCategory == "All") "📁 All ▾" else "📁 $selectedCategory ▾",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = null,
+                            colors = AssistChipDefaults.assistChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                            )
+                        )
+                        DropdownMenu(
+                            expanded = categoryMenuExpanded,
+                            onDismissRequest = { categoryMenuExpanded = false }
+                        ) {
+                            IslVocabulary.CATEGORIES.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = cat,
+                                            fontWeight = if (cat == selectedCategory) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (cat == selectedCategory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedCategory = cat
+                                        currentSignIndex = 0
+                                        categoryMenuExpanded = false
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Horizontal Sign Carousel Ribbon
+            // Horizontal Sign Carousel Ribbon (Compact)
             val carouselState = rememberLazyListState()
+            LaunchedEffect(currentSignIndex) {
+                if (currentSignList.isNotEmpty() && currentSignIndex in currentSignList.indices) {
+                    carouselState.animateScrollToItem(currentSignIndex)
+                }
+            }
             LazyRow(
                 state = carouselState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(currentSignList.indices.toList()) { idx ->
                     val signItem = currentSignList[idx]
@@ -359,51 +430,63 @@ fun TrainStudioScreen(
                     val isSelected = currentSignIndex == idx
 
                     val chipBg = when {
-                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.tertiary
-                        count > 0 -> MaterialTheme.colorScheme.secondary
+                        isSelected -> MaterialTheme.colorScheme.primary
+                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.tertiaryContainer
+                        count > 0 -> MaterialTheme.colorScheme.secondaryContainer
                         else -> MaterialTheme.colorScheme.surfaceContainerHigh
                     }
                     val textColor = when {
-                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.onTertiary
-                        count > 0 -> MaterialTheme.colorScheme.onSecondary
+                        isSelected -> MaterialTheme.colorScheme.onPrimary
+                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.onTertiaryContainer
+                        count > 0 -> MaterialTheme.colorScheme.onSecondaryContainer
                         else -> MaterialTheme.colorScheme.onSurface
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(chipBg)
-                            .then(
-                                if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(18.dp))
-                                else Modifier
-                            )
-                            .clickable { currentSignIndex = idx }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = chipBg,
+                        modifier = Modifier.clickable { currentSignIndex = idx }
                     ) {
-                        Text(
-                            text = "${signItem.name}: $count",
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 13.sp,
-                            color = textColor
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = signItem.name,
+                                fontWeight = if (isSelected) FontWeight.Black else FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = textColor
+                            )
+                            if (count > 0) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (count >= TARGET_SAMPLES) "✓" else "$count",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textColor.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Main Camera Viewport + Cybernetic Tracking Overlay
+            // ─── Native 4:3 Sensor Viewport (3:4 portrait aspect ratio) ───────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .padding(horizontal = 12.dp)
+                    .padding(horizontal = 12.dp, vertical = 2.dp)
+                    .aspectRatio(3f / 4f)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.Black)
             ) {
-                // Camera Preview
+                // Full Sensor 4:3 Viewfinder
                 AndroidView(
                     factory = { _ ->
                         (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
-                        previewView
+                        previewView.apply {
+                            scaleType = PreviewView.ScaleType.FIT_CENTER
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -419,219 +502,200 @@ fun TrainStudioScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Top Floating Status Pill
+                // Minimal Floating HUD in top corners of viewfinder
                 if (currentSign != null) {
                     val count = recordedCounts[currentSign.name] ?: 0
-                    Card(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
-                        ),
+
+                    Row(
                         modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = 10.dp)
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                            .align(Alignment.TopCenter),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                        // Left Pill: Sign Name + Expected Hands + Target Anchor Match
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.Black.copy(alpha = 0.65f)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = currentSign.name,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 15.sp,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "${currentSign.expectedHands}H",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                )
+                                if (currentSign.targetAnchor != null) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isAnchorMatched) "✓ [${currentSign.targetAnchor}]" else "[${currentSign.targetAnchor}]",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAnchorMatched) Color(0xFF4ADE80) else Color(0xFFFACC15)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Right Pill: Samples Count
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (count >= TARGET_SAMPLES) Color(0xFF166534).copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.65f)
                         ) {
                             Text(
-                                text = currentSign.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            AssistChip(
-                                onClick = {},
-                                label = { Text("${currentSign.expectedHands} HANDS", fontSize = 11.sp) },
-                                shape = CircleShape
-                            )
-                            if (currentSign.targetAnchor != null) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                AssistChip(
-                                    onClick = {},
-                                    label = {
-                                        Text(
-                                            text = if (isAnchorMatched) "✓ [${currentSign.targetAnchor}]" else "[${currentSign.targetAnchor}]",
-                                            fontSize = 11.sp,
-                                            color = if (isAnchorMatched) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
-                                        )
-                                    },
-                                    shape = CircleShape
-                                )
-                            }
-                            if (activeSegment != null) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                AssistChip(
-                                    onClick = {},
-                                    label = {
-                                        Text(
-                                            text = "📍 ${activeSegment.displayName}",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    },
-                                    shape = CircleShape
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Samples: $count / $TARGET_SAMPLES",
+                                text = "$count / $TARGET_SAMPLES",
                                 fontSize = 12.sp,
-                                color = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                                fontWeight = FontWeight.Bold,
+                                color = if (count >= TARGET_SAMPLES) Color(0xFF86EFAC) else Color.White,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             )
                         }
                     }
                 }
 
-
-                // Countdown Overlay
+                // Countdown Overlay (Frosted Center Dial)
                 if (studioState == StudioState.COUNTDOWN) {
-                    Card(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.96f)
-                        ),
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.80f),
                         modifier = Modifier
+                            .size(110.dp)
                             .align(Alignment.Center)
-                            .padding(24.dp)
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp)
-                        ) {
+                        Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "$countdownValue",
-                                fontSize = 64.sp,
+                                fontSize = 52.sp,
                                 fontWeight = FontWeight.Black,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = "HOLD POSTURE FOR '${currentSign?.name}'",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                color = Color.White
                             )
                         }
                     }
                 }
 
-                // Recording Indicator
+                // Recording Indicator (Slim top strip, never obstructs hands)
                 if (studioState == StudioState.RECORDING) {
-                    Card(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f)
-                        ),
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.90f),
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .padding(top = 64.dp)
+                            .padding(top = 46.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
                         ) {
-                            Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                Icons.Filled.FiberManualRecord,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "BURST 220D: ${collectedBatch.size} / $TARGET_SAMPLES SAMPLES",
+                                text = "RECORDING 220D: ${collectedBatch.size} / $TARGET_SAMPLES",
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontSize = 14.sp
+                                color = Color.White,
+                                fontSize = 11.sp
                             )
                         }
                     }
                 }
 
-                // Success Message Banner
+                // Compact Non-intrusive Toast at bottom of viewfinder
                 if (statusMessage.isNotBlank()) {
-                    Card(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.96f)
-                        ),
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF0F172A).copy(alpha = 0.90f),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 16.dp)
+                            .padding(bottom = 10.dp)
                     ) {
                         Text(
                             text = statusMessage,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
                 }
-
             }
 
-            // Bottom Posture Guide Card & Record Trigger FAB
+            // ─── Ergonomic Bottom Control Deck ─────────────────────────────────────
             if (currentSign != null) {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                val count = recordedCounts[currentSign.name] ?: 0
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp)
+                        .padding(horizontal = 12.dp, vertical = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Posture guide hint in a single clean line
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = currentSign.guidePosture,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = currentSign.guideDetail,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Icon(
+                                Icons.Filled.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = currentSign.guidePosture,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
 
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            val count = recordedCounts[currentSign.name] ?: 0
-
-                            // Clear / Reset Samples for current sign
+                        // Action row: Clear Samples (if recorded) + Full-Width Expressive Record Button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             if (count > 0) {
-                                IconButton(
+                                OutlinedIconButton(
                                     onClick = {
                                         datasetManager.clearSignSamples(currentSign.name)
                                         recordedCounts = datasetManager.getRecordedCounts()
                                         statusMessage = "Cleared samples for '${currentSign.name}'"
                                     },
-                                    enabled = studioState == StudioState.IDLE
+                                    enabled = studioState == StudioState.IDLE,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier.size(48.dp)
                                 ) {
                                     Icon(
                                         Icons.Filled.DeleteSweep,
                                         contentDescription = "Clear Samples",
-                                        tint = MaterialTheme.colorScheme.error
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(4.dp))
                             }
 
-                            // Retrain button on the card
-                            FilledTonalButton(
-                                onClick = { showRetrainDialog = true },
-                                enabled = studioState == StudioState.IDLE,
-                                shape = MaterialTheme.shapes.large,
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
-                            ) {
-                                Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Retrain", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            // Large Expressive Record Button (Record 1000 or + Record 1000 More)
                             Button(
                                 onClick = {
                                     if (studioState == StudioState.IDLE) {
@@ -639,16 +703,22 @@ fun TrainStudioScreen(
                                     }
                                 },
                                 enabled = studioState == StudioState.IDLE,
-                                shape = MaterialTheme.shapes.extraLarge,
+                                shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
                                 ),
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
                             ) {
-                                Icon(Icons.Filled.RadioButtonChecked, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Icon(
+                                    Icons.Filled.RadioButtonChecked,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (count == 0) "Record 1000" else "+ 1000 More ($count)",
+                                    text = if (count == 0) "Record 1000 Samples" else "+ Record More ($count)",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp
                                 )
