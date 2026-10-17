@@ -43,6 +43,7 @@ fun SignoraScreen(
     minMargin: Float = 0.05f,
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
     assetStatus: AutoAssetManager.AssetStatus,
+    nlpState: NlpState = NlpState(),
     onModeChange: (RecognitionMode) -> Unit,
     onDwellProfileChange: (DwellProfile) -> Unit,
     onCustomDwellChange: (Long) -> Unit = {},
@@ -114,6 +115,7 @@ fun SignoraScreen(
                             autoCollapseEnabled = autoCollapseEnabled,
                             latestFrameId = latestFrameId,
                             assetStatus = assetStatus,
+                            nlpState = nlpState,
                             onModeChange = onModeChange,
                             onToggleMute = onToggleMute,
                             onToggleCamera = onToggleCamera,
@@ -129,6 +131,7 @@ fun SignoraScreen(
                             bottomBarPadding = innerPadding.calculateBottomPadding()
                         )
                     }
+
 
                     AppDestination.STUDIO -> {
                         ai.signora.ui.screens.TrainStudioScreen(

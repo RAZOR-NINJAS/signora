@@ -65,6 +65,19 @@ enum class RecognitionMode(val displayName: String, val description: String) {
     FINGERSPELLING("Fingerspelling", "Continuous fingerspelling stream")
 }
 
+/**
+ * Holds the current state of the ISL Gloss-to-Natural-Sentence NLP pipeline.
+ *
+ * @param pendingGlosses      Gloss labels still being accumulated (not yet sentence-complete).
+ * @param synthesizedSentence The latest naturally-reconstructed English sentence.
+ * @param isProcessing        True while a Tier-2 LLM refinement pass is running (future use).
+ */
+data class NlpState(
+    val pendingGlosses: List<String> = emptyList(),
+    val synthesizedSentence: String = "",
+    val isProcessing: Boolean = false
+)
+
 enum class DwellProfile(val label: String, val subtitle: String, val dwellMs: Long) {
     QUICK("0.750s", "Quick (750ms) - Rapid fingerspelling", 750L),
     STANDARD("1.0s", "Standard (1000ms) - Balanced & reliable", 1000L),

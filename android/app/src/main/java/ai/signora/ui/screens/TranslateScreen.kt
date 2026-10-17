@@ -45,6 +45,7 @@ import ai.signora.ui.theme.PureBlack
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+
 private val HAND_CONNECTIONS = listOf(
     0 to 1, 1 to 2, 2 to 3, 3 to 4,       // Thumb
     0 to 5, 5 to 6, 6 to 7, 7 to 8,       // Index
@@ -61,6 +62,7 @@ private val UPPER_BODY_CONNECTIONS = listOf(
     23 to 24 // Waist
 )
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TranslateScreen(
     previewView: PreviewView,
@@ -79,6 +81,7 @@ fun TranslateScreen(
     autoCollapseEnabled: Boolean = true,
     latestFrameId: Long = 0L,
     assetStatus: AutoAssetManager.AssetStatus,
+    nlpState: NlpState = NlpState(),
     onModeChange: (RecognitionMode) -> Unit,
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
@@ -527,7 +530,131 @@ fun TranslateScreen(
             }
         }
 
-        // 4. Debug Telemetry Overlay (if active)
+        // 4. NLP Dual-Layer Display (ISL Mode only) — M3 Expressive
+        if (currentMode == RecognitionMode.ISL) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomBarPadding + 82.dp)
+                    .padding(horizontal = AppTheme.spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+            ) {
+                // (a) Live Gloss Token Chip Flow — secondary container role
+                AnimatedVisibility(
+                    visible = nlpState.pendingGlosses.isNotEmpty(),
+                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
+                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec())
+                ) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        tonalElevation = 2.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
+                            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                        ) {
+                            Text(
+                                text = "📝 ISL GLOSS STREAM",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.70f)
+                            )
+                            androidx.compose.foundation.layout.FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall),
+                                verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                            ) {
+                                nlpState.pendingGlosses.forEachIndexed { idx, gloss ->
+                                    Surface(
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            0.8.dp,
+                                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
+                                        )
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = AppTheme.spacing.small, vertical = AppTheme.spacing.extraSmall),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            Text(
+                                                text = "${idx + 1}.",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f)
+                                            )
+                                            Text(
+                                                text = gloss,
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // (b) Synthesized Natural Sentence Card — tertiary container role
+                AnimatedVisibility(
+                    visible = nlpState.synthesizedSentence.isNotBlank(),
+                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec())
+                ) {
+                    Surface(
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.95f),
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
+                            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                            ) {
+                                // M3 Expressive Assist Chip badge
+                                Surface(
+                                    shape = MaterialTheme.shapes.extraSmall,
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.20f),
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        0.8.dp,
+                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)
+                                    )
+                                ) {
+                                    Text(
+                                        text = "✨ NEURAL GRAMMAR",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.padding(horizontal = AppTheme.spacing.small, vertical = 2.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "ISL → English",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.70f)
+                                )
+                            }
+                            Text(
+                                text = "\"${nlpState.synthesizedSentence}\"",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Debug Telemetry Overlay (if active)
         if (isDebugOpen) {
             DebugOverlay(
                 debounceState = debounceState,

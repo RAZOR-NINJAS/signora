@@ -13,9 +13,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import ai.signora.camera.CameraXManager
 import ai.signora.engine.DebounceEngine
+import ai.signora.ml.BodySegmentation
 import ai.signora.ml.FeatureExtractor
 import ai.signora.ml.SignoraMLP
 import ai.signora.models.*
+import ai.signora.nlp.GlossToken
+import ai.signora.nlp.IslGrammarSynthesizer
+import ai.signora.nlp.SentenceBuffer
 import ai.signora.recovery.AutoAssetManager
 import ai.signora.tts.SpeechManager
 import ai.signora.profiler.TrackingProfiler
@@ -26,6 +30,7 @@ import ai.signora.vision.HandLandmarkerHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 
 class MainActivity : ComponentActivity() {
 
@@ -39,6 +44,15 @@ class MainActivity : ComponentActivity() {
     private var islMlp: SignoraMLP? = null
 
     private val debounceEngine = DebounceEngine(threshold = 0.30f, minMargin = 0.02f, voteWindowSize = 2)
+
+    // ── NLP Pipeline ─────────────────────────────────────────────────────────
+    private var nlpState by mutableStateOf(NlpState())
+    private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 1500L) { completedTokens ->
+        val sentence = IslGrammarSynthesizer.synthesize(completedTokens)
+        if (sentence.isNotBlank()) {
+            nlpState = nlpState.copy(synthesizedSentence = sentence, pendingGlosses = emptyList())
+        }
+    }
 
     private var hasCameraPermission by mutableStateOf(false)
     private var assetStatus by mutableStateOf(AutoAssetManager.AssetStatus(isReady = false, message = "Initializing..."))
@@ -116,9 +130,12 @@ class MainActivity : ComponentActivity() {
                     minMargin = minMargin,
                     cameraResolution = cameraResolution,
                     assetStatus = assetStatus,
+                    nlpState = nlpState,
                     onModeChange = { newMode ->
                         currentMode = newMode
                         debounceEngine.clear()
+                        sentenceBuffer.clear()
+                        nlpState = NlpState()
                         debounceState = debounceState.copy(candidate = "", confidence = 0f, dwellProgress = 0f)
                     },
                     onDwellProfileChange = { newProfile ->
@@ -169,6 +186,8 @@ class MainActivity : ComponentActivity() {
                     },
                     onClear = {
                         debounceEngine.clear()
+                        sentenceBuffer.clear()
+                        nlpState = NlpState()
                         debounceState = debounceState.copy(transcript = "")
                     },
                     onSpace = {
@@ -176,7 +195,12 @@ class MainActivity : ComponentActivity() {
                         debounceState = state
                     },
                     onSpeak = {
-                        speechManager.speak(debounceEngine.getTranscript())
+                        // Flush pending gloss buffer first, then speak synthesized sentence
+                        sentenceBuffer.flush()
+                        val toSpeak = nlpState.synthesizedSentence.ifBlank {
+                            debounceEngine.getTranscript()
+                        }
+                        speechManager.speak(toSpeak)
                     },
                     onReloadModels = {
                         lifecycleScope.launch {
@@ -184,6 +208,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 )
+
             }
         }
 
@@ -329,10 +354,36 @@ class MainActivity : ComponentActivity() {
         debounceState = newState
         TrackingProfiler.onUiStateEmitted(frameId)
 
-        // Vocalize confirmed letters/words
+        // ── NLP sentence buffer tick (time-based boundary detection) ─────────
+        sentenceBuffer.tick(now)
+
+        // ── Token push on sign confirmation ──────────────────────────────────
         if (newState.confirmed && newState.lastConfirmed.isNotBlank() && newState.lastConfirmed != "SPACE") {
-            speechManager.speak(newState.lastConfirmed)
+            val confirmedLabel = newState.lastConfirmed
+
+            if (currentMode == RecognitionMode.ISL) {
+                // For ISL word-level signs, push to NLP sentence buffer
+                val bodyAnchor = BodySegmentation.detectActiveSegment(hands, activePose)?.id ?: ""
+                val token = GlossToken(
+                    label = confirmedLabel,
+                    bodyAnchor = bodyAnchor,
+                    timestamp = now,
+                    confidence = newState.confidence
+                )
+                sentenceBuffer.push(token)
+
+                // Update live pending gloss chips in UI
+                val pending = sentenceBuffer.peek().map { it.label }
+                nlpState = nlpState.copy(pendingGlosses = pending)
+
+                // In ISL mode, speak each confirmed word aloud immediately (word-by-word TTS)
+                speechManager.speak(confirmedLabel)
+            } else {
+                // ASL / Fingerspelling: speak each letter individually as before
+                speechManager.speak(confirmedLabel)
+            }
         }
+
     }
 
     override fun onDestroy() {

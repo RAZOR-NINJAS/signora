@@ -359,12 +359,13 @@ fun TrainStudioScreen(
                     val isSelected = currentSignIndex == idx
 
                     val chipBg = when {
-                        count >= TARGET_SAMPLES -> Color(0xFF10B981) // Emerald Green
-                        count > 0 -> Color(0xFFF59E0B) // Amber
+                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.tertiary
+                        count > 0 -> MaterialTheme.colorScheme.secondary
                         else -> MaterialTheme.colorScheme.surfaceContainerHigh
                     }
                     val textColor = when {
-                        count > 0 -> Color(0xFF0F172A)
+                        count >= TARGET_SAMPLES -> MaterialTheme.colorScheme.onTertiary
+                        count > 0 -> MaterialTheme.colorScheme.onSecondary
                         else -> MaterialTheme.colorScheme.onSurface
                     }
 
@@ -422,8 +423,10 @@ fun TrainStudioScreen(
                 if (currentSign != null) {
                     val count = recordedCounts[currentSign.name] ?: 0
                     Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.88f)),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f)
+                        ),
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = 10.dp)
@@ -436,7 +439,7 @@ fun TrainStudioScreen(
                                 text = currentSign.name,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             AssistChip(
@@ -452,7 +455,7 @@ fun TrainStudioScreen(
                                         Text(
                                             text = if (isAnchorMatched) "✓ [${currentSign.targetAnchor}]" else "[${currentSign.targetAnchor}]",
                                             fontSize = 11.sp,
-                                            color = if (isAnchorMatched) Color(0xFF34D399) else Color(0xFFFBBF24)
+                                            color = if (isAnchorMatched) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary
                                         )
                                     },
                                     shape = CircleShape
@@ -466,7 +469,7 @@ fun TrainStudioScreen(
                                         Text(
                                             text = "📍 ${activeSegment.displayName}",
                                             fontSize = 11.sp,
-                                            color = Color(0xFF38BDF8)
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     },
                                     shape = CircleShape
@@ -476,18 +479,20 @@ fun TrainStudioScreen(
                             Text(
                                 text = "Samples: $count / $TARGET_SAMPLES",
                                 fontSize = 12.sp,
-                                color = if (count >= TARGET_SAMPLES) Color(0xFF34D399) else Color(0xFFCBD5E1)
+                                color = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
 
+
                 // Countdown Overlay
                 if (studioState == StudioState.COUNTDOWN) {
                     Card(
-                        shape = RoundedCornerShape(32.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A).copy(alpha = 0.94f)),
-                        border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(Color(0xFFF59E0B))),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.96f)
+                        ),
                         modifier = Modifier
                             .align(Alignment.Center)
                             .padding(24.dp)
@@ -500,13 +505,13 @@ fun TrainStudioScreen(
                                 text = "$countdownValue",
                                 fontSize = 64.sp,
                                 fontWeight = FontWeight.Black,
-                                color = Color(0xFFF59E0B)
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                             Text(
                                 text = "HOLD POSTURE FOR '${currentSign?.name}'",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         }
                     }
@@ -515,8 +520,10 @@ fun TrainStudioScreen(
                 // Recording Indicator
                 if (studioState == StudioState.RECORDING) {
                     Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.92f)),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f)
+                        ),
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = 64.dp)
@@ -525,12 +532,12 @@ fun TrainStudioScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                         ) {
-                            Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "BURST 220D: ${collectedBatch.size} / $TARGET_SAMPLES SAMPLES",
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 fontSize = 14.sp
                             )
                         }
@@ -540,8 +547,10 @@ fun TrainStudioScreen(
                 // Success Message Banner
                 if (statusMessage.isNotBlank()) {
                     Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF10B981).copy(alpha = 0.94f)),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.96f)
+                        ),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 16.dp)
@@ -549,11 +558,12 @@ fun TrainStudioScreen(
                         Text(
                             text = statusMessage,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF0F172A),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                         )
                     }
                 }
+
             }
 
             // Bottom Posture Guide Card & Record Trigger FAB
@@ -611,7 +621,7 @@ fun TrainStudioScreen(
                             FilledTonalButton(
                                 onClick = { showRetrainDialog = true },
                                 enabled = studioState == StudioState.IDLE,
-                                shape = RoundedCornerShape(18.dp),
+                                shape = MaterialTheme.shapes.large,
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
                             ) {
                                 Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -629,9 +639,9 @@ fun TrainStudioScreen(
                                     }
                                 },
                                 enabled = studioState == StudioState.IDLE,
-                                shape = RoundedCornerShape(20.dp),
+                                shape = MaterialTheme.shapes.extraLarge,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.primary else Color(0xFF10B981)
+                                    containerColor = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
                                 ),
                                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
                             ) {
@@ -655,7 +665,8 @@ fun TrainStudioScreen(
         val totalSamples = recordedCounts.values.sum()
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(36.dp)) },
+            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(36.dp)) },
+
             title = { Text("Training Dataset Exported", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
@@ -767,11 +778,12 @@ fun TrainStudioScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = trainingStatusText,
-                                color = Color(0xFF10B981),
+                                color = MaterialTheme.colorScheme.tertiary,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
+
                     }
                 }
             },
