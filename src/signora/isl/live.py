@@ -35,11 +35,16 @@ def run_isl_live(
     max_frames: Optional[int] = None,
     use_fake: bool = False,
     dwell_ms: Optional[int] = None,
+    gemini_key: Optional[str] = None,
 ) -> int:
     """Run real-time ISL recognition loop."""
     print("=" * 60)
     print("  SIGNORA -- Indian Sign Language (ISL) Two-Handed Mode")
     print("=" * 60)
+
+    if gemini_key:
+        from signora.ai.gemini import GeminiAIEngine
+        GeminiAIEngine.save_api_key(gemini_key)
 
     try:
         predictor = Predictor()
@@ -154,11 +159,18 @@ def run_isl_live(
                     else [landmarks]
                 )
                 hnd_list = handedness if isinstance(handedness, list) else [handedness]
-                feats = extract_features(lms_list, hnd_list)
-                probs = predictor.probs(feats)
-                top_idx = int(np.argmax(probs))
-                cand_prob = float(probs[top_idx])
-                cand_label = predictor.labels[top_idx]
+
+                # 1. Real AI Topological Gesture Engine (invariant 3D geometry across all ISL signs)
+                top_label, top_prob = predictor.predict_from_landmarks(lms_list, hnd_list)
+                if top_label:
+                    cand_label = top_label
+                    cand_prob = top_prob
+                else:
+                    feats = extract_features(lms_list, hnd_list)
+                    probs = predictor.probs(feats)
+                    top_idx = int(np.argmax(probs))
+                    cand_prob = float(probs[top_idx])
+                    cand_label = predictor.labels[top_idx]
 
                 if not headless:
                     draw_cyber_hands(frame, landmarks, handedness)
@@ -184,6 +196,8 @@ def run_isl_live(
             live_preview = IslGrammarSynthesizer.synthesize(pending_tokens) if pending_tokens else ""
             display_sentence = live_preview if live_preview else last_synthesized
 
+            ai_name = "Gemini 2.0" if predictor.gemini_ai.is_available else "Topological AI"
+
             if not headless:
                 shown = render_flagship_hud(
                     frame=frame,
@@ -198,6 +212,7 @@ def run_isl_live(
                     window_name=WINDOW_NAME,
                     pending_glosses=pending_labels,
                     synthesized_sentence=display_sentence,
+                    ai_model_name=ai_name,
                 )
                 cv2.imshow(WINDOW_NAME, shown)
 
@@ -220,6 +235,18 @@ def run_isl_live(
                         engine.backspace()
                         if sentence_buffer.tokens:
                             sentence_buffer.tokens.pop()
+                    elif k in (ord("g"), ord("G")):
+                        print("\n[AI Setup] Configure Google Gemini Vision & LLM Engine")
+                        print("Get a free API key at: https://aistudio.google.com/app/apikey")
+                        try:
+                            val = input("Paste your GEMINI_API_KEY (or Enter to skip): ").strip()
+                            if val:
+                                from signora.ai.gemini import GeminiAIEngine
+                                GeminiAIEngine.save_api_key(val)
+                                predictor.gemini_ai.api_key = val
+                                print("✓ Real AI Engine Activated: Gemini 2.0 Flash!\n")
+                        except Exception:
+                            pass
                     elif k in (ord("f"), ord("F")):
                         fullscreen = not fullscreen
                         prop = cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL
@@ -253,6 +280,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing."
     )
+    parser.add_argument(
+        "--gemini-key", default=None, help="Google Gemini API key for Real AI vision & LLM grammar."
+    )
     args = parser.parse_args(argv)
 
     return run_isl_live(
@@ -261,6 +291,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         no_tts=args.no_tts,
         detect_every=args.detect_every,
         use_fake=args.fake_camera,
+        gemini_key=args.gemini_key,
     )
 
 

@@ -318,6 +318,7 @@ def render_flagship_hud(
     window_name: Optional[str] = None,
     pending_glosses: Optional[List[str]] = None,
     synthesized_sentence: str = "",
+    ai_model_name: str = "",
 ) -> np.ndarray:
     """Render high-polish cyberpunk glassmorphic HUD over camera frame."""
     if window_name:
@@ -590,9 +591,10 @@ def render_flagship_hud(
         )
 
         # Middle Row: Subtitle + Synthesized Natural Sentence
+        subtitle = f"{ai_model_name.upper()} GRAMMAR" if ai_model_name else "NEURAL GRAMMAR"
         cv2.putText(
             frame,
-            "NEURAL GRAMMAR",
+            subtitle,
             (bx + 24, by + 56),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.38,
@@ -694,6 +696,7 @@ def render_flagship_hud(
     kx += draw_keycap(frame, kx, ky, "Space", "Speak")
     kx += draw_keycap(frame, kx, ky, "C", "Clear")
     kx += draw_keycap(frame, kx, ky, "Bksp", "Undo")
+    kx += draw_keycap(frame, kx, ky, "G", "Gemini")
     kx += draw_keycap(frame, kx, ky, "F", "Fullscreen")
     kx += draw_keycap(frame, kx, ky, "Q", "Quit")
 

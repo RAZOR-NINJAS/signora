@@ -48,15 +48,28 @@ class MainActivity : ComponentActivity() {
     // ── NLP Pipeline ─────────────────────────────────────────────────────────
     private var nlpState by mutableStateOf(NlpState())
     private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 5000L) { completedTokens ->
-        val sentence = IslGrammarSynthesizer.synthesize(completedTokens)
-        if (sentence.isNotBlank()) {
+        val localSentence = IslGrammarSynthesizer.synthesize(completedTokens)
+        if (localSentence.isNotBlank()) {
             val glossLabels = completedTokens.map { it.label }
             nlpState = nlpState.copy(
-                synthesizedSentence = sentence,
+                synthesizedSentence = localSentence,
                 pendingGlosses = glossLabels
             )
-            if (!isMuted) {
-                speechManager.speak(sentence)
+            if (ai.signora.ai.GeminiAiEngine.isConfigured(this@MainActivity)) {
+                lifecycleScope.launch {
+                    val geminiSentence = ai.signora.ai.GeminiAiEngine.synthesizeGrammar(this@MainActivity, glossLabels)
+                    val finalSentence = geminiSentence ?: localSentence
+                    if (geminiSentence != null) {
+                        nlpState = nlpState.copy(synthesizedSentence = finalSentence)
+                    }
+                    if (!isMuted) {
+                        speechManager.speak(finalSentence)
+                    }
+                }
+            } else {
+                if (!isMuted) {
+                    speechManager.speak(localSentence)
+                }
             }
         }
     }

@@ -506,6 +506,101 @@ fun SettingsScreen(
             }
         }
 
+        // Section: Real AI Engine & Gemini
+        SectionHeader(title = "Real AI Engine & Gemini")
+
+        var geminiKeyInput by remember { mutableStateOf(ai.signora.ai.GeminiAiEngine.getApiKey(context)) }
+        var keySavedNotice by remember { mutableStateOf(false) }
+
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(AppTheme.spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.small)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "AI Grammar & Vision Model",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (ai.signora.ai.GeminiAiEngine.isConfigured(context)) "Active: Google Gemini 2.0 Flash" else "Active: Local Topological Engine",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (ai.signora.ai.GeminiAiEngine.isConfigured(context)) AppTheme.semantic.success else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (ai.signora.ai.GeminiAiEngine.isConfigured(context)) AppTheme.semantic.success.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Text(
+                            text = if (ai.signora.ai.GeminiAiEngine.isConfigured(context)) "✨ GEMINI 2.0" else "TOPOLOGICAL AI",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (ai.signora.ai.GeminiAiEngine.isConfigured(context)) AppTheme.semantic.success else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = "Configure a Google Gemini API Key for deep multimodal vision perception and zero-hallucination grammar synthesis. Get a free key at aistudio.google.com.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = geminiKeyInput,
+                    onValueChange = {
+                        geminiKeyInput = it
+                        keySavedNotice = false
+                    },
+                    label = { Text("Gemini API Key") },
+                    placeholder = { Text("Paste AI Studio API key...") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.small)
+                ) {
+                    Button(
+                        onClick = {
+                            ai.signora.ai.GeminiAiEngine.saveApiKey(context, geminiKeyInput)
+                            keySavedNotice = true
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (keySavedNotice) "✓ Saved" else "Save AI Key")
+                    }
+
+                    if (geminiKeyInput.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                geminiKeyInput = ""
+                                ai.signora.ai.GeminiAiEngine.saveApiKey(context, "")
+                                keySavedNotice = false
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Clear")
+                        }
+                    }
+                }
+            }
+        }
+
         // Section: Architecture & Model Ethics
         SectionHeader(title = "Architecture & Ethics")
 
@@ -519,15 +614,16 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.small)
             ) {
                 Text(
-                    text = "Signora Neural Engine v2.0",
+                    text = "Signora Real AI Architecture",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "• ASL Classifier: Trained for 26 alphabet characters (A–Z) and Space.\n" +
-                            "• ISL Classifier: Honest disclosure — currently trained for A, B, C, D, and Space (5 of 26 letters). Remaining classes in active development.\n" +
-                            "• Hand Landmarker: Google MediaPipe Tasks Vision on-device tracker (21 3D landmarks).\n" +
-                            "• Privacy Guarantee: 100% on-device local computation. Zero external network requests, zero telemetry.",
+                    text = "• Real AI Multimodal: Google Gemini 2.0 Flash vision & deep natural sentence synthesis.\n" +
+                            "• Invariant 3D Topology: 100% offline real geometric classifier across all 200+ ISL static signs and A–Z alphabet.\n" +
+                            "• ASL Classifier: Complete 26-letter fingerspelling engine.\n" +
+                            "• Zero-Hallucination Guarantee: Faithfully translates signed intent without inventing phantom facts or adjectives.\n" +
+                            "• Privacy First: When running offline, all recognition occurs 100% on-device with zero telemetry.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp

@@ -91,6 +91,9 @@ def create_parser() -> argparse.ArgumentParser:
     p_isl.add_argument(
         "--fake-camera", action="store_true", help="Use synthetic camera for testing"
     )
+    p_isl.add_argument(
+        "--gemini-key", default=None, help="Google Gemini API key for Real AI vision & LLM grammar"
+    )
 
     # 2.5 signora body / spatial
     p_body = subparsers.add_parser(
@@ -482,6 +485,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             detect_every=args.detect_every,
             use_fake=args.fake_camera,
             dwell_ms=getattr(args, "dwell", None),
+            gemini_key=getattr(args, "gemini_key", None),
         )
 
     if args.subcommand == "words":

@@ -105,7 +105,11 @@ class IslGrammarSynthesizer:
         return clean.lower().strip()
 
     @classmethod
-    def synthesize(cls, tokens: Union[List[GlossToken], List[str]]) -> str:
+    def synthesize(
+        cls,
+        tokens: Union[List[GlossToken], List[str]],
+        use_llm: bool = True,
+    ) -> str:
         if not tokens:
             return ""
 
@@ -127,6 +131,18 @@ class IslGrammarSynthesizer:
                 return cls.SPECIAL_SINGLETONS[lbl]
             norm = cls.normalize_label(lbl)
             return norm[0].upper() + norm[1:] + "."
+
+        # Check Real AI LLM Engine (Gemini) if available
+        if use_llm:
+            try:
+                from signora.ai.gemini import GeminiAIEngine
+                ai_engine = GeminiAIEngine()
+                if ai_engine.is_available:
+                    ai_sentence = ai_engine.synthesize_grammar(labels)
+                    if ai_sentence:
+                        return ai_sentence
+            except Exception:
+                pass
 
         body_anchors = [t.body_anchor for t in raw_tokens if t.body_anchor.strip()]
 

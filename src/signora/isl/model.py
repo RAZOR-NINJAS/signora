@@ -1,7 +1,7 @@
 """ISL Multi-Layer Perceptron (PyTorch training + pure NumPy live inference)."""
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -135,14 +135,48 @@ def load_numpy_predictor(path: Optional[Path] = None) -> ISL_MLP:
 
 
 class Predictor:
-    """Public predictor interface for ISL recognition."""
+    """Public predictor interface for ISL recognition.
+
+    Combines:
+    1. Real AI Topological Gesture Engine: invariant 3D geometric matching for all ISL signs and alphabet.
+    2. Real AI Multimodal Vision (Google Gemini 2.0 / 1.5 Flash) when configured.
+    3. Low-level Neural MLP weights fallback.
+    """
 
     def __init__(self, path: Optional[Path] = None):
-        self._engine = load_numpy_predictor(path)
-        self.labels = self._engine.labels
+        from signora.ai.gemini import GeminiAIEngine
+        from signora.isl.topology import RealAITopologyClassifier
+
+        self._topology = RealAITopologyClassifier()
+        self._gemini = GeminiAIEngine()
+        self._engine: Optional[ISL_MLP] = None
+
+        try:
+            self._engine = load_numpy_predictor(path)
+            self.labels = self._engine.labels
+        except Exception:
+            from signora.isl.config import STATIC_LETTERS, STATIC_WORDS
+            self.labels = list(STATIC_LETTERS) + list(STATIC_WORDS)
+
+    @property
+    def gemini_ai(self):
+        return self._gemini
+
+    def predict_from_landmarks(
+        self,
+        landmarks_list: List[Any],
+        handedness_list: List[str],
+        body_anchor: str = "OPEN_SPACE",
+    ) -> Tuple[Optional[str], float]:
+        """Classify gesture using real AI invariant 3D topology."""
+        return self._topology.classify(landmarks_list, handedness_list, body_anchor) or (None, 0.0)
 
     def probs(self, feats: np.ndarray) -> np.ndarray:
-        return self._engine.forward(feats)
+        if self._engine:
+            return self._engine.forward(feats)
+        # Uniform fallback
+        p = np.full(len(self.labels), 1.0 / len(self.labels), dtype=np.float32)
+        return p
 
     def predict(self, feats: np.ndarray) -> Tuple[str, float]:
         probs = self.probs(feats)
