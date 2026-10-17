@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -965,6 +966,29 @@ fun DinoGameScreen(
                     )
                 }
 
+                // 1b. Geometry Dash Hyperspace Warp Streaks
+                if (gameState == GameState.RUNNING || gameState == GameState.JUMPING || feverActive) {
+                    val streakAlpha = if (feverActive) 0.55f else 0.22f
+                    for (i in 0 until 14) {
+                        val rowT = (frameNow * 0.0012f * (speed / 0.40f) * (i + 4) * 80f) % (canvasW + 200f)
+                        val lx = canvasW - rowT + shakeX
+                        val ly = canvasH * (0.08f + (i * 0.046f))
+                        val len = canvasW * (if (feverActive) 0.18f else 0.09f) * (speed / 0.42f)
+                        val streakColor = if (feverActive) {
+                            FEVER_RAINBOW[i % FEVER_RAINBOW.size].copy(alpha = streakAlpha)
+                        } else {
+                            currentBiome.groundLineColor.copy(alpha = streakAlpha)
+                        }
+                        drawLine(
+                            color = streakColor,
+                            start = Offset(lx, ly),
+                            end = Offset(lx + len, ly),
+                            strokeWidth = if (feverActive) 2.5f else 1.5f,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                }
+
                 // 2. Celestial & Parallax Backgrounds
                 when (currentBiome) {
                     GameBiome.DESERT -> {
@@ -1221,10 +1245,45 @@ fun DinoGameScreen(
                     )
                 }
 
-                // 8. Dinosaur Rendering
+                // 8. Dinosaur Rendering with Geometry Dash 360° Airborne Flip & Rocket Flames
                 val dinoX = canvasW * 0.16f + shakeX
                 val hopPx = dinoHop * canvasH * 0.95f
                 val dinoY = groundY - 22 * u - hopPx
+                val dinoPivotX = dinoX + 8f * u
+                val dinoPivotY = dinoY + 11f * u
+
+                // Geometry Dash 360° jump flip rotation angle
+                val jumpRotation = if (gameState == GameState.JUMPING) (jumpProgress * 360f) else 0f
+
+                // Rocket Jet Exhaust Sparks behind player
+                if (gameState == GameState.RUNNING || gameState == GameState.JUMPING || feverActive) {
+                    for (i in 0 until 5) {
+                        val sparkPhase = (frameNow * 0.04f + i * 1.8f)
+                        val sparkX = dinoX - (i * 3.2f * u) - (sparkPhase % 16f) * u * 0.35f
+                        val sparkY = dinoY + 13f * u + sin((sparkPhase + i).toDouble()).toFloat() * 2f * u
+                        val flameColor = if (feverActive) {
+                            FEVER_RAINBOW[(i * 2) % FEVER_RAINBOW.size]
+                        } else {
+                            if (i % 2 == 0) Color(0xFFFF5722) else Color(0xFFFFEB3B)
+                        }
+                        drawCircle(
+                            color = flameColor.copy(alpha = 0.85f - i * 0.15f),
+                            radius = (4f - i * 0.6f) * u,
+                            center = Offset(sparkX, sparkY)
+                        )
+                    }
+                }
+
+                // Geometry Dash Jump Orb Ring during jump
+                if (gameState == GameState.JUMPING) {
+                    val pulse = 1f + 0.25f * sin((jumpProgress * PI).toFloat())
+                    drawCircle(
+                        color = Color(0xFFFDE047).copy(alpha = 0.55f),
+                        radius = 16f * u * pulse,
+                        center = Offset(dinoPivotX, dinoPivotY),
+                        style = Stroke(width = 2.5f)
+                    )
+                }
 
                 val isInvincibleBlink = (invincibilityTimer > 0f) && ((frameNow / 80) % 2 == 0L)
                 val dinoBodyColor = when {
@@ -1253,54 +1312,80 @@ fun DinoGameScreen(
                     size = Size(18f * u * (1f - shadowLift * 0.35f), u * 2.4f)
                 )
 
-                // Dino Body
-                for (run in DINO_BODY_RUNS) {
-                    drawRect(
-                        color = dinoBodyColor,
-                        topLeft = Offset(dinoX + run.startCol * u, dinoY + run.row * u),
-                        size = Size((run.endCol - run.startCol) * u + 0.6f, u + 0.6f)
-                    )
-                }
-
-                // Dino Legs & Eye
-                if (gameState == GameState.GAME_OVER) {
-                    for (run in DINO_LEGS_DEAD_RUNS) {
-                        drawRect(
-                            color = currentBiome.dinoColor,
-                            topLeft = Offset(dinoX + run.startCol * u, dinoY + 17 * u + run.row * u),
-                            size = Size((run.endCol - run.startCol) * u + 0.6f, u + 0.6f)
-                        )
-                    }
-                    val ex = dinoX + 14 * u
-                    val ey = dinoY + 3.2f * u
-                    val es = u * 1.3f
-                    drawLine(Color.Red, Offset(ex - es, ey - es), Offset(ex + es, ey + es), strokeWidth = 3.5f)
-                    drawLine(Color.Red, Offset(ex + es, ey - es), Offset(ex - es, ey + es), strokeWidth = 3.5f)
-                } else {
-                    val legRuns = when (gameState) {
-                        GameState.JUMPING -> DINO_LEGS_A_RUNS
-                        GameState.ENCOUNTER -> DINO_LEGS_A_RUNS
-                        else -> if (legFrame == 0) DINO_LEGS_A_RUNS else DINO_LEGS_B_RUNS
-                    }
-                    for (run in legRuns) {
+                // Rotate Dino with Geometry Dash 360° flip
+                rotate(degrees = jumpRotation, pivot = Offset(dinoPivotX, dinoPivotY)) {
+                    // Dino Body
+                    for (run in DINO_BODY_RUNS) {
                         drawRect(
                             color = dinoBodyColor,
-                            topLeft = Offset(dinoX + run.startCol * u, dinoY + 17 * u + run.row * u),
+                            topLeft = Offset(dinoX + run.startCol * u, dinoY + run.row * u),
                             size = Size((run.endCol - run.startCol) * u + 0.6f, u + 0.6f)
                         )
                     }
-                    val eyeColor = if (currentBiome == GameBiome.NEON_SYNTH) Color(0xFF06B6D4) else Color(0xFF0F172A)
-                    drawRect(eyeColor, Offset(dinoX + 13.5f * u, dinoY + 2.5f * u), Size(u * 1.5f, u * 1.5f))
+
+                    // Dino Legs & Eye
+                    if (gameState == GameState.GAME_OVER) {
+                        for (run in DINO_LEGS_DEAD_RUNS) {
+                            drawRect(
+                                color = currentBiome.dinoColor,
+                                topLeft = Offset(dinoX + run.startCol * u, dinoY + 17 * u + run.row * u),
+                                size = Size((run.endCol - run.startCol) * u + 0.6f, u + 0.6f)
+                            )
+                        }
+                        val ex = dinoX + 14 * u
+                        val ey = dinoY + 3.2f * u
+                        val es = u * 1.3f
+                        drawLine(Color.Red, Offset(ex - es, ey - es), Offset(ex + es, ey + es), strokeWidth = 3.5f)
+                        drawLine(Color.Red, Offset(ex + es, ey - es), Offset(ex - es, ey + es), strokeWidth = 3.5f)
+                    } else {
+                        val legRuns = when (gameState) {
+                            GameState.JUMPING -> DINO_LEGS_A_RUNS
+                            GameState.ENCOUNTER -> DINO_LEGS_A_RUNS
+                            else -> if (legFrame == 0) DINO_LEGS_A_RUNS else DINO_LEGS_B_RUNS
+                        }
+                        for (run in legRuns) {
+                            drawRect(
+                                color = dinoBodyColor,
+                                topLeft = Offset(dinoX + run.startCol * u, dinoY + 17 * u + run.row * u),
+                                size = Size((run.endCol - run.startCol) * u + 0.6f, u + 0.6f)
+                            )
+                        }
+                        val eyeColor = if (currentBiome == GameBiome.NEON_SYNTH) Color(0xFF06B6D4) else Color(0xFF0F172A)
+                        drawRect(eyeColor, Offset(dinoX + 13.5f * u, dinoY + 2.5f * u), Size(u * 1.5f, u * 1.5f))
+                    }
+
+                    // Cosmic Astronaut Helmet Visor
+                    if (currentBiome == GameBiome.COSMIC_SPACE) {
+                        drawOval(
+                            color = Color(0xFF38BDF8).copy(alpha = 0.85f),
+                            topLeft = Offset(dinoX + 11.5f * u, dinoY + 1.2f * u),
+                            size = Size(5.5f * u, 4.5f * u)
+                        )
+                    }
                 }
 
-                // Cosmic Astronaut Helmet Visor
-                if (currentBiome == GameBiome.COSMIC_SPACE) {
-                    drawOval(
-                        color = Color(0xFF38BDF8).copy(alpha = 0.85f),
-                        topLeft = Offset(dinoX + 11.5f * u, dinoY + 1.2f * u),
-                        size = Size(5.5f * u, 4.5f * u)
-                    )
-                }
+            }
+
+            // Geometry Dash Level Progress Bar across top edge
+            val levelProgress = ((score % 1000) / 1000f).coerceIn(0f, 1f)
+            val levelPercent = (levelProgress * 100).toInt()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .align(Alignment.TopCenter)
+                    .background(Color.Black.copy(alpha = 0.6f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(levelProgress)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF00F0FF), Color(0xFFA855F7), Color(0xFFFF007F))
+                            )
+                        )
+                )
             }
 
             // Top HUD Overlay (Scoreboard, Hearts & Streak Multiplier)
@@ -1364,10 +1449,35 @@ fun DinoGameScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Geometry Dash Level Percentage Badge
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.65f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00F0FF).copy(alpha = 0.5f))
+                    ) {
+                        Text(
+                            text = "$levelPercent%",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            color = Color(0xFF00F0FF),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
                 }
 
-                // Streak / Multiplier Pill
+                // Streak / Multiplier Pill with Arcade Ranks
                 if (streak > 0 && gameState != GameState.IDLE) {
+                    val comboRank = when {
+                        streak >= 10 -> "GODLIKE"
+                        streak >= 8 -> "INSANE"
+                        streak >= 6 -> "MEGA"
+                        streak >= 4 -> "SUPER"
+                        else -> "NICE"
+                    }
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = if (feverActive) Color(0xFFBE123C).copy(alpha = 0.9f) else Color(0xFFD97706).copy(alpha = 0.85f),
@@ -1383,7 +1493,7 @@ fun DinoGameScreen(
                             Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (feverActive) "FEVER ${currentMultiplier()}×" else "${streak}x • ${currentMultiplier()}×",
+                                text = if (feverActive) "FEVER ${currentMultiplier()}×" else "$comboRank ${streak}x • ${currentMultiplier()}×",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
@@ -1393,6 +1503,7 @@ fun DinoGameScreen(
                     }
                 }
             }
+
 
             // ENCOUNTER CHALLENGE HUD CARD (Appears when Dino halts in front of cactus)
             if (gameState == GameState.ENCOUNTER && currentUpcomingObstacle != null) {

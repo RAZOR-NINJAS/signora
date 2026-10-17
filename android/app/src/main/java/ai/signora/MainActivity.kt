@@ -25,12 +25,12 @@ import ai.signora.tts.SpeechManager
 import ai.signora.profiler.TrackingProfiler
 import ai.signora.ui.SignoraScreen
 import ai.signora.ui.theme.AppThemeMode
+import ai.signora.ui.theme.AppPalette
 import ai.signora.ui.theme.SignoraTheme
 import ai.signora.vision.HandLandmarkerHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
 
 class MainActivity : ComponentActivity() {
 
@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
     private var autoCollapseEnabled by mutableStateOf(true)
     private var latestFrameId by mutableStateOf(0L)
     private var themeMode by mutableStateOf(AppThemeMode.DARK)
+    private var selectedPalette by mutableStateOf(AppPalette.WALLPAPER)
     private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
     private var activeLandmarks by mutableStateOf<List<HandLandmarks>>(emptyList())
@@ -104,6 +105,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SignoraTheme(
                 themeMode = themeMode,
+                selectedPalette = selectedPalette,
                 dynamicColor = dynamicColorEnabled
             ) {
                 SignoraScreen(
@@ -122,6 +124,7 @@ class MainActivity : ComponentActivity() {
                     fps = currentFps,
                     isDark = themeMode == AppThemeMode.DARK,
                     themeMode = themeMode,
+                    selectedPalette = selectedPalette,
                     dynamicColor = dynamicColorEnabled,
                     autoCollapseEnabled = autoCollapseEnabled,
                     latestFrameId = latestFrameId,
@@ -176,6 +179,7 @@ class MainActivity : ComponentActivity() {
                         themeMode = if (themeMode == AppThemeMode.DARK) AppThemeMode.LIGHT else AppThemeMode.DARK
                     },
                     onThemeModeChange = { themeMode = it },
+                    onPaletteChange = { selectedPalette = it },
                     onDynamicColorChange = { dynamicColorEnabled = it },
                     onTestVoice = {
                         speechManager.speak("Testing Unspoken Neural Voice synthesizer")

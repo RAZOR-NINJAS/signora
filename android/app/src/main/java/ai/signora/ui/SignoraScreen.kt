@@ -35,6 +35,7 @@ fun SignoraScreen(
     fps: Float = 30f,
     isDark: Boolean = true,
     themeMode: AppThemeMode = AppThemeMode.DARK,
+    selectedPalette: ai.signora.ui.theme.AppPalette = ai.signora.ui.theme.AppPalette.WALLPAPER,
     dynamicColor: Boolean = true,
     autoCollapseEnabled: Boolean = true,
     latestFrameId: Long = 0L,
@@ -56,6 +57,7 @@ fun SignoraScreen(
     onTogglePause: () -> Unit = {},
     onToggleTheme: () -> Unit = {},
     onThemeModeChange: (AppThemeMode) -> Unit = {},
+    onPaletteChange: (ai.signora.ui.theme.AppPalette) -> Unit = {},
     onDynamicColorChange: (Boolean) -> Unit = {},
     onTestVoice: () -> Unit = {},
     onBackspace: () -> Unit,
@@ -167,6 +169,7 @@ fun SignoraScreen(
                     AppDestination.SETTINGS -> {
                         SettingsScreen(
                             themeMode = themeMode,
+                            selectedPalette = selectedPalette,
                             dynamicColor = dynamicColor,
                             dwellProfile = dwellProfile,
                             customDwellMs = customDwellMs,
@@ -176,6 +179,7 @@ fun SignoraScreen(
                             isFrontCamera = isFrontCamera,
                             autoCollapseEnabled = autoCollapseEnabled,
                             onThemeModeChange = onThemeModeChange,
+                            onPaletteChange = onPaletteChange,
                             onDynamicColorChange = onDynamicColorChange,
                             onDwellProfileChange = onDwellProfileChange,
                             onCustomDwellChange = onCustomDwellChange,

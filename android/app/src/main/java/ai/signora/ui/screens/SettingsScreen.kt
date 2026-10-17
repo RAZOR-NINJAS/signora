@@ -1,9 +1,12 @@
 package ai.signora.ui.screens
 
 import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -13,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -21,12 +25,14 @@ import ai.signora.ui.components.SectionHeader
 import ai.signora.ui.components.SettingsItem
 import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.AppThemeMode
+import ai.signora.ui.theme.AppPalette
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     themeMode: AppThemeMode,
+    selectedPalette: AppPalette = AppPalette.WALLPAPER,
     dynamicColor: Boolean,
     dwellProfile: DwellProfile,
     customDwellMs: Long,
@@ -36,6 +42,7 @@ fun SettingsScreen(
     isFrontCamera: Boolean,
     autoCollapseEnabled: Boolean = true,
     onThemeModeChange: (AppThemeMode) -> Unit,
+    onPaletteChange: (AppPalette) -> Unit = {},
     onDynamicColorChange: (Boolean) -> Unit,
     onDwellProfileChange: (DwellProfile) -> Unit,
     onCustomDwellChange: (Long) -> Unit,
@@ -118,6 +125,72 @@ fun SettingsScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(AppTheme.spacing.medium))
+
+                Text(
+                    text = "Color Palette & Wallpaper Theming",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Detect wallpaper tones or pick custom expressive aesthetics",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(AppTheme.spacing.small))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppPalette.values().forEach { palette ->
+                        val isSelected = selectedPalette == palette
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPaletteChange(palette) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .background(palette.previewColor, androidx.compose.foundation.shape.CircleShape)
+                                            .border(1.5.dp, Color.White.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = palette.displayName,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = palette.subtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     Spacer(modifier = Modifier.height(AppTheme.spacing.medium))
                     Row(
@@ -145,6 +218,7 @@ fun SettingsScreen(
                 }
             }
         }
+
 
         // Section: Gesture Debounce & Dwell Timers
         SectionHeader(title = "Dwell Duration & Smoothing")

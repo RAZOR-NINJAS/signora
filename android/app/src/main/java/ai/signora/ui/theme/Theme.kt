@@ -144,6 +144,171 @@ val ExpressiveDarkColorScheme = darkColorScheme(
 )
 
 // ============================================================================
+// EXPRESSIVE PALETTES (Pink Sakura, Neon Synthwave, Emerald Matrix, Solar Amber)
+// ============================================================================
+
+val PinkSakuraDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFF6090),
+    onPrimary = Color(0xFF5A0025),
+    primaryContainer = Color(0xFF831843),
+    onPrimaryContainer = Color(0xFFFFD9E2),
+    secondary = Color(0xFFFB7185),
+    onSecondary = Color(0xFF5A001F),
+    secondaryContainer = Color(0xFF9F1239),
+    onSecondaryContainer = Color(0xFFFFD9DF),
+    tertiary = Color(0xFFF472B6),
+    onTertiary = Color(0xFF4C0030),
+    tertiaryContainer = Color(0xFF701A51),
+    onTertiaryContainer = Color(0xFFFFD8EB),
+    background = Color(0xFF160910),
+    onBackground = Color(0xFFFDE8F0),
+    surface = Color(0xFF1A0C13),
+    onSurface = Color(0xFFFDE8F0),
+    surfaceVariant = Color(0xFF331625),
+    onSurfaceVariant = Color(0xFFE2B8CA),
+    surfaceContainerLowest = Color(0xFF0F050A),
+    surfaceContainerLow = Color(0xFF1F0E17),
+    surfaceContainer = Color(0xFF27121D),
+    surfaceContainerHigh = Color(0xFF321726),
+    surfaceContainerHighest = Color(0xFF3E1D2F),
+    outline = Color(0xFFA66E87),
+    outlineVariant = Color(0xFF592D43),
+    inverseSurface = Color(0xFFFDE8F0),
+    inverseOnSurface = Color(0xFF1A0C13),
+    inversePrimary = Color(0xFFBE123C),
+    scrim = PureBlack
+)
+
+val PinkSakuraLightColorScheme = lightColorScheme(
+    primary = Color(0xFFDB2777),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFFCE7F3),
+    onPrimaryContainer = Color(0xFF831843),
+    secondary = Color(0xFFE11D48),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFFFE4E6),
+    onSecondaryContainer = Color(0xFF881337),
+    tertiary = Color(0xFFC026D3),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFAE8FF),
+    onTertiaryContainer = Color(0xFF701A75),
+    background = Color(0xFFFFF5F7),
+    onBackground = Color(0xFF26101B),
+    surface = Color(0xFFFFF5F7),
+    onSurface = Color(0xFF26101B),
+    surfaceVariant = Color(0xFFF8E0EB),
+    onSurfaceVariant = Color(0xFF6B485A),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFFF0F5),
+    surfaceContainer = Color(0xFFFCE7EE),
+    surfaceContainerHigh = Color(0xFFF7DDE6),
+    surfaceContainerHighest = Color(0xFFF2D3DF),
+    outline = Color(0xFFA66E87),
+    outlineVariant = Color(0xFFDAB0C3),
+    inverseSurface = Color(0xFF381B2A),
+    inverseOnSurface = Color(0xFFFCE7EE),
+    inversePrimary = Color(0xFFFF6090),
+    scrim = PureBlack
+)
+
+val NeonSynthwaveDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF06B6D4),
+    onPrimary = Color(0xFF00363F),
+    primaryContainer = Color(0xFF0E4E5B),
+    onPrimaryContainer = Color(0xFFA5F3FC),
+    secondary = Color(0xFFF43F5E),
+    onSecondary = Color(0xFF4C0519),
+    secondaryContainer = Color(0xFF881337),
+    onSecondaryContainer = Color(0xFFFFE4E6),
+    tertiary = Color(0xFFA855F7),
+    onTertiary = Color(0xFF3B0764),
+    tertiaryContainer = Color(0xFF581C87),
+    onTertiaryContainer = Color(0xFFF3E8FF),
+    background = Color(0xFF0A0A14),
+    onBackground = Color(0xFFE2E8F0),
+    surface = Color(0xFF0F0F1E),
+    onSurface = Color(0xFFE2E8F0),
+    surfaceVariant = Color(0xFF1E1E38),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    surfaceContainerLowest = Color(0xFF05050C),
+    surfaceContainerLow = Color(0xFF121224),
+    surfaceContainer = Color(0xFF18182E),
+    surfaceContainerHigh = Color(0xFF21213D),
+    surfaceContainerHighest = Color(0xFF2C2C4E),
+    outline = Color(0xFF06B6D4),
+    outlineVariant = Color(0xFF2A2A4E),
+    inverseSurface = Color(0xFFE2E8F0),
+    inverseOnSurface = Color(0xFF0A0A14),
+    inversePrimary = Color(0xFF0891B2),
+    scrim = PureBlack
+)
+
+val EmeraldMatrixDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF10B981),
+    onPrimary = Color(0xFF003822),
+    primaryContainer = Color(0xFF064E3B),
+    onPrimaryContainer = Color(0xFFA7F3D0),
+    secondary = Color(0xFF34D399),
+    onSecondary = Color(0xFF003824),
+    secondaryContainer = Color(0xFF047857),
+    onSecondaryContainer = Color(0xFFD1FAE5),
+    tertiary = Color(0xFF2DD4BF),
+    onTertiary = Color(0xFF003731),
+    tertiaryContainer = Color(0xFF115E59),
+    onTertiaryContainer = Color(0xFFCCFBF1),
+    background = Color(0xFF050F0A),
+    onBackground = Color(0xFFECFDF5),
+    surface = Color(0xFF091710),
+    onSurface = Color(0xFFECFDF5),
+    surfaceVariant = Color(0xFF132A1E),
+    onSurfaceVariant = Color(0xFFA7F3D0),
+    surfaceContainerLowest = Color(0xFF020805),
+    surfaceContainerLow = Color(0xFF0D1E16),
+    surfaceContainer = Color(0xFF13281E),
+    surfaceContainerHigh = Color(0xFF1A3427),
+    surfaceContainerHighest = Color(0xFF224233),
+    outline = Color(0xFF10B981),
+    outlineVariant = Color(0xFF1B3B2B),
+    inverseSurface = Color(0xFFECFDF5),
+    inverseOnSurface = Color(0xFF050F0A),
+    inversePrimary = Color(0xFF059669),
+    scrim = PureBlack
+)
+
+val SolarAmberDarkColorScheme = darkColorScheme(
+    primary = Color(0xFFFBBF24),
+    onPrimary = Color(0xFF452B00),
+    primaryContainer = Color(0xFF78350F),
+    onPrimaryContainer = Color(0xFFFEF3C7),
+    secondary = Color(0xFFF97316),
+    onSecondary = Color(0xFF4A1800),
+    secondaryContainer = Color(0xFF9A3412),
+    onSecondaryContainer = Color(0xFFFFEDD5),
+    tertiary = Color(0xFFF59E0B),
+    onTertiary = Color(0xFF451A03),
+    tertiaryContainer = Color(0xFF78350F),
+    onTertiaryContainer = Color(0xFFFEF3C7),
+    background = Color(0xFF110C05),
+    onBackground = Color(0xFFFFFBEB),
+    surface = Color(0xFF171107),
+    onSurface = Color(0xFFFFFBEB),
+    surfaceVariant = Color(0xFF291E0C),
+    onSurfaceVariant = Color(0xFFFDE68A),
+    surfaceContainerLowest = Color(0xFF0A0702),
+    surfaceContainerLow = Color(0xFF1E160A),
+    surfaceContainer = Color(0xFF261C0D),
+    surfaceContainerHigh = Color(0xFF322511),
+    surfaceContainerHighest = Color(0xFF402F17),
+    outline = Color(0xFFF59E0B),
+    outlineVariant = Color(0xFF3C2C12),
+    inverseSurface = Color(0xFFFFFBEB),
+    inverseOnSurface = Color(0xFF110C05),
+    inversePrimary = Color(0xFFD97706),
+    scrim = PureBlack
+)
+
+
+// ============================================================================
 // SEMANTIC COLORS (Success & Warning containers harmonized with M3 roles)
 // ============================================================================
 
@@ -360,13 +525,22 @@ val TranscriptMonospace = TextStyle(
 )
 
 // ============================================================================
-// APP THEME MODE ENUM
+// APP THEME MODE & PALETTE ENUMS
 // ============================================================================
 
 enum class AppThemeMode(val displayName: String) {
     SYSTEM("System Default"),
     LIGHT("Light Mode"),
     DARK("Dark Mode")
+}
+
+enum class AppPalette(val displayName: String, val subtitle: String, val previewColor: Color) {
+    WALLPAPER("Wallpaper Adaptive", "Auto-detect colors from system wallpaper", Color(0xFF6750A4)),
+    PINK_SAKURA("Sakura Rose Pink", "Cyberpunk bubblegum & pastel rose", Color(0xFFFF4081)),
+    NEON_CYBER("Neon Synthwave", "Electric cyan & hot magenta", Color(0xFF06B6D4)),
+    EMERALD_MATRIX("Matrix Emerald", "Cyber emerald & fresh mint", Color(0xFF10B981)),
+    SOLAR_AMBER("Solar Gold", "Radiant gold & warm amber", Color(0xFFF59E0B)),
+    EXPRESSIVE_INDIGO("Expressive Indigo", "Classic expressive deep indigo", Color(0xFF6366F1))
 }
 
 // ============================================================================
@@ -377,6 +551,7 @@ enum class AppThemeMode(val displayName: String) {
 @Composable
 fun SignoraTheme(
     themeMode: AppThemeMode = AppThemeMode.DARK,
+    selectedPalette: AppPalette = AppPalette.WALLPAPER,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -390,12 +565,19 @@ fun SignoraTheme(
     val context = LocalContext.current
     val supportsDynamic = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
-    val colorScheme = when {
-        dynamicColor && supportsDynamic -> {
-            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    val colorScheme = when (selectedPalette) {
+        AppPalette.WALLPAPER -> {
+            if (dynamicColor && supportsDynamic) {
+                if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            } else {
+                if (isDark) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
+            }
         }
-        isDark -> ExpressiveDarkColorScheme
-        else -> ExpressiveLightColorScheme
+        AppPalette.PINK_SAKURA -> if (isDark) PinkSakuraDarkColorScheme else PinkSakuraLightColorScheme
+        AppPalette.NEON_CYBER -> if (isDark) NeonSynthwaveDarkColorScheme else ExpressiveLightColorScheme
+        AppPalette.EMERALD_MATRIX -> if (isDark) EmeraldMatrixDarkColorScheme else ExpressiveLightColorScheme
+        AppPalette.SOLAR_AMBER -> if (isDark) SolarAmberDarkColorScheme else ExpressiveLightColorScheme
+        AppPalette.EXPRESSIVE_INDIGO -> if (isDark) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
     }
 
     val semanticColors = if (isDark) DarkSemanticColors else LightSemanticColors
@@ -414,6 +596,7 @@ fun SignoraTheme(
         )
     }
 }
+
 
 // Theme token accessor helpers
 object AppTheme {
