@@ -50,7 +50,14 @@ class MainActivity : ComponentActivity() {
     private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 1500L) { completedTokens ->
         val sentence = IslGrammarSynthesizer.synthesize(completedTokens)
         if (sentence.isNotBlank()) {
-            nlpState = nlpState.copy(synthesizedSentence = sentence, pendingGlosses = emptyList())
+            val glossLabels = completedTokens.map { it.label }
+            nlpState = nlpState.copy(
+                synthesizedSentence = sentence,
+                pendingGlosses = glossLabels
+            )
+            if (!isMuted) {
+                speechManager.speak(sentence)
+            }
         }
     }
 
@@ -376,12 +383,13 @@ class MainActivity : ComponentActivity() {
                 )
                 sentenceBuffer.push(token)
 
-                // Update live pending gloss chips in UI
+                // Update live pending gloss chips in UI and synthesize live preview sentence
                 val pending = sentenceBuffer.peek().map { it.label }
-                nlpState = nlpState.copy(pendingGlosses = pending)
-
-                // In ISL mode, speak each confirmed word aloud immediately (word-by-word TTS)
-                speechManager.speak(confirmedLabel)
+                val livePreview = IslGrammarSynthesizer.synthesize(sentenceBuffer.peek())
+                nlpState = nlpState.copy(
+                    pendingGlosses = pending,
+                    synthesizedSentence = livePreview
+                )
             } else {
                 // ASL / Fingerspelling: speak each letter individually as before
                 speechManager.speak(confirmedLabel)
