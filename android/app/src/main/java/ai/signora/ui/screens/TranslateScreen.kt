@@ -225,20 +225,30 @@ fun TranslateScreen(
                 val sScale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
 
                 val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+                val crown = Point3D(pNose.x, pNose.y - 0.45f * sScale, pNose.z)
                 val forehead = Point3D(pNose.x, pNose.y - 0.22f * sScale, pNose.z)
                 val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * sScale, mouthCenter.z)
+                val throat = Point3D(mouthCenter.x, mouthCenter.y + 0.30f * sScale, mouthCenter.z)
                 val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+                val chestLeft = Point3D(pLsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
+                val chestRight = Point3D(pRsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
                 val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
+                val midTorso = Point3D(chestCenter.x, (chestCenter.y + waistCenter.y) / 2f, chestCenter.z)
                 val templeR = Point3D(pRsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
                 val templeL = Point3D(pLsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
 
                 val anchors = listOf(
+                    Triple("CROWN", crown, 22f),
                     Triple("FOREHEAD", forehead, 22f),
                     Triple("TEMPLE", templeR, 20f),
                     Triple("TEMPLE", templeL, 20f),
                     Triple("CHIN", chin, 20f),
                     Triple("MOUTH_LIPS", mouthCenter, 20f),
-                    Triple("CHEST", chestCenter, 30f),
+                    Triple("THROAT", throat, 20f),
+                    Triple("CHEST", chestCenter, 28f),
+                    Triple("CHEST_LEFT", chestLeft, 22f),
+                    Triple("CHEST_RIGHT", chestRight, 22f),
+                    Triple("MID_TORSO", midTorso, 24f),
                     Triple("WAIST", waistCenter, 26f),
                     Triple("WRIST", pLwrist, 18f),
                     Triple("WRIST", pRwrist, 18f)
@@ -249,7 +259,10 @@ fun TranslateScreen(
 
                 for ((name, pt, baseRadius) in anchors) {
                     val center = toScreen(pt)
-                    val isAnchorActive = (name == activeAnchorZone)
+                    val isAnchorActive = (name == activeAnchorZone) ||
+                        (name == "CHEST" && (activeAnchorZone == "CHEST" || activeAnchorZone == "CHEST_CENTER")) ||
+                        (name == "CHEST_LEFT" && activeAnchorZone == "HEART") ||
+                        (name == "MID_TORSO" && activeAnchorZone == "STOMACH")
 
                     if (isAnchorActive) {
                         // High-tech Glowing Active Target Reticle

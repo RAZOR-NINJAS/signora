@@ -32,6 +32,7 @@ import ai.signora.models.Point3D
 import ai.signora.models.PoseLandmarks
 import ai.signora.models.SignInfo
 import ai.signora.training.IslVocabulary
+import ai.signora.training.OnDeviceIslTrainer
 import ai.signora.training.TrainingDatasetManager
 import ai.signora.ui.components.SpatialOverlay
 import kotlinx.coroutines.delay
@@ -53,11 +54,15 @@ fun TrainStudioScreen(
     pose: PoseLandmarks?,
     onToggleCamera: () -> Unit,
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
+    onReloadModels: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val datasetManager = remember { TrainingDatasetManager(context) }
+
+    // Target sample collection count per sign
+    val TARGET_SAMPLES = 1000
 
     // Vocabulary & Selection
     var selectedTab by remember { mutableStateOf(0) } // 0: Letters, 1: 300 Words
@@ -75,6 +80,12 @@ fun TrainStudioScreen(
     var statusMessage by remember { mutableStateOf("") }
     var exportedFile by remember { mutableStateOf<File?>(null) }
     var showExportDialog by remember { mutableStateOf(false) }
+
+    // Retrain state
+    var showRetrainDialog by remember { mutableStateOf(false) }
+    var isTrainingRunning by remember { mutableStateOf(false) }
+    var trainingProgressValue by remember { mutableStateOf(0f) }
+    var trainingStatusText by remember { mutableStateOf("") }
 
     // Filtered signs list
     val currentSignList = remember(selectedTab, selectedCategory, searchQuery) {
@@ -106,7 +117,17 @@ fun TrainStudioScreen(
     }
 
     val isAnchorMatched = remember(activeAnchorZone, currentSign) {
-        currentSign?.targetAnchor != null && activeAnchorZone == currentSign.targetAnchor
+        val target = currentSign?.targetAnchor ?: return@remember false
+        if (activeAnchorZone == target) return@remember true
+        when (target) {
+            "CHEST" -> activeAnchorZone in listOf("CHEST", "CHEST_CENTER", "CHEST_LEFT", "CHEST_RIGHT")
+            "CHEST_CENTER" -> activeAnchorZone in listOf("CHEST", "CHEST_CENTER")
+            "CHEST_LEFT" -> activeAnchorZone in listOf("CHEST_LEFT", "HEART")
+            "MID_TORSO" -> activeAnchorZone in listOf("MID_TORSO", "STOMACH")
+            "THROAT" -> activeAnchorZone in listOf("THROAT", "NECK")
+            "FOREHEAD" -> activeAnchorZone in listOf("FOREHEAD", "CROWN")
+            else -> false
+        }
     }
 
     // Target reticle position
@@ -126,15 +147,32 @@ fun TrainStudioScreen(
         )
         val scale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
         val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+        val pCrown = Point3D(pNose.x, pNose.y - 0.40f * scale, pNose.z)
+        val forehead = Point3D(pNose.x, pNose.y - 0.22f * scale, pNose.z)
+        val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
+        val throat = Point3D(mouthCenter.x, mouthCenter.y + 0.30f * scale, mouthCenter.z)
+        val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+        val chestLeft = Point3D(pLsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
+        val chestRight = Point3D(pRsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
+        val waistCenter = Point3D((p[23].x + p[24].x) / 2f, (p[23].y + p[24].y) / 2f, (p[23].z + p[24].z) / 2f)
+        val midTorso = Point3D(chestCenter.x, (chestCenter.y + waistCenter.y) / 2f, chestCenter.z)
 
         when (anchorName) {
-            "FOREHEAD" -> Point3D(pNose.x, pNose.y - 0.22f * scale, pNose.z)
-            "CHIN" -> Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
+            "CROWN" -> pCrown
+            "FOREHEAD" -> forehead
+            "TEMPLE" -> Point3D(pRsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+            "EYES" -> Point3D(pNose.x, pNose.y - 0.08f * scale, pNose.z)
+            "NOSE" -> pNose
             "MOUTH_LIPS" -> mouthCenter
-            "CHEST" -> Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+            "CHIN" -> chin
+            "THROAT" -> throat
+            "CHEST", "CHEST_CENTER" -> chestCenter
+            "CHEST_LEFT", "HEART" -> chestLeft
+            "CHEST_RIGHT" -> chestRight
+            "MID_TORSO", "STOMACH" -> midTorso
+            "WAIST" -> waistCenter
             "WRIST" -> pLwrist
             "SHOULDER" -> pRsh
-            "WAIST" -> Point3D((p[23].x + p[24].x) / 2f, (p[23].y + p[24].y) / 2f, (p[23].z + p[24].z) / 2f)
             else -> null
         }
     }
@@ -154,10 +192,10 @@ fun TrainStudioScreen(
                 }
                 collectedBatch.add(jittered)
 
-                if (collectedBatch.size >= 300) {
+                if (collectedBatch.size >= TARGET_SAMPLES) {
                     val total = datasetManager.saveSamples(currentSign.name, collectedBatch)
                     recordedCounts = datasetManager.getRecordedCounts()
-                    statusMessage = "🎉 Saved 300 samples for '${currentSign.name}'! Total: $total"
+                    statusMessage = "🎉 Saved 1000 samples for '${currentSign.name}'! Total: $total"
                     studioState = StudioState.SUCCESS
                     delay(2500)
                     studioState = StudioState.IDLE
@@ -181,7 +219,7 @@ fun TrainStudioScreen(
     }
 
     val totalReady = remember(recordedCounts) {
-        recordedCounts.values.count { it >= 300 }
+        recordedCounts.values.count { it >= TARGET_SAMPLES }
     }
 
     Scaffold(
@@ -202,6 +240,20 @@ fun TrainStudioScreen(
                     }
                 },
                 actions = {
+                    // Retrain On-Device ISL Model Button
+                    Button(
+                        onClick = { showRetrainDialog = true },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Filled.Bolt, contentDescription = "Retrain ISL Model", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Retrain", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     // Export Dataset Button
                     FilledTonalButton(
                         onClick = {
@@ -298,7 +350,7 @@ fun TrainStudioScreen(
                     val isSelected = currentSignIndex == idx
 
                     val chipBg = when {
-                        count >= 300 -> Color(0xFF10B981) // Emerald Green
+                        count >= TARGET_SAMPLES -> Color(0xFF10B981) // Emerald Green
                         count > 0 -> Color(0xFFF59E0B) // Amber
                         else -> MaterialTheme.colorScheme.surfaceContainerHigh
                     }
@@ -399,9 +451,9 @@ fun TrainStudioScreen(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                text = "Samples: $count / 300",
+                                text = "Samples: $count / $TARGET_SAMPLES",
                                 fontSize = 12.sp,
-                                color = if (count >= 300) Color(0xFF34D399) else Color(0xFFCBD5E1)
+                                color = if (count >= TARGET_SAMPLES) Color(0xFF34D399) else Color(0xFFCBD5E1)
                             )
                         }
                     }
@@ -453,7 +505,7 @@ fun TrainStudioScreen(
                             Icon(Icons.Filled.FiberManualRecord, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "BURST 220D: ${collectedBatch.size} / 300 SAMPLES",
+                                text = "BURST 220D: ${collectedBatch.size} / $TARGET_SAMPLES SAMPLES",
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
                                 fontSize = 14.sp
@@ -511,7 +563,42 @@ fun TrainStudioScreen(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            // Large Expressive Record Button
+                            val count = recordedCounts[currentSign.name] ?: 0
+
+                            // Clear / Reset Samples for current sign
+                            if (count > 0) {
+                                IconButton(
+                                    onClick = {
+                                        datasetManager.clearSignSamples(currentSign.name)
+                                        recordedCounts = datasetManager.getRecordedCounts()
+                                        statusMessage = "Cleared samples for '${currentSign.name}'"
+                                    },
+                                    enabled = studioState == StudioState.IDLE
+                                ) {
+                                    Icon(
+                                        Icons.Filled.DeleteSweep,
+                                        contentDescription = "Clear Samples",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+
+                            // Retrain button on the card
+                            FilledTonalButton(
+                                onClick = { showRetrainDialog = true },
+                                enabled = studioState == StudioState.IDLE,
+                                shape = RoundedCornerShape(18.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
+                            ) {
+                                Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Retrain", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // Large Expressive Record Button (Record 1000 or + Record 1000 More)
                             Button(
                                 onClick = {
                                     if (studioState == StudioState.IDLE) {
@@ -521,16 +608,16 @@ fun TrainStudioScreen(
                                 enabled = studioState == StudioState.IDLE,
                                 shape = RoundedCornerShape(20.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (recordedCounts[currentSign.name] ?: 0 >= 300) MaterialTheme.colorScheme.primary else Color(0xFF10B981)
+                                    containerColor = if (count >= TARGET_SAMPLES) MaterialTheme.colorScheme.primary else Color(0xFF10B981)
                                 ),
-                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp)
                             ) {
                                 Icon(Icons.Filled.RadioButtonChecked, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if ((recordedCounts[currentSign.name] ?: 0) >= 300) "Re-Record" else "Record 300",
+                                    text = if (count == 0) "Record 1000" else "+ 1000 More ($count)",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
+                                    fontSize = 14.sp
                                 )
                             }
                         }
@@ -578,6 +665,138 @@ fun TrainStudioScreen(
             dismissButton = {
                 TextButton(onClick = { showExportDialog = false }) {
                     Text("Close")
+                }
+            }
+        )
+    }
+
+    // On-Device Neural Retraining Dialog
+    if (showRetrainDialog) {
+        val allCounts = recordedCounts
+        val qualifyingSigns = allCounts.filter { it.value >= 10 }
+        val totalSamples = allCounts.values.sum()
+
+        AlertDialog(
+            onDismissRequest = {
+                if (!isTrainingRunning) showRetrainDialog = false
+            },
+            icon = {
+                Icon(
+                    Icons.Filled.Bolt,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = if (isTrainingRunning) "Training ISL Neural Engine..." else "On-Device ISL Retraining",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (isTrainingRunning) {
+                        Text(
+                            text = trainingStatusText.ifBlank { "Compiling dataset and initializing weights..." },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        LinearProgressIndicator(
+                            progress = { trainingProgressValue },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "${(trainingProgressValue * 100).toInt()}% Complete",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Text(
+                            text = "Train a custom 220D multi-class neural network on your device using all recorded ISL posture samples.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("• Qualifying Classes (>= 10 samples): ${qualifyingSigns.size}", fontWeight = FontWeight.SemiBold)
+                                Text("• Total Recorded Samples: $totalSamples vectors", fontWeight = FontWeight.SemiBold)
+                                Text("• Target Architecture: 220D -> 128 (LN+GELU) -> 64 -> ${qualifyingSigns.size} Classes", fontSize = 12.sp)
+                                Text("• Speed: ~2-4 seconds on device CPU", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        if (qualifyingSigns.size < 2) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "⚠️ Need at least 2 distinct signs with >= 10 samples to train classification.",
+                                color = MaterialTheme.colorScheme.error,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (trainingStatusText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = trainingStatusText,
+                                color = Color(0xFF10B981),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (!isTrainingRunning) {
+                    Button(
+                        onClick = {
+                            if (qualifyingSigns.size >= 2) {
+                                isTrainingRunning = true
+                                trainingProgressValue = 0f
+                                trainingStatusText = "Loading dataset..."
+                                coroutineScope.launch {
+                                    val dataset = datasetManager.loadAllSamples()
+                                    val trainer = OnDeviceIslTrainer(context)
+                                    val summary = trainer.train(
+                                        dataset = dataset,
+                                        epochs = 40,
+                                        batchSize = 64
+                                    ) { progress ->
+                                        trainingProgressValue = progress.epoch.toFloat() / progress.totalEpochs
+                                        trainingStatusText = progress.message
+                                    }
+
+                                    isTrainingRunning = false
+                                    if (summary.success) {
+                                        trainingStatusText = "✓ Success! Trained ${summary.totalClasses} classes (${summary.totalSamples} samples) with ${(summary.finalAccuracy * 100).toInt()}% acc in ${summary.durationMs}ms."
+                                        statusMessage = "⚡ New ISL Neural Engine trained & activated!"
+                                        onReloadModels()
+                                    } else {
+                                        trainingStatusText = "❌ Training failed: ${summary.errorMessage}"
+                                    }
+                                }
+                            }
+                        },
+                        enabled = qualifyingSigns.size >= 2,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Filled.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Train Now")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isTrainingRunning) {
+                    TextButton(onClick = { showRetrainDialog = false }) {
+                        Text("Close")
+                    }
                 }
             }
         )

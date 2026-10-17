@@ -376,11 +376,17 @@ object FeatureExtractor {
         val scale = if (shoulderDist > 0.15f) shoulderDist else 0.15f
 
         val mouthCenter = Point3D((pMl.x + pMr.x) / 2f, (pMl.y + pMr.y) / 2f, (pMl.z + pMr.z) / 2f)
+        val pCrown = Point3D(pNose.x, pNose.y - 0.40f * scale, pNose.z)
         val forehead = Point3D(pNose.x, pNose.y - 0.22f * scale, pNose.z)
-        val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
-        val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
-        val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
         val temple = Point3D(if (hand.isRightHand) pRsh.x * 0.4f + pNose.x * 0.6f else pLsh.x * 0.4f + pNose.x * 0.6f, forehead.y, pNose.z)
+        val eyes = Point3D(pNose.x, pNose.y - 0.08f * scale, pNose.z)
+        val chin = Point3D(mouthCenter.x, mouthCenter.y + 0.12f * scale, mouthCenter.z)
+        val throat = Point3D(mouthCenter.x, mouthCenter.y + 0.30f * scale, mouthCenter.z)
+        val chestCenter = Point3D((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f, (pLsh.z + pRsh.z) / 2f)
+        val chestLeft = Point3D(pLsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
+        val chestRight = Point3D(pRsh.x * 0.38f + chestCenter.x * 0.62f, chestCenter.y, chestCenter.z)
+        val waistCenter = Point3D((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f, (pLhip.z + pRhip.z) / 2f)
+        val midTorso = Point3D(chestCenter.x, (chestCenter.y + waistCenter.y) / 2f, chestCenter.z)
 
         // Contact candidates from hand
         val wrist = hand.points[WRIST]
@@ -390,15 +396,23 @@ object FeatureExtractor {
         val contactPts = listOf(wrist, indexTip, thumbTip, palm)
 
         val anchorCandidates = listOf(
-            Triple("FOREHEAD", forehead, 0.58f * scale),
-            Triple("CHIN", chin, 0.52f * scale),
-            Triple("MOUTH_LIPS", mouthCenter, 0.50f * scale),
-            Triple("TEMPLE", temple, 0.55f * scale),
+            Triple("CROWN", pCrown, 0.50f * scale),
+            Triple("FOREHEAD", forehead, 0.55f * scale),
+            Triple("TEMPLE", temple, 0.52f * scale),
+            Triple("EYES", eyes, 0.45f * scale),
+            Triple("NOSE", pNose, 0.45f * scale),
+            Triple("MOUTH_LIPS", mouthCenter, 0.48f * scale),
+            Triple("CHIN", chin, 0.50f * scale),
+            Triple("THROAT", throat, 0.52f * scale),
+            Triple("CHEST_LEFT", chestLeft, 0.58f * scale),
+            Triple("CHEST_CENTER", chestCenter, 0.65f * scale),
+            Triple("CHEST_RIGHT", chestRight, 0.58f * scale),
             Triple("CHEST", chestCenter, 0.68f * scale),
-            Triple("WRIST", if (hand.isRightHand) pLwrist else pRwrist, 0.58f * scale),
+            Triple("MID_TORSO", midTorso, 0.60f * scale),
+            Triple("WAIST", waistCenter, 0.65f * scale),
             Triple("SHOULDER", pRsh, 0.62f * scale),
             Triple("SHOULDER", pLsh, 0.62f * scale),
-            Triple("WAIST", waistCenter, 0.65f * scale)
+            Triple("WRIST", if (hand.isRightHand) pLwrist else pRwrist, 0.58f * scale)
         )
 
         var bestName = "OPEN_SPACE"

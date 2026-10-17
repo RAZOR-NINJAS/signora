@@ -60,7 +60,8 @@ fun SignoraScreen(
     onBackspace: () -> Unit,
     onClear: () -> Unit,
     onSpace: () -> Unit,
-    onSpeak: () -> Unit
+    onSpeak: () -> Unit,
+    onReloadModels: () -> Unit = {}
 ) {
     var currentDestination by remember { mutableStateOf(AppDestination.TRANSLATE) }
 
@@ -135,7 +136,8 @@ fun SignoraScreen(
                             hands = handLandmarks,
                             pose = poseLandmarks,
                             onToggleCamera = onToggleCamera,
-                            cameraResolution = cameraResolution
+                            cameraResolution = cameraResolution,
+                            onReloadModels = onReloadModels
                         )
                     }
 

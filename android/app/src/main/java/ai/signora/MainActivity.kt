@@ -177,6 +177,11 @@ class MainActivity : ComponentActivity() {
                     },
                     onSpeak = {
                         speechManager.speak(debounceEngine.getTranscript())
+                    },
+                    onReloadModels = {
+                        lifecycleScope.launch {
+                            loadNeuralEngines()
+                        }
                     }
                 )
             }

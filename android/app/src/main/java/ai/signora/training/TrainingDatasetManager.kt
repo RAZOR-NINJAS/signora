@@ -101,6 +101,50 @@ class TrainingDatasetManager(private val context: Context) {
     }
 
     /**
+     * Load all recorded samples in memory for on-device training.
+     */
+    fun loadAllSamples(): Map<String, List<FloatArray>> {
+        val dataset = mutableMapOf<String, List<FloatArray>>()
+        val files = samplesDir.listFiles { f -> f.extension == "json" } ?: return dataset
+        for (f in files) {
+            val signName = f.nameWithoutExtension.uppercase()
+            try {
+                val jsonStr = f.readText(StandardCharsets.UTF_8)
+                val obj = JSONObject(jsonStr)
+                val arr = obj.optJSONArray("samples") ?: continue
+                val list = mutableListOf<FloatArray>()
+                for (i in 0 until arr.length()) {
+                    val sArr = arr.getJSONArray(i)
+                    val sample = FloatArray(sArr.length()) { j -> sArr.getDouble(j).toFloat() }
+                    list.add(sample)
+                }
+                if (list.isNotEmpty()) {
+                    dataset[signName] = list
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return dataset
+    }
+
+    /**
+     * Total count of all recorded samples across all signs.
+     */
+    fun getTotalSampleCount(): Int {
+        var total = 0
+        val files = samplesDir.listFiles { f -> f.extension == "json" } ?: return 0
+        for (f in files) {
+            try {
+                val jsonStr = f.readText(StandardCharsets.UTF_8)
+                val obj = JSONObject(jsonStr)
+                total += obj.optInt("sample_count", 0)
+            } catch (_: Exception) {}
+        }
+        return total
+    }
+
+    /**
      * Assemble all recorded signs into a single structured dataset JSON file
      * and copy to public Downloads for easy transfer to PC.
      */
