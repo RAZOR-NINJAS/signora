@@ -92,6 +92,19 @@ def test_sentence_buffer_pause():
     buf.tick(now=100.15)  # 130ms later -> fires!
     assert len(results) == 1
     assert [t.label for t in results[0]] == ["HELLO", "WORLD"]
+    # Tokens persist for viewing until next sentence begins!
+    assert [t.label for t in buf.peek()] == ["HELLO", "WORLD"]
+
+    # Next sentence begins on new token push
+    buf.push(GlossToken("NEXT", timestamp=100.20))
+    assert [t.label for t in buf.peek()] == ["NEXT"]
+
+    # Pop removes last token
+    buf.push(GlossToken("WORD", timestamp=100.21))
+    assert len(buf.peek()) == 2
+    popped = buf.pop()
+    assert popped.label == "WORD"
+    assert len(buf.peek()) == 1
 
 
 def test_third_person_present():

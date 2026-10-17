@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
 
     // ── NLP Pipeline ─────────────────────────────────────────────────────────
     private var nlpState by mutableStateOf(NlpState())
-    private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 1500L) { completedTokens ->
+    private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 5000L) { completedTokens ->
         val sentence = IslGrammarSynthesizer.synthesize(completedTokens)
         if (sentence.isNotBlank()) {
             val glossLabels = completedTokens.map { it.label }
@@ -193,6 +193,13 @@ class MainActivity : ComponentActivity() {
                     },
                     onBackspace = {
                         debounceEngine.backspace()
+                        sentenceBuffer.pop()
+                        val pending = sentenceBuffer.peek().map { it.label }
+                        val livePreview = IslGrammarSynthesizer.synthesize(sentenceBuffer.peek())
+                        nlpState = nlpState.copy(
+                            pendingGlosses = pending,
+                            synthesizedSentence = livePreview
+                        )
                         debounceState = debounceState.copy(transcript = debounceEngine.getTranscript())
                     },
                     onClear = {
@@ -321,6 +328,9 @@ class MainActivity : ComponentActivity() {
             lastFpsTimestamp = now
         }
 
+        // Tick NLP boundary timer every frame regardless of momentary hand dropout
+        sentenceBuffer.tick(now)
+
         if (hands.isEmpty()) {
             debounceState = debounceEngine.update(null, now).copy(fps = currentFps)
             TrackingProfiler.onVoteDwellDone(frameId)
@@ -364,9 +374,6 @@ class MainActivity : ComponentActivity() {
         TrackingProfiler.onVoteDwellDone(frameId)
         debounceState = newState
         TrackingProfiler.onUiStateEmitted(frameId)
-
-        // ── NLP sentence buffer tick (time-based boundary detection) ─────────
-        sentenceBuffer.tick(now)
 
         // ── Token push on sign confirmation ──────────────────────────────────
         if (newState.confirmed && newState.lastConfirmed.isNotBlank() && newState.lastConfirmed != "SPACE") {

@@ -78,7 +78,7 @@ def run_isl_live(
                 tts.speak_async(sentence)
 
     sentence_buffer = SentenceBuffer(
-        sentence_pause_s=1.5,
+        sentence_pause_s=5.0,
         on_sentence_complete=on_sentence_complete,
     )
 

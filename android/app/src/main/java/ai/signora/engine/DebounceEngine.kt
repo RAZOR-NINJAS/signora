@@ -149,8 +149,14 @@ class DebounceEngine(
                 if (transcriptBuilder.isNotEmpty() && !transcriptBuilder.endsWith(" ")) {
                     transcriptBuilder.append(" ")
                 }
-            } else {
+            } else if (activeCandidate.length == 1) {
                 transcriptBuilder.append(activeCandidate)
+            } else {
+                // Multi-letter ISL word gloss: ensure space separation
+                if (transcriptBuilder.isNotEmpty() && !transcriptBuilder.endsWith(" ")) {
+                    transcriptBuilder.append(" ")
+                }
+                transcriptBuilder.append(activeCandidate).append(" ")
             }
         }
 
@@ -176,7 +182,20 @@ class DebounceEngine(
 
     fun backspace(): String {
         if (transcriptBuilder.isNotEmpty()) {
-            transcriptBuilder.deleteCharAt(transcriptBuilder.length - 1)
+            if (transcriptBuilder.endsWith(" ")) {
+                transcriptBuilder.deleteCharAt(transcriptBuilder.length - 1)
+            }
+            val lastSpace = transcriptBuilder.lastIndexOf(" ")
+            val lastWord = if (lastSpace >= 0) transcriptBuilder.substring(lastSpace + 1) else transcriptBuilder.toString()
+            if (lastWord.length > 1) {
+                if (lastSpace >= 0) {
+                    transcriptBuilder.delete(lastSpace, transcriptBuilder.length)
+                } else {
+                    transcriptBuilder.setLength(0)
+                }
+            } else if (transcriptBuilder.isNotEmpty()) {
+                transcriptBuilder.deleteCharAt(transcriptBuilder.length - 1)
+            }
         }
         return transcriptBuilder.toString()
     }
