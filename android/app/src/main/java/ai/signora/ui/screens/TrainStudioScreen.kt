@@ -311,9 +311,8 @@ fun TrainStudioScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+                .padding(innerPadding),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             // ─── Streamlined Sign Selector Strip ──────────────────────────────────
             Row(
@@ -474,13 +473,19 @@ fun TrainStudioScreen(
             // ─── Native 4:3 Sensor Viewport (3:4 portrait aspect ratio) ───────────
             Box(
                 modifier = Modifier
+                    .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 2.dp)
-                    .aspectRatio(3f / 4f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.Black)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Full Sensor 4:3 Viewfinder
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(3f / 4f)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.Black)
+                ) {
+                    // Full Sensor 4:3 Viewfinder
                 AndroidView(
                     factory = { _ ->
                         (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
@@ -633,8 +638,9 @@ fun TrainStudioScreen(
                     }
                 }
             }
+        }
 
-            // ─── Ergonomic Bottom Control Deck ─────────────────────────────────────
+        // ─── Ergonomic Bottom Control Deck ─────────────────────────────────────
             if (currentSign != null) {
                 val count = recordedCounts[currentSign.name] ?: 0
 
