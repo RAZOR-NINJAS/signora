@@ -196,6 +196,10 @@ Signora features a native companion app for Android (**Unspoken.apk** / **Signor
 | :---: | :---: | :---: | :---: |
 | ![Live Translation A](assets/screenshots/screenshot-01-translate-a.jpg) | ![Live Translation M](assets/screenshots/screenshot-02-translate-m.jpg) | ![Sign Academy](assets/screenshots/screenshot-03-learn-academy.jpg) | ![Preferences](assets/screenshots/screenshot-04-settings-preferences.jpg) |
 
+### Gesture Dino Runner
+
+![Gesture Dino Runner](assets/screenshots/screenshot-05-dino-runner.jpg)
+
 Download the pre-compiled APK directly from the [latest GitHub Release](https://github.com/RAZOR-NINJAS/signora/releases/latest).
 
 ---
