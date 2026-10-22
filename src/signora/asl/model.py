@@ -89,7 +89,8 @@ class Predictor:
 
     def probs(self, feats: np.ndarray) -> np.ndarray:
         """Compute softmax probability distribution over ASL classes."""
-        norm_feats = (np.asarray(feats, dtype=np.float32) - self.mean) / self.std
+        safe_std = np.where(self.std > 1e-8, self.std, 1.0)
+        norm_feats = (np.asarray(feats, dtype=np.float32) - self.mean) / safe_std
         with torch.no_grad():
             t = torch.from_numpy(norm_feats).unsqueeze(0)
             logits = self.model(t).squeeze(0) / self.temperature

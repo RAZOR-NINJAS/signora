@@ -34,18 +34,19 @@ class SpatialPipeline:
         self,
         source: Any = 0,
         mirror: bool = True,
-        detect_every: int = 1,
+        detect_every: int = 2,
         use_fake: bool = False,
+        width: int = 1280,
+        height: int = 720,
     ):
         self.source = source
         self.mirror = mirror
         self.detect_every = max(1, int(detect_every))
         self.use_fake = use_fake
+        self.width = width
+        self.height = height
 
-        self._frames: "queue.Queue" = queue.Queue(maxsize=1)
         self._stop = threading.Event()
-        self.started = threading.Event()
-        self.error: Optional[Exception] = None
 
         # Underlying hand pipeline with auto GPU/CPU acceleration
         self._hand_pipe = HandPipeline(
@@ -54,6 +55,8 @@ class SpatialPipeline:
             mirror=mirror,
             detect_every=self.detect_every,
             use_fake=use_fake,
+            width=self.width,
+            height=self.height,
         )
 
         self._last_pose_landmarks: Optional[List[LandmarkPoint]] = None
@@ -61,6 +64,10 @@ class SpatialPipeline:
         self._pending_pose_frame: Optional[np.ndarray] = None
         self._pose_lock = threading.Lock()
         self._pose_thread = None
+
+        from signora.core.filter import OneEuroFilter3D
+
+        self._pose_filter = OneEuroFilter3D(n_points=33, min_cutoff=0.75, beta=0.006)
 
         # Initialize MediaPipe Pose with BlazePose Lite (complexity 0) for sub-20ms tracking
         if not self.use_fake:
@@ -78,8 +85,15 @@ class SpatialPipeline:
                 print(f"[Warning] Could not initialize MediaPipe Pose: {e}")
                 self._pose = None
 
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
+    @property
+    def started(self) -> threading.Event:
+        """Lifecycle event indicating capture pipeline readiness."""
+        return self._hand_pipe.started
+
+    @property
+    def error(self) -> Optional[Exception]:
+        """Any critical startup or runtime error."""
+        return self._hand_pipe.error
 
     @property
     def delegate(self) -> str:
@@ -88,7 +102,16 @@ class SpatialPipeline:
 
     def _pose_worker_loop(self) -> None:
         """Asynchronous pose inference worker that decouples body tracking from video capture."""
+        last_pose_time = 0.0
+        # Optimal 6-7 Hz inference rate balance for upper body pose tracking with low CPU usage
+        pose_interval = 0.15
+
         while not self._stop.is_set():
+            now = time.monotonic()
+            if now - last_pose_time < pose_interval:
+                time.sleep(0.015)
+                continue
+
             frame_to_process = None
             with self._pose_lock:
                 if self._pending_pose_frame is not None:
@@ -96,15 +119,16 @@ class SpatialPipeline:
                     self._pending_pose_frame = None
 
             if frame_to_process is None:
-                time.sleep(0.005)
+                time.sleep(0.01)
                 continue
 
+            last_pose_time = now
             try:
-                # Downsample maintaining aspect ratio for clean pose estimation
+                # Downsample maintaining aspect ratio for accurate pose estimation
                 h_orig, w_orig = frame_to_process.shape[:2]
                 target_w = 320
                 target_h = max(160, int(h_orig * (target_w / max(1, w_orig))))
-                small = cv2.resize(frame_to_process, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                small = cv2.resize(frame_to_process, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
                 rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
                 res = self._pose.process(rgb)
                 if res and res.pose_landmarks:
@@ -112,18 +136,9 @@ class SpatialPipeline:
                         LandmarkPoint(lm.x, lm.y, lm.z)
                         for lm in res.pose_landmarks.landmark
                     ]
-                    # Temporal exponential moving average (EMA) to eliminate skeleton jitter
-                    alpha = 0.55
-                    if self._last_pose_landmarks is not None and len(self._last_pose_landmarks) == len(raw_pts):
-                        smoothed = []
-                        for old_p, new_p in zip(self._last_pose_landmarks, raw_pts):
-                            sx = alpha * new_p.x + (1.0 - alpha) * old_p.x
-                            sy = alpha * new_p.y + (1.0 - alpha) * old_p.y
-                            sz = alpha * new_p.z + (1.0 - alpha) * old_p.z
-                            smoothed.append(LandmarkPoint(sx, sy, sz))
-                        self._last_pose_landmarks = smoothed
-                    else:
-                        self._last_pose_landmarks = raw_pts
+                    self._last_pose_landmarks = self._pose_filter.filter_landmarks(raw_pts, now)
+                else:
+                    self._pose_filter.reset()
             except Exception:
                 pass
 
@@ -153,62 +168,45 @@ class SpatialPipeline:
         pts[24] = LandmarkPoint(0.60, 0.95, 0.0)  # Right hip
         return pts
 
-    def _capture_loop(self) -> None:
-        """Capture loop merging hand tracking with whole-body pose estimation."""
-        if not self._hand_pipe.started.wait(timeout=5):
-            self.error = self._hand_pipe.error or RuntimeError("Hand pipeline failed to start")
-            self.started.set()
-            return
-
-        self.started.set()
-
-        while not self._stop.is_set():
-            try:
-                frame, hand_lms, handedness = self._hand_pipe.read(timeout=1.0)
-                if frame is None:
-                    continue
-
-                if self.use_fake or self._pose is None:
-                    pose_landmarks = self._generate_synthetic_pose()
-                else:
-                    # Submit latest frame to async pose worker without blocking hand tracking
-                    with self._pose_lock:
-                        self._pending_pose_frame = frame
-                    pose_landmarks = self._last_pose_landmarks
-
-                # Enqueue merged sample (drop older frame if consumer is behind)
-                item = (frame, hand_lms, handedness, pose_landmarks)
-                try:
-                    self._frames.put_nowait(item)
-                except queue.Full:
-                    try:
-                        self._frames.get_nowait()
-                    except queue.Empty:
-                        pass
-                    self._frames.put_nowait(item)
-
-            except Exception as e:
-                self.error = e
-                time.sleep(0.01)
-
     def read(
         self, timeout: float = 1.0
     ) -> Tuple[Optional[np.ndarray], Optional[Any], Optional[Any], Optional[List[LandmarkPoint]]]:
         """Fetch latest frame, dual-hand landmarks, handedness, and body pose landmarks."""
-        try:
-            return self._frames.get(timeout=timeout)
-        except queue.Empty:
+        frame, hand_lms, handedness = self._hand_pipe.read(timeout=timeout)
+        if frame is None:
             return None, None, None, None
+
+        if self.use_fake or self._pose is None:
+            pose_landmarks = self._generate_synthetic_pose()
+        else:
+            with self._pose_lock:
+                self._pending_pose_frame = frame
+            pose_landmarks = self._last_pose_landmarks
+
+        return frame, hand_lms, handedness, pose_landmarks
+
+    def __enter__(self) -> "SpatialPipeline":
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        self.close()
 
     def close(self) -> None:
         """Shut down capture loop and release models."""
         self._stop.set()
         self._hand_pipe.close()
+        if hasattr(self, "_pose_thread") and self._pose_thread is not None and self._pose_thread.is_alive():
+            self._pose_thread.join(timeout=1.5)
         if self._pose:
             try:
                 self._pose.close()
             except Exception:
                 pass
+            self._pose = None
+
+    def stop(self) -> None:
+        """Alias for close() to ensure consistent lifecycle teardown."""
+        self.close()
 
 
 def draw_cyber_spatial(

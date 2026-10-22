@@ -27,6 +27,8 @@ class GameHub:
         seed: Optional[int] = None,
         use_fake: bool = False,
         mode: str = "asl",
+        width: int = 1280,
+        height: int = 720,
     ):
         self.mode = str(mode or "asl").lower()
         self.include = include
@@ -34,6 +36,8 @@ class GameHub:
         self.seed = seed
         self.source = source
         self.use_fake = use_fake
+        self.width = width
+        self.height = height
         self._lock = threading.Lock()
         self.reader = None
 
@@ -72,6 +76,8 @@ class GameHub:
             hold_ms=self.state.config.hold_ms,
             use_fake=self.use_fake,
             mode=self.mode,
+            width=self.width,
+            height=self.height,
         )
         try:
             ok = reader.start()
@@ -240,6 +246,8 @@ def serve(
     kiosk: bool = False,
     use_fake: bool = False,
     mode: str = "asl",
+    width: int = 1280,
+    height: int = 720,
 ) -> None:
     """Start the Dino gesture game server."""
     hub = GameHub(
@@ -249,6 +257,8 @@ def serve(
         exclude=exclude,
         use_fake=use_fake,
         mode=mode,
+        width=width,
+        height=height,
     )
     stop_event = threading.Event()
 

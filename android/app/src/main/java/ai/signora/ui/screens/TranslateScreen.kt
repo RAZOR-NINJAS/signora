@@ -37,6 +37,8 @@ import ai.signora.ml.BodySegmentation
 import ai.signora.ml.BodySegmentZone
 import ai.signora.ml.FeatureExtractor
 import ai.signora.models.*
+import ai.signora.nlp.EnglishToIslResult
+import ai.signora.speech.SpeechState
 import ai.signora.profiler.TrackingProfiler
 import ai.signora.recovery.AutoAssetManager
 import ai.signora.ui.components.*
@@ -95,9 +97,18 @@ fun TranslateScreen(
     onSpeak: () -> Unit,
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
     bottomBarPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    speechState: SpeechState = SpeechState.Idle,
+    speechPartialText: String = "",
+    speechSoundLevel: Float = 0f,
+    speechTranslationResult: EnglishToIslResult? = null,
+    onStartSpeechListening: () -> Unit = {},
+    onStopSpeechListening: () -> Unit = {},
+    onManualTranslateText: (String) -> Unit = {},
+    onAttachPreview: (PreviewView) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isDebugOpen by remember { mutableStateOf(false) }
+    var isSpeechToSignOpen by remember { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
     var isPinnedExpanded by remember { mutableStateOf(false) }
@@ -117,18 +128,6 @@ fun TranslateScreen(
         }
     }
 
-    // Auto-hiding ISL 5-of-26 notification chip (hides after 4s)
-    var islBannerVisible by remember(currentMode) { mutableStateOf(currentMode == RecognitionMode.ISL) }
-    LaunchedEffect(currentMode) {
-        if (currentMode == RecognitionMode.ISL) {
-            islBannerVisible = true
-            delay(4000L)
-            islBannerVisible = false
-        } else {
-            islBannerVisible = false
-        }
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -138,7 +137,15 @@ fun TranslateScreen(
         AndroidView(
             factory = { _ ->
                 (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
-                previewView
+                previewView.apply {
+                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                }.also {
+                    onAttachPreview(it)
+                }
+            },
+            update = { view ->
+                view.scaleType = PreviewView.ScaleType.FILL_CENTER
+                onAttachPreview(view)
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -158,27 +165,34 @@ fun TranslateScreen(
             }
         }
 
-        // Active anatomical body segment computation
-        val activeSegment = remember(handLandmarks, poseLandmarks) {
-            BodySegmentation.detectActiveSegment(handLandmarks, poseLandmarks)
+        // Active anatomical body segment computation (supports simultaneous dual-hand multi-zone detection)
+        val activeSegments = remember(handLandmarks, poseLandmarks) {
+            BodySegmentation.detectActiveSegments(handLandmarks, poseLandmarks)
         }
+        val activeSegment = activeSegments.firstOrNull()
 
         // Active anatomical anchor zone computation across detected hands
-        val (activeAnchorZone, activeAnchorPt) = remember(handLandmarks, poseLandmarks, activeSegment) {
-            if (activeSegment != null) {
-                Pair(activeSegment.id, activeSegment.center)
+        val (activeAnchorZone, activeAnchorPt) = remember(handLandmarks, poseLandmarks, activeSegments) {
+            if (activeSegments.size >= 2) {
+                Pair("${activeSegments[0].shortTag} + ${activeSegments[1].shortTag}", activeSegments[0].center)
+            } else if (activeSegments.size == 1) {
+                Pair(activeSegments[0].id, activeSegments[0].center)
             } else if (handLandmarks.isNotEmpty() && poseLandmarks != null) {
                 var zone = "OPEN_SPACE"
                 var pt: Point3D? = null
+                val zones = mutableListOf<String>()
                 for (h in handLandmarks) {
                     val (z, p) = FeatureExtractor.detectBodyAnchor(h, poseLandmarks)
-                    if (z != "OPEN_SPACE") {
-                        zone = z
-                        pt = p
-                        break
+                    if (z != "OPEN_SPACE" && !zones.contains(z)) {
+                        zones.add(z)
+                        if (pt == null) pt = p
                     }
                 }
-                Pair(zone, pt)
+                if (zones.size >= 2) {
+                    Pair("${zones[0]} + ${zones[1]}", pt)
+                } else if (zones.isNotEmpty()) {
+                    Pair(zones[0], pt)
+                } else Pair("OPEN_SPACE", null)
             } else Pair("OPEN_SPACE", null)
         }
 
@@ -201,43 +215,57 @@ fun TranslateScreen(
                 Offset(p.x * scaledW + offsetX, p.y * scaledH + offsetY)
             }
 
-            // 1. Draw Upper Body Skeleton & Anatomical Body Map Anchors
+            // 1. Draw Upper Body Skeleton (Head, Neck, Shoulders, Arms, Spine, Waist)
             if (poseLandmarks != null && poseLandmarks.points.size >= 25) {
                 val pts = poseLandmarks.points
-                val boneColor = Color(0xFF6366F1).copy(alpha = 0.65f) // Electric Indigo
-                val jointColor = Color(0xFFA5B4FC) // Soft Violet glow
+                val boneColor = Color(0xFF818CF8).copy(alpha = 0.55f) // Electric Indigo
+                val spineColor = Color(0xFF6366F1).copy(alpha = 0.45f)
+                val jointRingColor = Color(0xFFA5B4FC).copy(alpha = 0.60f)
+                val jointCoreColor = Color.White
 
-                // Draw Upper Body Bones
+                // Upper body bones
                 for ((s, e) in UPPER_BODY_CONNECTIONS) {
                     if (s < pts.size && e < pts.size) {
                         drawLine(
                             color = boneColor,
                             start = toScreen(pts[s]),
                             end = toScreen(pts[e]),
-                            strokeWidth = 4.5f,
+                            strokeWidth = 3.5f,
                             cap = StrokeCap.Round
                         )
                     }
                 }
 
-                // Head/Neck lines (Nose to Shoulders)
+                // Head/Neck lines (Nose to Shoulders, Neck midpoint)
                 if (pts.isNotEmpty()) {
                     val pNose = toScreen(pts[0])
-                    if (11 < pts.size) drawLine(boneColor.copy(alpha = 0.40f), pNose, toScreen(pts[11]), strokeWidth = 3f, cap = StrokeCap.Round)
-                    if (12 < pts.size) drawLine(boneColor.copy(alpha = 0.40f), pNose, toScreen(pts[12]), strokeWidth = 3f, cap = StrokeCap.Round)
-                }
+                    if (11 < pts.size && 12 < pts.size) {
+                        val pLsh = toScreen(pts[11])
+                        val pRsh = toScreen(pts[12])
+                        val pNeck = Offset((pLsh.x + pRsh.x) / 2f, (pLsh.y + pRsh.y) / 2f)
+                        drawLine(boneColor.copy(alpha = 0.35f), pNose, pNeck, strokeWidth = 2.5f, cap = StrokeCap.Round)
 
-                // Key Body Joints
-                val keyJoints = intArrayOf(11, 12, 13, 14, 15, 16, 23, 24)
-                for (idx in keyJoints) {
-                    if (idx < pts.size) {
-                        val center = toScreen(pts[idx])
-                        drawCircle(color = jointColor.copy(alpha = 0.35f), radius = 9f, center = center)
-                        drawCircle(color = jointColor, radius = 5.5f, center = center)
+                        // Central spine (Neck to Waist center)
+                        if (23 < pts.size && 24 < pts.size) {
+                            val pLhip = toScreen(pts[23])
+                            val pRhip = toScreen(pts[24])
+                            val pWaist = Offset((pLhip.x + pRhip.x) / 2f, (pLhip.y + pRhip.y) / 2f)
+                            drawLine(spineColor, pNeck, pWaist, strokeWidth = 3.0f, cap = StrokeCap.Round)
+                        }
                     }
                 }
 
-                // 1. Draw Anatomical Body Segmentation Zones
+                // Key Body Joints: Nose, Shoulders, Elbows, Wrists, Hips
+                val keyJoints = intArrayOf(0, 11, 12, 13, 14, 15, 16, 23, 24)
+                for (idx in keyJoints) {
+                    if (idx < pts.size) {
+                        val center = toScreen(pts[idx])
+                        drawCircle(color = jointRingColor, radius = 5.0f, center = center)
+                        drawCircle(color = jointCoreColor, radius = 2.0f, center = center)
+                    }
+                }
+
+                // Anatomical Body Part Mapping Zones (Visual feedback for chest, chin, head, throat anchors)
                 val segments = BodySegmentation.computeSegments(poseLandmarks)
                 for (seg in segments) {
                     val center = toScreen(seg.center)
@@ -245,66 +273,43 @@ fun TranslateScreen(
                     val h = seg.height * scaledH
                     val left = center.x - w / 2f
                     val top = center.y - h / 2f
-                    val right = left + w
-                    val bottom = top + h
 
-                    val isActive = (activeSegment?.id == seg.id)
-
-                    val strokeColor = if (isActive) Color(0xFF10B981) else Color(0xFF818CF8).copy(alpha = 0.40f)
-                    val fillColor = if (isActive) Color(0xFF10B981).copy(alpha = 0.24f) else Color(0xFF818CF8).copy(alpha = 0.05f)
-
-                    val cornerRadius = CornerRadius(16f, 16f)
-
-                    // Semi-transparent segment background
-                    drawRoundRect(
-                        color = fillColor,
-                        topLeft = Offset(left, top),
-                        size = Size(w, h),
-                        cornerRadius = cornerRadius
-                    )
-
-                    // High-tech border
-                    drawRoundRect(
-                        color = strokeColor,
-                        topLeft = Offset(left, top),
-                        size = Size(w, h),
-                        cornerRadius = cornerRadius,
-                        style = Stroke(
-                            width = if (isActive) 3.5f else 1.5f,
-                            pathEffect = if (isActive) null else PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+                    val isActive = activeSegments.any { it.id == seg.id }
+                    if (isActive) {
+                        // Vibrant glowing active anchor zone
+                        drawRoundRect(
+                            color = Color(0xFF10B981).copy(alpha = 0.25f),
+                            topLeft = Offset(left, top),
+                            size = Size(w, h),
+                            cornerRadius = CornerRadius(16f, 16f)
                         )
-                    )
-
-                    // Cybernetic corner brackets
-                    val bracketLen = minOf(14f, w * 0.22f, h * 0.22f)
-                    val bracketColor = if (isActive) Color(0xFF10B981) else Color(0xFF06B6D4).copy(alpha = 0.70f)
-                    val bWidth = if (isActive) 3.5f else 2.2f
-
-                    // Top-Left
-                    drawLine(bracketColor, Offset(left - 2f, top + bracketLen), Offset(left - 2f, top - 2f), bWidth, StrokeCap.Round)
-                    drawLine(bracketColor, Offset(left - 2f, top - 2f), Offset(left + bracketLen, top - 2f), bWidth, StrokeCap.Round)
-
-                    // Top-Right
-                    drawLine(bracketColor, Offset(right + 2f - bracketLen, top - 2f), Offset(right + 2f, top - 2f), bWidth, StrokeCap.Round)
-                    drawLine(bracketColor, Offset(right + 2f, top - 2f), Offset(right + 2f, top + bracketLen), bWidth, StrokeCap.Round)
-
-                    // Bottom-Left
-                    drawLine(bracketColor, Offset(left - 2f, bottom - bracketLen), Offset(left - 2f, bottom + 2f), bWidth, StrokeCap.Round)
-                    drawLine(bracketColor, Offset(left - 2f, bottom + 2f), Offset(left + bracketLen, bottom + 2f), bWidth, StrokeCap.Round)
-
-                    // Bottom-Right
-                    drawLine(bracketColor, Offset(right + 2f - bracketLen, bottom + 2f), Offset(right + 2f, bottom + 2f), bWidth, StrokeCap.Round)
-                    drawLine(bracketColor, Offset(right + 2f, bottom + 2f), Offset(right + 2f, bottom - bracketLen), bWidth, StrokeCap.Round)
-
-                    // Segment Tag Label
-                    segmentTextPaint.color = strokeColor.toArgb()
-                    val tag = if (isActive) "▶ ${seg.shortTag} ◀" else seg.shortTag
-                    drawContext.canvas.nativeCanvas.drawText(
-                        tag,
-                        center.x,
-                        top + 22f,
-                        segmentTextPaint
-                    )
+                        drawRoundRect(
+                            color = Color(0xFF10B981),
+                            topLeft = Offset(left, top),
+                            size = Size(w, h),
+                            cornerRadius = CornerRadius(16f, 16f),
+                            style = Stroke(width = 3.0f)
+                        )
+                        segmentTextPaint.color = Color(0xFF10B981).toArgb()
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "▶ ${seg.shortTag} ◀",
+                            center.x,
+                            top + 22f,
+                            segmentTextPaint
+                        )
+                    } else {
+                        // Subtle unobtrusive boundary showing mapped zones
+                        drawRoundRect(
+                            color = Color(0xFF818CF8).copy(alpha = 0.22f),
+                            topLeft = Offset(left, top),
+                            size = Size(w, h),
+                            cornerRadius = CornerRadius(14f, 14f),
+                            style = Stroke(
+                                width = 1.2f,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                            )
+                        )
+                    }
                 }
             }
 
@@ -328,25 +333,24 @@ fun TranslateScreen(
                         color = boneColor,
                         start = p1,
                         end = p2,
-                        strokeWidth = 5f,
+                        strokeWidth = 3.5f,
                         cap = StrokeCap.Round
                     )
                 }
 
-                // Draw spatial joints with glowing aura
+                // Draw crisp spatial joints
                 for (p in pts) {
                     val center = Offset(p.x * scaledW + offsetX, p.y * scaledH + offsetY)
 
                     drawCircle(
                         color = jointColor,
-                        radius = 6.5f,
+                        radius = 4.5f,
                         center = center
                     )
                     drawCircle(
-                        color = jointColor.copy(alpha = 0.35f),
-                        radius = 13f,
-                        center = center,
-                        style = Stroke(width = 2.5f)
+                        color = Color.White,
+                        radius = 1.8f,
+                        center = center
                     )
                 }
             }
@@ -372,7 +376,7 @@ fun TranslateScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AppTopBar(
-                    title = "Unspoken",
+                    title = "Signora",
                     fps = fps,
                     isDebugOpen = isDebugOpen,
                     isDark = isDark,
@@ -387,7 +391,8 @@ fun TranslateScreen(
                     onToggleCamera = onToggleCamera,
                     onToggleTorch = onToggleTorch,
                     onTogglePause = onTogglePause,
-                    onOpenSettings = onOpenSettings
+                    onOpenSettings = onOpenSettings,
+                    onOpenSpeechToSign = { isSpeechToSignOpen = true }
                 )
             }
 
@@ -397,52 +402,6 @@ fun TranslateScreen(
                 onModeSelected = onModeChange,
                 modifier = Modifier.fillMaxWidth()
             )
-
-            // Auto-hiding, dismissible ISL 5-of-26 Status Chip (Phase 6.5)
-            AnimatedVisibility(
-                visible = islBannerVisible,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.small),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "ISL Info",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "ISL model recognizes 17 signs (A-F, Namaste, Hello, Help, Doctor, Emergency, Peace, Space, etc.)",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                        IconButton(
-                            onClick = { islBannerVisible = false },
-                            modifier = Modifier.size(20.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
 
             // Prominent Real-time Candidate Floating Badge
             AnimatedVisibility(
@@ -463,7 +422,7 @@ fun TranslateScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = debounceState.candidate,
+                            text = ai.signora.engine.DebounceEngine.formatDisplayText(debounceState.candidate),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black)
                         )
                         if (activeAnchorZone != "OPEN_SPACE") {
@@ -495,9 +454,9 @@ fun TranslateScreen(
                 }
             }
 
-            // Real-time Anatomical Body Map Active Anchor Pill (when candidate is accumulating)
+            // Real-time Anatomical Body Map Active Anchor Pill
             AnimatedVisibility(
-                visible = activeAnchorZone != "OPEN_SPACE" && debounceState.candidate.isBlank(),
+                visible = activeAnchorZone != "OPEN_SPACE",
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -530,123 +489,37 @@ fun TranslateScreen(
             }
         }
 
-        // 4. NLP Dual-Layer Display (ISL Mode only) — M3 Expressive
-        if (currentMode == RecognitionMode.ISL) {
-            Column(
+        // 4. Live Gloss Token Chips (ISL Mode only) — sleek compact pill
+        if (currentMode == RecognitionMode.ISL && nlpState.pendingGlosses.isNotEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.90f),
+                shadowElevation = 4.dp,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = bottomBarPadding + 82.dp)
-                    .padding(horizontal = AppTheme.spacing.medium),
-                verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                    .padding(bottom = bottomBarPadding + 195.dp)
+                    .padding(horizontal = AppTheme.spacing.medium)
             ) {
-                // (a) Live Gloss Token Chip Flow — secondary container role
-                AnimatedVisibility(
-                    visible = nlpState.pendingGlosses.isNotEmpty(),
-                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
-                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec())
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.92f),
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        tonalElevation = 2.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
-                            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
+                    Text(
+                        text = "GLOSS:",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    nlpState.pendingGlosses.takeLast(4).forEach { gloss ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         ) {
                             Text(
-                                text = "📝 ISL GLOSS STREAM",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.70f)
-                            )
-                            androidx.compose.foundation.layout.FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall),
-                                verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
-                            ) {
-                                nlpState.pendingGlosses.forEachIndexed { idx, gloss ->
-                                    Surface(
-                                        shape = MaterialTheme.shapes.small,
-                                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.18f),
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            0.8.dp,
-                                            MaterialTheme.colorScheme.secondary.copy(alpha = 0.55f)
-                                        )
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = AppTheme.spacing.small, vertical = AppTheme.spacing.extraSmall),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                        ) {
-                                            Text(
-                                                text = "${idx + 1}.",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.55f)
-                                            )
-                                            Text(
-                                                text = gloss,
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // (b) Synthesized Natural Sentence Card — tertiary container role
-                AnimatedVisibility(
-                    visible = nlpState.synthesizedSentence.isNotBlank(),
-                    enter = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
-                    exit = fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec())
-                ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.95f),
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        tonalElevation = 4.dp,
-                        shadowElevation = 4.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AppTheme.spacing.medium, vertical = AppTheme.spacing.small),
-                            verticalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(AppTheme.spacing.extraSmall)
-                            ) {
-                                // M3 Expressive Assist Chip badge
-                                Surface(
-                                    shape = MaterialTheme.shapes.extraSmall,
-                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.20f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        0.8.dp,
-                                        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f)
-                                    )
-                                ) {
-                                    Text(
-                                        text = "✨ NEURAL GRAMMAR",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.padding(horizontal = AppTheme.spacing.small, vertical = 2.dp)
-                                    )
-                                }
-                                Text(
-                                    text = "ISL → English",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.70f)
-                                )
-                            }
-                            Text(
-                                text = "\"${nlpState.synthesizedSentence}\"",
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                                text = ai.signora.engine.DebounceEngine.formatDisplayText(gloss),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -667,7 +540,7 @@ fun TranslateScreen(
             )
         }
 
-        // 5. Hand-Aware Responsive Bottom Deck (Phase 6 & Phase 7)
+        // 6. Responsive Bottom Deck with Live Translation
         HandAwareBottomBar(
             shouldCollapse = shouldCollapse,
             debounceState = debounceState,
@@ -682,17 +555,18 @@ fun TranslateScreen(
             onDelete = onBackspace,
             onClear = onClear,
             onSpeak = onSpeak,
+            synthesizedSentence = nlpState.synthesizedSentence,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = bottomBarPadding)
         )
 
-        // 6. Camera Permission Required Screen
+        // 7. Camera Permission Required Screen
         if (!hasCameraPermission) {
             EmptyState(
                 icon = Icons.Default.VideocamOff,
                 title = "Camera Permission Required",
-                description = "Unspoken needs camera access to track hands and recognize sign language gestures in real time.",
+                description = "Signora needs camera access to track hands and recognize sign language gestures in real time.",
                 actionLabel = "Grant Permission",
                 onActionClick = onRequestCameraPermission,
                 modifier = Modifier.align(Alignment.Center)
@@ -710,6 +584,23 @@ fun TranslateScreen(
                     ExpressiveLoading(message = assetStatus.message)
                 }
             }
+        }
+
+        // 8. Bidirectional Speech-to-Sign Bottom Sheet (Hearing Person Speaks)
+        if (isSpeechToSignOpen) {
+            SpeechToSignBottomSheet(
+                speechState = speechState,
+                partialText = speechPartialText,
+                soundLevel = speechSoundLevel,
+                translationResult = speechTranslationResult,
+                onStartListening = onStartSpeechListening,
+                onStopListening = onStopSpeechListening,
+                onManualTranslate = onManualTranslateText,
+                onDismiss = {
+                    onStopSpeechListening()
+                    isSpeechToSignOpen = false
+                }
+            )
         }
     }
 }

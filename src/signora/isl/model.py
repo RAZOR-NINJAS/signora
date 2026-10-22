@@ -48,7 +48,25 @@ class ISL_MLP:
 
     def forward(self, feats: np.ndarray) -> np.ndarray:
         """Run forward inference and return probability distribution over classes."""
-        x = (np.asarray(feats, dtype=np.float32) - self.mean) / self.std
+        feats_arr = np.asarray(feats, dtype=np.float32)
+        in_dim = self.mean.shape[-1]
+        if feats_arr.shape[-1] != in_dim:
+            if feats_arr.ndim == 1:
+                aligned = np.zeros(in_dim, dtype=np.float32)
+                n = min(len(feats_arr), in_dim)
+                aligned[:n] = feats_arr[:n]
+                feats_arr = aligned
+            elif feats_arr.ndim == 2:
+                aligned = np.zeros((feats_arr.shape[0], in_dim), dtype=np.float32)
+                n = min(feats_arr.shape[1], in_dim)
+                aligned[:, :n] = feats_arr[:, :n]
+                feats_arr = aligned
+
+        if len(self.labels) == 0 or self.weights[2][0].shape[1] == 0:
+            return np.zeros((feats_arr.shape[0], 0) if feats_arr.ndim == 2 else (0,), dtype=np.float32)
+
+        safe_std = np.where(self.std > 1e-8, self.std, 1.0)
+        x = (feats_arr - self.mean) / safe_std
         # Layer 1
         h = np.dot(x, self.weights[0][0]) + self.weights[0][1]
         h = _layer_norm_np(h, self.ln_params[0][0], self.ln_params[0][1])
@@ -64,9 +82,9 @@ class ISL_MLP:
         logits = logits / self.temperature
 
         # Stable Softmax
-        shift = logits - np.max(logits)
+        shift = logits - np.max(logits, axis=-1, keepdims=True)
         exp_logits = np.exp(shift)
-        probs = exp_logits / np.sum(exp_logits)
+        probs = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
         return probs.astype(np.float32)
 
     def predict_proba(self, feats: np.ndarray) -> np.ndarray:
@@ -143,20 +161,39 @@ class Predictor:
     3. Low-level Neural MLP weights fallback.
     """
 
-    def __init__(self, path: Optional[Path] = None):
+    def __init__(self, path: Optional[Path] = None, enable_topology: bool = True):
         from signora.ai.gemini import GeminiAIEngine
         from signora.isl.topology import RealAITopologyClassifier
 
-        self._topology = RealAITopologyClassifier()
+        self._enable_topology = enable_topology
+        self._topology = RealAITopologyClassifier() if enable_topology else None
         self._gemini = GeminiAIEngine()
         self._engine: Optional[ISL_MLP] = None
+        self._letters_engine: Optional[ISL_MLP] = None
 
         try:
             self._engine = load_numpy_predictor(path)
             self.labels = self._engine.labels
         except Exception:
-            from signora.isl.config import STATIC_LETTERS, STATIC_WORDS
-            self.labels = list(STATIC_LETTERS) + list(STATIC_WORDS)
+            if not enable_topology:
+                self.labels = []
+            else:
+                from signora.isl.config import STATIC_LETTERS, STATIC_WORDS
+                self.labels = list(STATIC_LETTERS) + list(STATIC_WORDS)
+
+        # Optional letters engine for single-handed fingerspelling fallback (only when topology is active)
+        if enable_topology:
+            from signora.models.manifest import get_default_models_dir
+            letters_ckpt = get_default_models_dir() / "signs_mlp.pt"
+            if letters_ckpt.exists():
+                try:
+                    self._letters_engine = load_numpy_predictor(letters_ckpt)
+                except Exception:
+                    self._letters_engine = None
+
+    @property
+    def has_engine(self) -> bool:
+        return self._engine is not None
 
     @property
     def gemini_ai(self):
@@ -168,18 +205,44 @@ class Predictor:
         handedness_list: List[str],
         body_anchor: str = "OPEN_SPACE",
     ) -> Tuple[Optional[str], float]:
-        """Classify gesture using real AI invariant 3D topology."""
-        return self._topology.classify(landmarks_list, handedness_list, body_anchor) or (None, 0.0)
+        """Classify gesture using real AI invariant 3D topology and letters fallback."""
+        if self._enable_topology and self._topology is not None:
+            res = self._topology.classify(landmarks_list, handedness_list, body_anchor)
+            if res is not None:
+                return res
+
+        # Single-hand fingerspelling fallback via neural letters classifier (only in topology mode)
+        if self._enable_topology and len(landmarks_list) == 1 and self._letters_engine is not None:
+            try:
+                from signora.core.features import landmark_features, normalize_hand
+                hnd = handedness_list[0] if handedness_list else "Right"
+                norm_hand = normalize_hand(landmarks_list[0], hnd)
+                feats = landmark_features(norm_hand)
+                probs = self._letters_engine.forward(feats)
+                top_idx = int(np.argmax(probs))
+                top_prob = float(probs[top_idx])
+                if top_prob >= 0.55:
+                    return self._letters_engine.labels[top_idx], top_prob
+            except Exception:
+                pass
+
+        return None, 0.0
 
     def probs(self, feats: np.ndarray) -> np.ndarray:
         if self._engine:
             return self._engine.forward(feats)
+        if not self.labels:
+            return np.array([], dtype=np.float32)
         # Uniform fallback
         p = np.full(len(self.labels), 1.0 / len(self.labels), dtype=np.float32)
         return p
 
-    def predict(self, feats: np.ndarray) -> Tuple[str, float]:
+    def predict(self, feats: np.ndarray) -> Tuple[Optional[str], float]:
+        if not self.labels:
+            return None, 0.0
         probs = self.probs(feats)
+        if len(probs) == 0:
+            return None, 0.0
         idx = int(np.argmax(probs))
         return self.labels[idx], float(probs[idx])
 

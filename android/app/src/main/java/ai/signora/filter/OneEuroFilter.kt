@@ -38,9 +38,10 @@ class LowPassFilter {
  * - At high speed: Increases cutoff frequency to avoid phase lag during rapid hand transitions.
  */
 class OneEuroFilter(
-    var minCutoff: Float = 1.0f,
-    var beta: Float = 0.007f,
-    var dCutoff: Float = 1.0f
+    var minCutoff: Float = 0.8f,
+    var beta: Float = 3.5f,
+    var dCutoff: Float = 1.0f,
+    var maxJumpThreshold: Float = 0.25f
 ) {
     private val xFilter = LowPassFilter()
     private val dxFilter = LowPassFilter()
@@ -53,7 +54,7 @@ class OneEuroFilter(
     }
 
     fun filter(x: Float, timestampMs: Long): Float {
-        if (lastTimestampMs < 0L || (timestampMs - lastTimestampMs) > 180L) {
+        if (lastTimestampMs < 0L || timestampMs < lastTimestampMs || (timestampMs - lastTimestampMs) > 180L) {
             lastTimestampMs = timestampMs
             dxFilter.reset()
             return xFilter.filter(x, 1f)
@@ -63,6 +64,12 @@ class OneEuroFilter(
         val rate = if (dt > 1e-4f) 1f / dt else 30f
 
         val prevX = xFilter.lastValue()
+        if (abs(x - prevX) > maxJumpThreshold) {
+            // Immediate snap on teleport/jump without dragging across frames
+            dxFilter.reset()
+            return xFilter.filter(x, 1f)
+        }
+
         val dx = (x - prevX) * rate
         val edx = dxFilter.filter(dx, alpha(rate, dCutoff))
         val cutoff = minCutoff + beta * abs(edx)
@@ -81,13 +88,14 @@ class OneEuroFilter(
  */
 class LandmarkSmoother(
     val maxPoints: Int = 33,
-    minCutoff: Float = 1.2f,
-    beta: Float = 0.08f,
-    dCutoff: Float = 1.0f
+    minCutoff: Float = 0.8f,
+    beta: Float = 3.5f,
+    dCutoff: Float = 1.0f,
+    maxJumpThreshold: Float = 0.25f
 ) {
-    private val xFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
-    private val yFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
-    private val zFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff) }
+    private val xFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff, maxJumpThreshold) }
+    private val yFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff, maxJumpThreshold) }
+    private val zFilters = Array(maxPoints) { OneEuroFilter(minCutoff, beta, dCutoff, maxJumpThreshold) }
 
     fun filter(rawPoints: List<Point3D>, timestampMs: Long): List<Point3D> {
         val n = minOf(rawPoints.size, maxPoints)

@@ -5,11 +5,13 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.hardware.camera2.CaptureRequest
-import android.util.Range
 import android.util.Size
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.core.*
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
@@ -34,6 +36,8 @@ class CameraXManager(
     private val cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
     private var camera: Camera? = null
+    private var preview: Preview? = null
+    private var activePreviewView: PreviewView? = previewView
 
     // Pre-allocated reusable buffers across frames (zero per-frame heap allocation)
     private var rawBitmap: Bitmap? = null
@@ -41,6 +45,10 @@ class CameraXManager(
     private val portraitBitmaps = arrayOfNulls<Bitmap>(2)
     private val rotateCanvases = arrayOfNulls<Canvas>(2)
     private var rotateMatrix: Matrix? = null
+    private var lastRot = -1
+    private var lastW = -1
+    private var lastH = -1
+    private var lastFront: Boolean? = null
 
     var isFrontCamera: Boolean = true
         private set
@@ -69,11 +77,7 @@ class CameraXManager(
     fun toggleCamera() {
         isFrontCamera = !isFrontCamera
         isTorchOn = false
-        portraitBitmaps[0] = null
-        portraitBitmaps[1] = null
-        rotateCanvases[0] = null
-        rotateCanvases[1] = null
-        rotateMatrix = null
+        recycleBitmaps()
         bindCameraUseCases()
     }
 
@@ -85,10 +89,17 @@ class CameraXManager(
         return isTorchOn
     }
 
+    fun attachPreviewView(view: PreviewView) {
+        this.activePreviewView = view
+        val executor = ContextCompat.getMainExecutor(context)
+        preview?.setSurfaceProvider(executor, view.surfaceProvider)
+    }
+
     fun focus(x: Float, y: Float) {
         val cam = camera ?: return
         try {
-            val factory = previewView.meteringPointFactory
+            val view = activePreviewView ?: previewView
+            val factory = view.meteringPointFactory
             val point = factory.createPoint(x, y)
             val action = FocusMeteringAction.Builder(point).build()
             cam.cameraControl.startFocusAndMetering(action)
@@ -99,53 +110,88 @@ class CameraXManager(
 
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
-        provider.unbindAll()
-
-        val cameraSelector = if (isFrontCamera) {
-            CameraSelector.DEFAULT_FRONT_CAMERA
-        } else {
-            CameraSelector.DEFAULT_BACK_CAMERA
-        }
-
-        // 640x480 analysis resolution provides optimal sub-millisecond memory transfer
-        // while matching MediaPipe HandLandmarker internal receptive field without downsampling artifacts.
-        val targetSize = Size(640, 480)
-
-        @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
-        @Suppress("DEPRECATION")
-        val previewBuilder = Preview.Builder()
-            .setTargetResolution(targetSize)
-        Camera2Interop.Extender(previewBuilder)
-            .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(30, 60))
-            .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
-        val preview = previewBuilder.build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-
-        @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
-        @Suppress("DEPRECATION")
-        val analysisBuilder = ImageAnalysis.Builder()
-            .setTargetResolution(targetSize)
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-        Camera2Interop.Extender(analysisBuilder)
-            .setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(30, 60))
-            .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
-        val imageAnalysis = analysisBuilder.build().also {
-            it.setAnalyzer(cameraExecutor) { imageProxy ->
-                processImageProxy(imageProxy)
-            }
-        }
-
         try {
+            provider.unbindAll()
+
+            val cameraSelector = if (isFrontCamera) {
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            } else {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            }
+
+            // Enforce synchronized 4:3 aspect ratio and 640x480 landscape sensor resolution
+            // across Preview and ImageAnalysis so the viewfinder FOV matches neural input 1:1.
+            val resolutionSelector = ResolutionSelector.Builder()
+                .setAspectRatioStrategy(
+                    AspectRatioStrategy(AspectRatio.RATIO_4_3, AspectRatioStrategy.FALLBACK_RULE_AUTO)
+                )
+                .setResolutionStrategy(
+                    ResolutionStrategy(
+                        Size(640, 480),
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
+                )
+                .build()
+
+            @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+            val previewBuilder = Preview.Builder()
+                .setResolutionSelector(resolutionSelector)
+            try {
+                Camera2Interop.Extender(previewBuilder)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+            } catch (_: Throwable) {}
+
+            val view = activePreviewView ?: previewView
+            val executor = ContextCompat.getMainExecutor(context)
+
+            val previewInstance = previewBuilder.build().also {
+                it.setSurfaceProvider(executor, view.surfaceProvider)
+            }
+            this.preview = previewInstance
+
+            @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+            val analysisBuilder = ImageAnalysis.Builder()
+                .setResolutionSelector(resolutionSelector)
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+            try {
+                Camera2Interop.Extender(analysisBuilder)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+            } catch (_: Throwable) {}
+
+            val imageAnalysis = analysisBuilder.build().also {
+                it.setAnalyzer(cameraExecutor) { imageProxy ->
+                    processImageProxy(imageProxy)
+                }
+            }
+
             camera = provider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
-                preview,
+                previewInstance,
                 imageAnalysis
             )
-        } catch (exc: Exception) {
+        } catch (exc: Throwable) {
             exc.printStackTrace()
+            // Robust fallback: bind with default basic use cases if resolution selector or interop failed
+            try {
+                val view = activePreviewView ?: previewView
+                val executor = ContextCompat.getMainExecutor(context)
+                val cameraSelector = if (isFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                val fallbackPreview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(executor, view.surfaceProvider)
+                }
+                this.preview = fallbackPreview
+                val fallbackAnalysis = ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                    .build().also {
+                        it.setAnalyzer(cameraExecutor) { img -> processImageProxy(img) }
+                    }
+                camera = provider.bindToLifecycle(lifecycleOwner, cameraSelector, fallbackPreview, fallbackAnalysis)
+            } catch (fallbackExc: Throwable) {
+                fallbackExc.printStackTrace()
+            }
         }
     }
 
@@ -187,7 +233,7 @@ class CameraXManager(
                 rotateCanvases[bufIdx] = Canvas(portraitBitmaps[bufIdx]!!)
             }
 
-            if (rotateMatrix == null) {
+            if (rotateMatrix == null || lastRot != rot || lastW != width || lastH != height || lastFront != isFrontCamera) {
                 val matrix = Matrix()
                 matrix.postTranslate(-width / 2f, -height / 2f)
                 matrix.postRotate(rot.toFloat())
@@ -196,6 +242,10 @@ class CameraXManager(
                 }
                 matrix.postTranslate(targetW / 2f, targetH / 2f)
                 rotateMatrix = matrix
+                lastRot = rot
+                lastW = width
+                lastH = height
+                lastFront = isFrontCamera
             }
 
             // Zero-allocation direct native pixel copy
@@ -228,8 +278,28 @@ class CameraXManager(
         try {
             cameraProvider?.unbindAll()
             cameraExecutor.shutdown()
+            recycleBitmaps()
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun recycleBitmaps() {
+        try {
+            rawBitmap?.recycle()
+            rawBitmap = null
+            portraitBitmaps[0]?.recycle()
+            portraitBitmaps[0] = null
+            portraitBitmaps[1]?.recycle()
+            portraitBitmaps[1] = null
+            rotateCanvases[0] = null
+            rotateCanvases[1] = null
+            rotateMatrix = null
+            lastRot = -1
+            lastW = -1
+            lastH = -1
+            lastFront = null
+        } catch (_: Throwable) {
         }
     }
 }

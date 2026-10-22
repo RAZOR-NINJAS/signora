@@ -31,6 +31,7 @@ def test_cli_subcommands_present():
         "alert",
         "lipsync",
         "train",
+        "phone",
     }
 
     subparsers_actions = [
@@ -230,4 +231,28 @@ def test_cli_collect_body_flag():
     assert args.body is True
     assert args.sign == "FOOD"
     assert args.count == 100
+
+
+def test_cli_phone_subcommand():
+    parser = create_parser()
+    args = parser.parse_args(["phone", "isl", "--facing", "front", "--res", "480p", "--no-tts"])
+    assert args.subcommand == "phone"
+    assert args.mode == "isl"
+    assert args.facing == "front"
+    assert args.resolution == "480p"
+    assert args.no_tts is True
+
+
+def test_cli_phone_flag_on_subcommands():
+    parser = create_parser()
+    args_isl = parser.parse_args(["isl", "--phone", "--facing", "back", "--res", "720p"])
+    assert args_isl.subcommand == "isl"
+    assert args_isl.phone is True
+    assert args_isl.facing == "back"
+    assert args_isl.resolution == "720p"
+
+    args_body = parser.parse_args(["body", "--phone"])
+    assert args_body.subcommand == "body"
+    assert args_body.phone is True
+
 

@@ -24,7 +24,9 @@ data class SignInfo(
     val expectedHands: Int,
     val targetAnchor: String?,
     val guidePosture: String,
-    val guideDetail: String
+    val guideDetail: String,
+    val expectedMotion: String? = null,
+    val motionDescription: String = ""
 )
 
 data class RecognitionResult(
@@ -56,7 +58,9 @@ data class DebounceState(
     val inferenceMs: Float = 0.5f,
     val isSpeaking: Boolean = false,
     val top3: List<Pair<String, Float>> = emptyList(),
-    val status: DwellStatus = DwellStatus.IDLE
+    val status: DwellStatus = DwellStatus.IDLE,
+    val isApex: Boolean = false,
+    val effectiveDwellMs: Long = 250L
 )
 
 enum class RecognitionMode(val displayName: String, val description: String) {
@@ -79,7 +83,7 @@ data class NlpState(
 )
 
 enum class DwellProfile(val label: String, val subtitle: String, val dwellMs: Long) {
-    QUICK("0.750s", "Quick (750ms) - Rapid fingerspelling", 750L),
-    STANDARD("1.0s", "Standard (1000ms) - Balanced & reliable", 1000L),
-    STEADY("2.0s", "Steady (2000ms) - Maximum precision", 2000L)
+    FLUID("0.50s", "Fluid (500ms) - Quick natural signing", 500L),
+    STANDARD("1.00s", "Standard (1000ms) - Balanced & steady hold", 1000L),
+    STEADY("1.50s", "Steady (1500ms) - Long deliberate hold", 1500L)
 }

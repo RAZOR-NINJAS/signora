@@ -22,7 +22,11 @@ def main():
     print("=" * 60)
 
     export_model_to_json("asl_letters", "asl", assets_dir / "asl_model.json")
-    export_model_to_json("isl_signs", "isl", assets_dir / "isl_model.json")
+    spatial_ckpt = root / "models" / "isl_spatial_mlp.pt"
+    if spatial_ckpt.exists():
+        export_model_to_json(spatial_ckpt, "isl", assets_dir / "isl_model.json")
+    else:
+        export_model_to_json("isl_signs", "isl", assets_dir / "isl_model.json")
     copy_mediapipe_landmarker(assets_dir / "hand_landmarker.task")
 
     print(

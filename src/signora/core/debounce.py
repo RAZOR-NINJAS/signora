@@ -129,17 +129,18 @@ class DebounceEngine:
     def __init__(
         self,
         predictor: Any = None,
-        smooth_ms: float = 300.0,
-        dwell_ms: float = 600.0,
-        space_dwell_ms: float = 500.0,
+        smooth_ms: float = 180.0,
+        dwell_ms: float = 250.0,
+        space_dwell_ms: float = 350.0,
         threshold: float = 0.52,
         confirm_threshold: Optional[float] = None,
-        repeat_cooldown_ms: float = 550.0,
-        space_cooldown_ms: float = 600.0,
+        repeat_cooldown_ms: float = 220.0,
+        space_cooldown_ms: float = 320.0,
         enable_confidence_check: bool = True,
         high_threshold: float = 0.82,
         ambiguous_threshold: float = 0.48,
         min_stable_frames: int = 3,
+        fluid_mode: bool = True,
     ):
         self.predictor = predictor
         self.smooth_ms = smooth_ms
@@ -148,6 +149,7 @@ class DebounceEngine:
         self.threshold = confirm_threshold if confirm_threshold is not None else threshold
         self.repeat_cooldown_ms = repeat_cooldown_ms
         self.space_cooldown_ms = space_cooldown_ms
+        self.fluid_mode = fluid_mode
 
         self.confidence_guard = ConfidenceGuard(
             high_threshold=high_threshold,
@@ -164,6 +166,11 @@ class DebounceEngine:
         self._just_emitted: Optional[str] = None
         self._just_emitted_at: float = 0.0
         self._last_emit_time: Dict[str, float] = {}
+
+        # Kinetic tracking for apex acceleration
+        self._last_point: Optional[Tuple[float, float]] = None
+        self._last_point_t: float = 0.0
+        self._hand_velocity: float = 0.0
 
     @property
     def word_count(self) -> int:
@@ -191,6 +198,8 @@ class DebounceEngine:
         self._dwell_start = None
         self._just_emitted = None
         self._last_emit_time.clear()
+        self._last_point = None
+        self._hand_velocity = 0.0
 
     def backspace(self) -> None:
         """Delete last character or word boundary from transcript buffer."""
@@ -203,14 +212,47 @@ class DebounceEngine:
         confidence: float,
         timestamp_ms: Optional[float] = None,
         now_ms: Optional[float] = None,
+        landmarks: Optional[Any] = None,
+        velocity: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Process a raw prediction and return state dictionary."""
+        """Process a raw prediction and return state dictionary with fluid continuous timing."""
         if timestamp_ms is not None:
             t = float(timestamp_ms)
         elif now_ms is not None:
             t = float(now_ms)
         else:
             t = time.monotonic() * 1000.0
+
+        # Update kinetic velocity
+        if velocity is not None:
+            self._hand_velocity = float(velocity)
+        elif landmarks is not None:
+            try:
+                # MediaPipe landmark object or list of coords
+                if hasattr(landmarks, "landmark") and len(landmarks.landmark) > 0:
+                    pt0 = (landmarks.landmark[0].x, landmarks.landmark[0].y)
+                elif isinstance(landmarks, (list, tuple)) and len(landmarks) > 0:
+                    first = landmarks[0]
+                    if hasattr(first, "x") and hasattr(first, "y"):
+                        pt0 = (first.x, first.y)
+                    elif isinstance(first, (list, tuple)) and len(first) >= 2:
+                        pt0 = (float(first[0]), float(first[1]))
+                    else:
+                        pt0 = None
+                else:
+                    pt0 = None
+
+                if pt0 is not None:
+                    if self._last_point is not None and self._last_point_t > 0:
+                        dt_s = max(0.005, (t - self._last_point_t) / 1000.0)
+                        dx = pt0[0] - self._last_point[0]
+                        dy = pt0[1] - self._last_point[1]
+                        inst_v = (dx * dx + dy * dy) ** 0.5 / dt_s
+                        self._hand_velocity = 0.65 * self._hand_velocity + 0.35 * inst_v
+                    self._last_point = pt0
+                    self._last_point_t = t
+            except Exception:
+                pass
 
         # Add to history window if confident
         if label is not None and confidence >= self.threshold:
@@ -234,6 +276,17 @@ class DebounceEngine:
         needed_dwell = self.space_dwell_ms if dominant == "SPACE" else self.dwell_ms
         cooldown = self.space_cooldown_ms if dominant == "SPACE" else self.repeat_cooldown_ms
 
+        # Kinetic Apex & Adaptive Dwell Acceleration in Fluid Mode
+        effective_dwell = needed_dwell
+        is_apex = False
+        if self.fluid_mode and (self._last_point is not None or velocity is not None):
+            if self._hand_velocity < 0.05 and confidence >= 0.70:
+                # Hand has decelerated into target gesture apex
+                effective_dwell = max(140.0, needed_dwell * 0.65)
+                is_apex = True
+            elif confidence >= 0.88:
+                effective_dwell = max(150.0, needed_dwell * 0.70)
+
         confirmed = None
         dwell_progress = 0.0
         in_cooldown = False
@@ -247,8 +300,8 @@ class DebounceEngine:
                 if dominant == self._active_dwell_cand:
                     if self._dwell_start is not None:
                         elapsed = t - self._dwell_start
-                        dwell_progress = min(1.0, elapsed / needed_dwell)
-                        if elapsed >= needed_dwell:
+                        dwell_progress = min(1.0, elapsed / effective_dwell)
+                        if elapsed >= effective_dwell:
                             confirmed = dominant
                             self._dwell_start = None
                             self._active_dwell_cand = None
@@ -295,6 +348,10 @@ class DebounceEngine:
             "is_ambiguous": guard_res.get("is_ambiguous", False),
             "guidance": guard_res.get("guidance", ""),
             "pending_confirmation": guard_res.get("pending", None),
+            "effective_dwell_ms": effective_dwell,
+            "fluid_mode": self.fluid_mode,
+            "is_apex": is_apex,
+            "velocity": self._hand_velocity,
         }
 
     def confirm(self) -> Optional[str]:

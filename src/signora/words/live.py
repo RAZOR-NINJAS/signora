@@ -416,6 +416,8 @@ def run_live(
     headless: bool = False,
     display: bool = True,
     no_tts: bool = False,
+    width: int = 1280,
+    height: int = 720,
 ) -> int:
     """Run real-time ASL Words live recognition.
 
@@ -491,8 +493,8 @@ def run_live(
 
     tts = PiperTTS(enabled=not no_tts)
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     # Initialize MediaPipe Holistic
     try:
@@ -512,7 +514,9 @@ def run_live(
 
     if not headless and display:
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
-        cv2.resizeWindow(WINDOW_TITLE, FRAME_WIDTH, FRAME_HEIGHT)
+        win_w = min(1280, width)
+        win_h = max(360, int(win_w * 9 / 16))
+        cv2.resizeWindow(WINDOW_TITLE, win_w, win_h)
 
     # State variables
     frame_count = 0

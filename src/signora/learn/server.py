@@ -23,9 +23,17 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 class LearnHub:
     """Manages learning session drills, quiz rounds, and detection feedback."""
 
-    def __init__(self, source: Any = 0, use_fake: bool = False):
+    def __init__(
+        self,
+        source: Any = 0,
+        use_fake: bool = False,
+        width: int = 1280,
+        height: int = 720,
+    ):
         self.source = source
         self.use_fake = use_fake
+        self.width = width
+        self.height = height
         self.reader = None
         self._lock = threading.RLock()
 
@@ -46,7 +54,12 @@ class LearnHub:
         from signora.game.detector import LetterReader
 
         reader = LetterReader(
-            source=self.source, hold_ms=500, min_conf=0.55, use_fake=self.use_fake
+            source=self.source,
+            hold_ms=500,
+            min_conf=0.55,
+            use_fake=self.use_fake,
+            width=self.width,
+            height=self.height,
         )
         try:
             ok = reader.start()
@@ -251,9 +264,16 @@ def serve(
     kiosk: bool = False,
     camera: bool = True,
     use_fake: bool = False,
+    width: int = 1280,
+    height: int = 720,
 ) -> None:
     """Start the Learning Kiosk server."""
-    hub = LearnHub(source=source, use_fake=use_fake)
+    hub = LearnHub(
+        source=source,
+        use_fake=use_fake,
+        width=width,
+        height=height,
+    )
     stop_event = threading.Event()
 
     print("[signora learn] Interactive Learning Kiosk starting...")

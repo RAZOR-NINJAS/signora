@@ -95,6 +95,8 @@ class SignoraTUI:
             "dwell_label": "Standard (600ms)",
             "no_tts": False,
             "camera_index": 0,
+            "resolution": "ask",
+            "resolution_label": "Always Prompt (16:9)",
         }
 
     def clear(self) -> None:
@@ -154,13 +156,14 @@ class SignoraTUI:
         )
 
         audio_sub = "MUTED" if self.settings["no_tts"] else "Active (Piper)"
+        res_sub = self.settings.get("resolution_label", "16:9")
         panel = Panel(
             info_table,
             border_style="cyan",
             box=box.ROUNDED,
             title="[bold cyan]System Hardware & Inference Architecture[/bold cyan]",
             title_align="left",
-            subtitle=f"[dim]Session: Dwell [bold white]{self.settings['dwell_label']}[/bold white] • Audio [bold white]{audio_sub}[/bold white] • Camera Device [bold white]#{self.settings['camera_index']}[/bold white][/dim]",
+            subtitle=f"[dim]Session: Dwell [bold white]{self.settings['dwell_label']}[/bold white] • Audio [bold white]{audio_sub}[/bold white] • Res [bold white]{res_sub}[/bold white] • Cam [bold white]#{self.settings['camera_index']}[/bold white][/dim]",
             subtitle_align="right",
             padding=(0, 1),
         )
@@ -380,14 +383,30 @@ class SignoraTUI:
         except Exception:
             pass
 
+        sig = inspect.signature(runner_func)
+        target_w, target_h = None, None
+        if "width" in sig.parameters and "height" in sig.parameters:
+            from signora.core.resolution import prompt_resolution_16_9
+
+            tui_res = self.settings.get("resolution", "ask")
+            cli_arg = None if tui_res == "ask" else tui_res
+            target_w, target_h, _ = prompt_resolution_16_9(
+                default_choice="720p",
+                headless=False,
+                cli_arg=cli_arg,
+            )
+
         while True:
             try:
                 kwargs = {"source": selected_source}
-                sig = inspect.signature(runner_func)
                 if "no_tts" in sig.parameters:
                     kwargs["no_tts"] = self.settings.get("no_tts", False)
                 if "dwell_ms" in sig.parameters:
                     kwargs["dwell_ms"] = self.settings.get("dwell_ms", 600)
+                if target_w is not None and "width" in sig.parameters:
+                    kwargs["width"] = target_w
+                if target_h is not None and "height" in sig.parameters:
+                    kwargs["height"] = target_h
 
                 runner_func(**kwargs)
                 break
@@ -491,7 +510,7 @@ class SignoraTUI:
         )
         from signora.isl.live import run_isl_live
 
-        self._run_with_auto_heal("ISL Dual-Handed", run_isl_live, model_key="isl_letters")
+        self._run_with_auto_heal("ISL Dual-Handed", run_isl_live, model_key="isl_signs")
         Prompt.ask("\nPress Enter to return to main menu", console=self.console)
 
     def run_words_flow(self) -> None:
@@ -753,8 +772,14 @@ class SignoraTUI:
             )
             table.add_row(
                 "4",
+                "Camera Resolution (16:9)",
+                f"[bold cyan]{self.settings.get('resolution_label', 'Always Prompt (16:9)')}[/bold cyan]",
+                "Aspect-ratio-locked 16:9 widescreen capture profile",
+            )
+            table.add_row(
+                "5",
                 "Reset to Defaults",
-                "[dim]600ms • Audio ON • Cam 0[/dim]",
+                "[dim]600ms • Audio ON • 16:9 Prompt • Cam 0[/dim]",
                 "Restore factory balanced operational parameters",
             )
             table.add_row("0", "Save & Return", "[dim]Apply and return to main menu[/dim]", "—")
@@ -764,7 +789,7 @@ class SignoraTUI:
 
             choice = Prompt.ask(
                 "[bold cyan]Select setting to configure[/bold cyan]",
-                choices=["1", "2", "3", "4", "0"],
+                choices=["1", "2", "3", "4", "5", "0"],
                 default="0",
                 console=self.console,
             )
@@ -833,10 +858,44 @@ class SignoraTUI:
                     )
                     time.sleep(0.8)
             elif choice == "4":
+                self.console.print("\n[bold cyan]Select 16:9 Resolution Profile:[/bold cyan]")
+                self.console.print("  [1] Always Prompt (Ask on each launch) (Default)")
+                self.console.print("  [2] 720p (1280x720)   — HD High Quality")
+                self.console.print("  [3] 480p (854x480)    — Balanced & Smooth Performance")
+                self.console.print("  [4] 360p (640x360)    — Fast & Low Latency (Low-End CPUs)")
+                self.console.print("  [5] 1080p (1920x1080) — Full HD Maximum Detail")
+                res_choice = Prompt.ask(
+                    "Choose resolution profile",
+                    choices=["1", "2", "3", "4", "5"],
+                    default="1",
+                    console=self.console,
+                )
+                if res_choice == "1":
+                    self.settings["resolution"] = "ask"
+                    self.settings["resolution_label"] = "Always Prompt (16:9)"
+                elif res_choice == "2":
+                    self.settings["resolution"] = "720p"
+                    self.settings["resolution_label"] = "720p (1280x720)"
+                elif res_choice == "3":
+                    self.settings["resolution"] = "480p"
+                    self.settings["resolution_label"] = "480p (854x480)"
+                elif res_choice == "4":
+                    self.settings["resolution"] = "360p"
+                    self.settings["resolution_label"] = "360p (640x360)"
+                elif res_choice == "5":
+                    self.settings["resolution"] = "1080p"
+                    self.settings["resolution_label"] = "1080p (1920x1080)"
+                self.console.print(
+                    f"\n[bold green]✓ Resolution profile set to: {self.settings['resolution_label']}[/bold green]"
+                )
+                time.sleep(0.8)
+            elif choice == "5":
                 self.settings["dwell_ms"] = 600
                 self.settings["dwell_label"] = "Standard (600ms)"
                 self.settings["no_tts"] = False
                 self.settings["camera_index"] = 0
+                self.settings["resolution"] = "ask"
+                self.settings["resolution_label"] = "Always Prompt (16:9)"
                 self.console.print(
                     "\n[bold green]✓ Preferences restored to factory defaults.[/bold green]"
                 )

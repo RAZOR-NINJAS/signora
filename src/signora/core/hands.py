@@ -60,9 +60,9 @@ def _create_landmarker(
             base_options=mpp.BaseOptions(model_asset_path=str(model_path), delegate=delegate),
             running_mode=vision.RunningMode.VIDEO,
             num_hands=num_hands,
-            min_hand_detection_confidence=0.35,
-            min_hand_presence_confidence=0.35,
-            min_tracking_confidence=0.35,
+            min_hand_detection_confidence=0.45,
+            min_hand_presence_confidence=0.45,
+            min_tracking_confidence=0.45,
         )
     )
 
@@ -76,14 +76,18 @@ class HandPipeline:
         num_hands: int = 1,
         mirror: bool = True,
         use_gpu: Optional[bool] = None,
-        detect_every: int = 1,
+        detect_every: int = 2,
         use_fake: bool = False,
+        width: int = 1280,
+        height: int = 720,
     ):
         self.source = source
         self.num_hands = max(1, int(num_hands))
         self.mirror = mirror
         self.detect_every = max(1, int(detect_every))
         self.use_fake = use_fake
+        self.width = width
+        self.height = height
 
         self._frames: "queue.Queue" = queue.Queue(maxsize=2)
         self._stop = threading.Event()
@@ -91,6 +95,13 @@ class HandPipeline:
         self.error: Optional[Exception] = None
         self.delegate = "CPU"
         self._landmarker = None
+
+        from signora.core.filter import OneEuroFilter3D
+
+        self._filters = [
+            OneEuroFilter3D(n_points=21, min_cutoff=1.1, beta=0.007)
+            for _ in range(self.num_hands)
+        ]
 
         if not self.use_fake:
             model_path = get_model_path("hand_landmarker")
@@ -125,10 +136,18 @@ class HandPipeline:
         self._last_landmarks = None
         self._last_handedness = None
         self._skip_counter = 0
-        self._ts = 0
+        self._last_ts = 0
 
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
+        # Dedicated inter-thread buffer
+        self._cam_lock = threading.Lock()
+        self._cam_cond = threading.Condition(self._cam_lock)
+        self._latest_cam_frame: Optional[np.ndarray] = None
+        self._cam_frame_id: int = 0
+
+        self._cam_thread = threading.Thread(target=self._camera_grab_loop, daemon=True)
+        self._proc_thread = threading.Thread(target=self._perception_loop, daemon=True)
+        self._cam_thread.start()
+        self._proc_thread.start()
 
     def _generate_synthetic_landmarks(self) -> Tuple[List[Any], List[str]]:
         t = time.monotonic() * 2.0
@@ -142,85 +161,157 @@ class HandPipeline:
             return [pts, pts], ["Right", "Left"]
         return [pts], ["Right"]
 
-    def _capture_loop(self) -> None:
+    def _camera_grab_loop(self) -> None:
+        """High-priority thread draining hardware camera buffer to eliminate lag."""
         try:
             cam = Camera(
-                source=self.source, width=640, height=480, buffer_size=1, use_fake=self.use_fake
+                source=self.source,
+                width=self.width,
+                height=self.height,
+                buffer_size=1,
+                use_fake=self.use_fake,
             )
             with cam:
                 self.started.set()
                 while not self._stop.is_set():
                     ret, frame = cam.read()
                     if not ret or frame is None:
-                        time.sleep(0.005)
+                        time.sleep(0.003)
                         continue
 
                     if self.mirror:
                         frame = cv2.flip(frame, 1)
 
-                    landmarks = None
-                    handedness = None
-
-                    if self.use_fake or self._landmarker is None:
-                        lms_list, hnds_list = self._generate_synthetic_landmarks()
-                        landmarks = lms_list if self.num_hands > 1 else lms_list[0]
-                        handedness = hnds_list if self.num_hands > 1 else hnds_list[0]
-                    else:
-                        self._skip_counter += 1
-                        if self._skip_counter >= self.detect_every:
-                            self._skip_counter = 0
-                            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                            self._ts += 33
-                            result = self._landmarker.detect_for_video(mp_img, self._ts)
-
-                            if result and result.hand_landmarks:
-                                if self.num_hands > 1:
-                                    landmarks = list(result.hand_landmarks)
-                                    handedness = [h[0].category_name for h in result.handedness]
-                                else:
-                                    landmarks = result.hand_landmarks[0]
-                                    handedness = result.handedness[0][0].category_name
-                                self._last_landmarks = landmarks
-                                self._last_handedness = handedness
-                            else:
-                                self._last_landmarks = None
-                                self._last_handedness = None
-                        else:
-                            landmarks = self._last_landmarks
-                            handedness = self._last_handedness
-
-                    # Deliver latest frame to output queue
-                    try:
-                        self._frames.put_nowait((frame, landmarks, handedness))
-                    except queue.Full:
-                        try:
-                            self._frames.get_nowait()
-                        except queue.Empty:
-                            pass
-                        self._frames.put_nowait((frame, landmarks, handedness))
-
+                    with self._cam_cond:
+                        self._latest_cam_frame = frame
+                        self._cam_frame_id += 1
+                        self._cam_cond.notify()
         except Exception as exc:
             self.error = exc
             self.started.set()
+            with self._cam_cond:
+                self._cam_cond.notify_all()
+
+    def _perception_loop(self) -> None:
+        """Worker thread processing freshest frame with temporal smoothing."""
+        last_processed_id = -1
+        while not self._stop.is_set():
+            frame = None
+            with self._cam_cond:
+                while self._cam_frame_id == last_processed_id and not self._stop.is_set():
+                    self._cam_cond.wait(timeout=0.03)
+                if self._stop.is_set():
+                    break
+                frame = self._latest_cam_frame
+                last_processed_id = self._cam_frame_id
+
+            if frame is None:
+                continue
+
+            landmarks = None
+            handedness = None
+            now_t = time.monotonic()
+
+            if self.use_fake or self._landmarker is None:
+                lms_list, hnds_list = self._generate_synthetic_landmarks()
+                landmarks = lms_list if self.num_hands > 1 else lms_list[0]
+                handedness = hnds_list if self.num_hands > 1 else hnds_list[0]
+            else:
+                self._skip_counter += 1
+                if self._skip_counter >= self.detect_every:
+                    self._skip_counter = 0
+                    h_cur, w_cur = frame.shape[:2]
+                    if w_cur > 640:
+                        small = cv2.resize(frame, (640, 360), interpolation=cv2.INTER_LINEAR)
+                        rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                    else:
+                        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+                    mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                    # MediaPipe requires strictly increasing monotonic timestamps
+                    ts = int(now_t * 1000)
+                    if ts <= self._last_ts:
+                        ts = self._last_ts + 1
+                    self._last_ts = ts
+
+                    result = self._landmarker.detect_for_video(mp_img, ts)
+
+                    if result and result.hand_landmarks:
+                        smoothed_hands = []
+                        handedness_names = []
+                        for h_idx, (raw_lms, hnd_info) in enumerate(
+                            zip(result.hand_landmarks, result.handedness)
+                        ):
+                            if h_idx < len(self._filters):
+                                sm_pts = self._filters[h_idx].filter_landmarks(raw_lms, now_t)
+                            else:
+                                sm_pts = [LandmarkPoint(p.x, p.y, getattr(p, "z", 0.0)) for p in raw_lms]
+                            smoothed_hands.append(sm_pts)
+                            handedness_names.append(hnd_info[0].category_name)
+
+                        # Reset inactive filters
+                        for inactive_idx in range(len(result.hand_landmarks), len(self._filters)):
+                            self._filters[inactive_idx].reset()
+
+                        if self.num_hands > 1:
+                            landmarks = smoothed_hands
+                            handedness = handedness_names
+                        else:
+                            landmarks = smoothed_hands[0]
+                            handedness = handedness_names[0]
+
+                        self._last_landmarks = landmarks
+                        self._last_handedness = handedness
+                    else:
+                        for flt in self._filters:
+                            flt.reset()
+                        self._last_landmarks = None
+                        self._last_handedness = None
+                else:
+                    landmarks = self._last_landmarks
+                    handedness = self._last_handedness
+
+            # Push latest processed frame and landmarks to output queue
+            try:
+                self._frames.put_nowait((frame, landmarks, handedness))
+            except queue.Full:
+                try:
+                    self._frames.get_nowait()
+                except queue.Empty:
+                    pass
+                self._frames.put_nowait((frame, landmarks, handedness))
 
     def read(
         self, timeout: float = 3.0
     ) -> Tuple[Optional[np.ndarray], Optional[Any], Optional[Any]]:
-        """Read latest processed frame and landmarks."""
+        """Read latest processed frame and landmarks, evicting any buffered backlog for zero lag."""
         try:
-            return self._frames.get(timeout=timeout)
+            item = self._frames.get(timeout=timeout)
+            while not self._frames.empty():
+                try:
+                    item = self._frames.get_nowait()
+                except queue.Empty:
+                    break
+            return item
         except queue.Empty:
             return None, None, None
 
     def close(self) -> None:
-        """Stop worker thread and close MediaPipe model."""
+        """Stop worker threads and close MediaPipe model."""
         self._stop.set()
-        if self._thread.is_alive():
-            self._thread.join(timeout=2.0)
+        with self._cam_cond:
+            self._cam_cond.notify_all()
+        if hasattr(self, "_cam_thread") and self._cam_thread.is_alive():
+            self._cam_thread.join(timeout=1.5)
+        if hasattr(self, "_proc_thread") and self._proc_thread.is_alive():
+            self._proc_thread.join(timeout=1.5)
         if self._landmarker is not None:
             self._landmarker.close()
             self._landmarker = None
+
+    def stop(self) -> None:
+        """Alias for close() to ensure graceful lifecycle teardown."""
+        self.close()
 
 
 def draw_landmarks(

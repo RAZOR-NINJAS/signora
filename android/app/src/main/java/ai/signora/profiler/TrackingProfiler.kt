@@ -97,15 +97,21 @@ object TrackingProfiler {
         frameMap[frameId]?.t7_voteDwellNs = SystemClock.elapsedRealtimeNanos()
     }
 
+    @Volatile
+    var latestEmittedFrameId: Long = 0L
+
     fun onUiStateEmitted(frameId: Long) {
         val now = SystemClock.elapsedRealtimeNanos()
         val ts = frameMap[frameId] ?: return
         ts.t8_uiEmitNs = now
+        latestEmittedFrameId = frameId
     }
 
-    fun onOverlayDrawn(frameId: Long) {
+    fun onOverlayDrawn(frameId: Long = latestEmittedFrameId) {
+        val targetId = if (frameId > 0L) frameId else latestEmittedFrameId
+        if (targetId <= 0L) return
         val now = SystemClock.elapsedRealtimeNanos()
-        val ts = frameMap.remove(frameId) ?: return
+        val ts = frameMap.remove(targetId) ?: return
         ts.t9_drawNs = now
         recordCompletedFrame(ts)
     }

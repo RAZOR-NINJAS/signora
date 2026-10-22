@@ -26,12 +26,16 @@ class LetterReader:
         min_conf: float = 0.0,
         use_fake: bool = False,
         mode: str = "asl",
+        width: int = 1280,
+        height: int = 720,
     ):
         self.source = source
         self.hold_ms = int(hold_ms)
         self.min_conf = float(min_conf)
         self.use_fake = use_fake
         self.mode = str(mode or "asl").lower()
+        self.width = width
+        self.height = height
         self._predictor = predictor
         self._lock = threading.Lock()
         self._letter: Optional[str] = None
@@ -94,7 +98,11 @@ class LetterReader:
 
         num_hands = 2 if self.mode == "isl" else 1
         self._pipeline = HandPipeline(
-            source=self.source, num_hands=num_hands, use_fake=self.use_fake
+            source=self.source,
+            num_hands=num_hands,
+            use_fake=self.use_fake,
+            width=self.width,
+            height=self.height,
         )
         self._pipeline.started.wait(timeout=15)
         if self._pipeline.error:

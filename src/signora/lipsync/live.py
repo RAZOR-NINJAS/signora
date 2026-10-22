@@ -309,10 +309,13 @@ def run_lipsync_live(
     headless: bool = False,
     fake_camera: bool = False,
     max_frames: Optional[int] = None,
+    width: int = 1280,
+    height: int = 720,
 ) -> int:
     """Run interactive real-time Lip Sync & Speech Activity monitor."""
     print("=" * 65)
     print("  SIGNORA LIP SYNC -- Visual Speech Activity & Viseme Monitor")
+    print(f"  Resolution          : {width}x{height} (16:9 Widescreen)")
     print("=" * 65)
     print(f"  Camera Source       : {source if not fake_camera else 'SYNTHETIC BENCH'}")
     print(f"  Microphone Sync     : {'ENABLED' if enable_audio else 'DISABLED'}")
@@ -330,6 +333,9 @@ def run_lipsync_live(
         try:
             cam_idx = int(source) if str(source).isdigit() else source
             cap = cv2.VideoCapture(cam_idx)
+            if cap.isOpened():
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             if not cap.isOpened():
                 print(f"[Notice] Could not open camera {source}. Switching to synthetic camera.")
                 fake_camera = True
@@ -342,7 +348,9 @@ def run_lipsync_live(
     window_name = "Signora - Lip Sync & Speech Activity"
     if not headless:
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(window_name, 960, 600)
+        win_w = min(1280, width)
+        win_h = max(360, int(win_w * 9 / 16))
+        cv2.resizeWindow(window_name, win_w, win_h)
 
     fps = 30.0
     frame_count = 0

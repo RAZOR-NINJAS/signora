@@ -11,16 +11,21 @@ import androidx.camera.view.PreviewView
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import ai.signora.audio.SignAudio
 import ai.signora.camera.CameraXManager
 import ai.signora.engine.DebounceEngine
 import ai.signora.ml.BodySegmentation
 import ai.signora.ml.FeatureExtractor
 import ai.signora.ml.SignoraMLP
 import ai.signora.models.*
+import ai.signora.nlp.EnglishToIslResult
+import ai.signora.nlp.EnglishToIslSynthesizer
 import ai.signora.nlp.GlossToken
 import ai.signora.nlp.IslGrammarSynthesizer
 import ai.signora.nlp.SentenceBuffer
 import ai.signora.recovery.AutoAssetManager
+import ai.signora.speech.SpeechState
+import ai.signora.speech.SpeechToSignManager
 import ai.signora.tts.SpeechManager
 import ai.signora.profiler.TrackingProfiler
 import ai.signora.ui.SignoraScreen
@@ -36,6 +41,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var assetManager: AutoAssetManager
     private lateinit var speechManager: SpeechManager
+    private lateinit var speechToSignManager: SpeechToSignManager
     private var cameraManager: CameraXManager? = null
     private var handHelper: HandLandmarkerHelper? = null
     private var poseHelper: ai.signora.vision.PoseLandmarkerHelper? = null
@@ -43,57 +49,35 @@ class MainActivity : ComponentActivity() {
     private var aslMlp: SignoraMLP? = null
     private var islMlp: SignoraMLP? = null
 
-    private val debounceEngine = DebounceEngine(threshold = 0.30f, minMargin = 0.02f, voteWindowSize = 2)
+    private val motionTracker = ai.signora.engine.HandMotionTracker(maxHistory = 30)
+    private val debounceEngine = DebounceEngine(dwellMs = 1000L, threshold = 0.65f, minMargin = 0.08f, voteWindowSize = 7)
 
     // ── NLP Pipeline ─────────────────────────────────────────────────────────
     private var nlpState by mutableStateOf(NlpState())
-    private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 5000L) { completedTokens ->
-        val localSentence = IslGrammarSynthesizer.synthesize(completedTokens)
-        if (localSentence.isNotBlank()) {
-            val glossLabels = completedTokens.map { it.label }
-            nlpState = nlpState.copy(
-                synthesizedSentence = localSentence,
-                pendingGlosses = glossLabels
-            )
-            if (ai.signora.ai.GeminiAiEngine.isConfigured(this@MainActivity)) {
-                lifecycleScope.launch {
-                    val geminiSentence = ai.signora.ai.GeminiAiEngine.synthesizeGrammar(this@MainActivity, glossLabels)
-                    val finalSentence = geminiSentence ?: localSentence
-                    if (geminiSentence != null) {
-                        nlpState = nlpState.copy(synthesizedSentence = finalSentence)
-                    }
-                    if (!isMuted) {
-                        speechManager.speak(finalSentence)
-                    }
-                }
-            } else {
-                if (!isMuted) {
-                    speechManager.speak(localSentence)
-                }
-            }
-        }
-    }
+    private val sentenceBuffer = SentenceBuffer(sentencePauseMs = 60000L) { /* Standard direct speech pipeline */ }
 
     private var hasCameraPermission by mutableStateOf(false)
     private var assetStatus by mutableStateOf(AutoAssetManager.AssetStatus(isReady = false, message = "Initializing..."))
     private var currentMode by mutableStateOf(RecognitionMode.ISL)
     private var dwellProfile by mutableStateOf(DwellProfile.STANDARD)
-    private var customDwellMs by mutableStateOf(900L)
-    private var confidenceThreshold by mutableStateOf(0.30f)
-    private var minMargin by mutableStateOf(0.02f)
+    private var customDwellMs by mutableStateOf(1000L)
+    private var confidenceThreshold by mutableStateOf(0.65f)
+    private var minMargin by mutableStateOf(0.08f)
     private var cameraResolution by mutableStateOf(Pair(480, 640))
     private var isMuted by mutableStateOf(false)
     private var isFrontCamera by mutableStateOf(true)
     private var isTorchOn by mutableStateOf(false)
     private var isPaused by mutableStateOf(false)
     private var autoCollapseEnabled by mutableStateOf(true)
-    private var latestFrameId by mutableStateOf(0L)
+    private var latestFrameId = 0L
     private var themeMode by mutableStateOf(AppThemeMode.DARK)
     private var selectedPalette by mutableStateOf(AppPalette.WALLPAPER)
     private var dynamicColorEnabled by mutableStateOf(true)
     private var debounceState by mutableStateOf(DebounceState())
     private var activeLandmarks by mutableStateOf<List<HandLandmarks>>(emptyList())
     private var activePose by mutableStateOf<PoseLandmarks?>(null)
+    @Volatile private var latestPose: PoseLandmarks? = null
+    private var handsRestStartTimeMs = 0L
 
     private var frameCount = 0
     private var lastFpsTimestamp = System.currentTimeMillis()
@@ -110,12 +94,50 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var hasAudioPermission by mutableStateOf(false)
+    private val audioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasAudioPermission = granted
+        if (granted) {
+            speechToSignManager.startListening()
+        }
+    }
+
+    private var speechState by mutableStateOf<SpeechState>(SpeechState.Idle)
+    private var speechPartialText by mutableStateOf("")
+    private var speechSoundLevel by mutableStateOf(0f)
+    private var speechTranslationResult by mutableStateOf<EnglishToIslResult?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         assetManager = AutoAssetManager(this)
         speechManager = SpeechManager(this)
+        speechToSignManager = SpeechToSignManager(this)
+
+        lifecycleScope.launch {
+            speechToSignManager.speechState.collect { state ->
+                speechState = state
+                if (state is SpeechState.Success) {
+                    speechTranslationResult = EnglishToIslSynthesizer.translate(state.spokenText)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            speechToSignManager.partialText.collect { partial ->
+                speechPartialText = partial
+                if (partial.isNotBlank()) {
+                    speechTranslationResult = EnglishToIslSynthesizer.translate(partial)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            speechToSignManager.soundLevel.collect { level ->
+                speechSoundLevel = level
+            }
+        }
 
         previewView = PreviewView(this).apply {
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
@@ -154,6 +176,28 @@ class MainActivity : ComponentActivity() {
                     cameraResolution = cameraResolution,
                     assetStatus = assetStatus,
                     nlpState = nlpState,
+                    speechState = speechState,
+                    speechPartialText = speechPartialText,
+                    speechSoundLevel = speechSoundLevel,
+                    speechTranslationResult = speechTranslationResult,
+                    onStartSpeechListening = {
+                        val granted = ContextCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) {
+                            hasAudioPermission = true
+                            speechToSignManager.startListening()
+                        } else {
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    onStopSpeechListening = {
+                        speechToSignManager.stopListening()
+                    },
+                    onManualTranslateText = { text ->
+                        speechTranslationResult = EnglishToIslSynthesizer.translate(text)
+                    },
                     onModeChange = { newMode ->
                         currentMode = newMode
                         debounceEngine.clear()
@@ -202,17 +246,13 @@ class MainActivity : ComponentActivity() {
                     onPaletteChange = { selectedPalette = it },
                     onDynamicColorChange = { dynamicColorEnabled = it },
                     onTestVoice = {
-                        speechManager.speak("Testing Unspoken Neural Voice synthesizer")
+                        speechManager.speak("Testing speech synthesis")
                     },
                     onBackspace = {
                         debounceEngine.backspace()
                         sentenceBuffer.pop()
                         val pending = sentenceBuffer.peek().map { it.label }
-                        val livePreview = IslGrammarSynthesizer.synthesize(sentenceBuffer.peek())
-                        nlpState = nlpState.copy(
-                            pendingGlosses = pending,
-                            synthesizedSentence = livePreview
-                        )
+                        nlpState = nlpState.copy(pendingGlosses = pending)
                         debounceState = debounceState.copy(transcript = debounceEngine.getTranscript())
                     },
                     onClear = {
@@ -226,17 +266,18 @@ class MainActivity : ComponentActivity() {
                         debounceState = state
                     },
                     onSpeak = {
-                        // Flush pending gloss buffer first, then speak synthesized sentence
-                        sentenceBuffer.flush()
-                        val toSpeak = nlpState.synthesizedSentence.ifBlank {
-                            debounceEngine.getTranscript()
+                        val formatted = DebounceEngine.formatTranscriptForDisplay(debounceEngine.getTranscript())
+                        if (formatted.isNotBlank()) {
+                            speechManager.speak(formatted)
                         }
-                        speechManager.speak(toSpeak)
                     },
                     onReloadModels = {
                         lifecycleScope.launch {
                             loadNeuralEngines()
                         }
+                    },
+                    onAttachPreview = { view ->
+                        cameraManager?.attachPreviewView(view)
                     }
                 )
 
@@ -303,6 +344,7 @@ class MainActivity : ComponentActivity() {
             context = this,
             modelFile = poseTaskFile,
             onResults = { pose, _, _ ->
+                latestPose = pose
                 activePose = pose
             },
             onError = { _ -> }
@@ -329,14 +371,14 @@ class MainActivity : ComponentActivity() {
     private fun onHandsDetected(hands: List<HandLandmarks>, frameId: Long, timestamp: Long) {
         if (isPaused) return
 
-        activeLandmarks = hands
         latestFrameId = frameId
 
-        // Calculate real-time FPS
+        // Calculate real-time FPS (throttled to at most once per second)
         frameCount++
         val now = System.currentTimeMillis()
+        var newFps: Float? = null
         if (now - lastFpsTimestamp >= 1000L) {
-            currentFps = frameCount * 1000f / (now - lastFpsTimestamp)
+            newFps = frameCount * 1000f / (now - lastFpsTimestamp)
             frameCount = 0
             lastFpsTimestamp = now
         }
@@ -344,9 +386,32 @@ class MainActivity : ComponentActivity() {
         // Tick NLP boundary timer every frame regardless of momentary hand dropout
         sentenceBuffer.tick(now)
 
+        // Kinetic rest-pose auto-commit: wrists dropped below chest (y > 0.82) or hands absent for >= 500 ms
+        val isHandsAtRest = if (hands.isEmpty()) {
+            true
+        } else {
+            val pt0 = hands[0].points.firstOrNull()
+            pt0 != null && pt0.y > 0.82f
+        }
+
+        if (isHandsAtRest) {
+            if (handsRestStartTimeMs == 0L) {
+                handsRestStartTimeMs = now
+            } else if ((now - handsRestStartTimeMs) >= 500L && sentenceBuffer.peek().isNotEmpty() && !sentenceBuffer.isFinalizedState) {
+                sentenceBuffer.flush()
+            }
+        } else {
+            handsRestStartTimeMs = 0L
+        }
+
         if (hands.isEmpty()) {
-            debounceState = debounceEngine.update(null, now).copy(fps = currentFps)
+            val emptyDebounce = debounceEngine.update(null, now).copy(fps = currentFps)
             TrackingProfiler.onVoteDwellDone(frameId)
+            androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+                activeLandmarks = emptyList()
+                debounceState = emptyDebounce
+                if (newFps != null) currentFps = newFps
+            }
             TrackingProfiler.onUiStateEmitted(frameId)
             return
         }
@@ -354,10 +419,15 @@ class MainActivity : ComponentActivity() {
         // Extract features based on active mode
         val activeMlp = if (currentMode == RecognitionMode.ASL) aslMlp else islMlp
         if (activeMlp == null) {
+            androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+                activeLandmarks = hands
+                if (newFps != null) currentFps = newFps
+            }
             TrackingProfiler.onUiStateEmitted(frameId)
             return
         }
 
+        val currentPose = latestPose ?: activePose
         val feats = if (currentMode == RecognitionMode.ASL) {
             if (hands.size == 1) {
                 FeatureExtractor.extractAslFeatures(hands[0].points, hands[0].isRightHand)
@@ -371,30 +441,96 @@ class MainActivity : ComponentActivity() {
             }
         } else {
             if (activeMlp.inDim == 220) {
-                FeatureExtractor.extractSpatialFeatures(hands, activePose)
+                FeatureExtractor.extractSpatialFeatures(hands, currentPose, activeMlp.mean)
             } else {
                 FeatureExtractor.extractIslFeatures(hands)
             }
         }
         TrackingProfiler.onFeaturesExtracted(frameId)
 
+        val activeSegs = BodySegmentation.detectActiveSegments(hands, currentPose)
+        val activeAnchor = activeSegs.firstOrNull()?.id
+
+        // Motion tracking for dynamic gesture recognition
+        val rHand = hands.firstOrNull { it.isRightHand } ?: hands.firstOrNull()
+        val lHand = if (hands.size > 1) hands.firstOrNull { !it.isRightHand && it != rHand } ?: hands.getOrNull(1) else null
+        val rWrist = rHand?.points?.firstOrNull()?.let { Pair(it.x, it.y) }
+        val lWrist = if (lHand != null && lHand != rHand) lHand.points.firstOrNull()?.let { Pair(it.x, it.y) } else null
+        val motionState = motionTracker.update(
+            rightWrist = rWrist,
+            leftWrist = lWrist,
+            timestampMs = now,
+            rightHandLandmarks = rHand?.points,
+            leftHandLandmarks = lHand?.points,
+            activeAnchorZone = activeAnchor,
+            poseLandmarks = currentPose?.points
+        )
+
         // Run sub-ms neural forward pass
-        val result = activeMlp.predict(feats)
+        val rawResult = activeMlp.predict(feats)
         TrackingProfiler.onMlpDone(frameId)
 
-        // Debounce and dwell tracking
-        val newState = debounceEngine.update(result, now).copy(fps = currentFps)
-        TrackingProfiler.onVoteDwellDone(frameId)
-        debounceState = newState
-        TrackingProfiler.onUiStateEmitted(frameId)
+        // Dynamic motion gesture prioritization:
+        // Neural network forward pass is the ground-truth classifier. Motion trajectory assists only when motion is active.
+        val isGenuineMotion = motionState.isMoving && motionState.speed >= 0.18f
+        val result = if (currentMode == RecognitionMode.ISL && isGenuineMotion && motionState.detectedGesture != null && motionState.gestureConfidence >= 0.85f && (rawResult.label == motionState.detectedGesture || rawResult.confidence < 0.50f)) {
+            RecognitionResult(
+                label = motionState.detectedGesture,
+                confidence = motionState.gestureConfidence,
+                margin = 0.50f,
+                top3 = listOf(Pair(motionState.detectedGesture, motionState.gestureConfidence))
+            )
+        } else if (currentMode == RecognitionMode.ISL && isGenuineMotion) {
+            val topMotion = rawResult.top3.firstOrNull { DebounceEngine.MOTION_SIGNS.contains(it.first) }
+            val hasMatchingPattern = when (topMotion?.first) {
+                "HELLO_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_WAVE
+                "YOU_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_FORWARD_PUSH
+                "MY_NAME_IS_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_CHEST_CONTACT || motionState.dualMotion == ai.signora.engine.DUAL_CONVERGING
+                "NO_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_SHAKE
+                "WHAT_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_PALMS_UP || motionState.dualMotion == ai.signora.engine.DUAL_DIVERGING
+                "J_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_J_TRACE
+                "Z_MOTION" -> motionState.pattern == ai.signora.engine.PATTERN_Z_TRACE
+                else -> false
+            }
+            if (topMotion != null && hasMatchingPattern && (topMotion.first == rawResult.label || topMotion.second >= 0.50f)) {
+                rawResult.copy(label = topMotion.first, confidence = (topMotion.second * 1.25f).coerceAtMost(0.99f))
+            } else if (motionState.pattern == ai.signora.engine.PATTERN_WAVE && motionState.speed >= 0.18f && (rawResult.label == "HELLO" || rawResult.top3.any { it.first == "HELLO_MOTION" })) {
+                rawResult.copy(label = "HELLO_MOTION", confidence = (rawResult.confidence * 1.15f).coerceAtMost(0.98f))
+            } else {
+                rawResult
+            }
+        } else {
+            rawResult
+        }
 
-        // ── Token push on sign confirmation ──────────────────────────────────
+        // Debounce and dwell tracking
+        val handLandmarks = if (hands.isNotEmpty()) hands[0].points else null
+        val newState = debounceEngine.update(result, now, handLandmarks, isMoving = motionState.isMoving).copy(fps = currentFps)
+        TrackingProfiler.onVoteDwellDone(frameId)
+
+        // ── Token push and immediate TTS voice playback on sign confirmation ──
+        var updatedNlpState: NlpState? = null
         if (newState.confirmed && newState.lastConfirmed.isNotBlank() && newState.lastConfirmed != "SPACE") {
-            val confirmedLabel = newState.lastConfirmed
+            // Consume dynamic gesture trajectory to prevent trailing repeat
+            if (DebounceEngine.isMotionSign(newState.lastConfirmed)) {
+                motionTracker.consumeGesture(now)
+            }
+
+            val confirmedLabel = DebounceEngine.cleanLabel(newState.lastConfirmed)
+            val spokenText = DebounceEngine.formatDisplayText(confirmedLabel)
+
+            // Immediate audio feedback: play the sign's bundled clip if it has one,
+            // otherwise fall back to TTS
+            if (!isMuted) {
+                if (SignAudio.hasCue(confirmedLabel)) {
+                    runOnUiThread { SignAudio.play(this@MainActivity, confirmedLabel) }
+                } else {
+                    speechManager.speak(spokenText)
+                }
+            }
 
             if (currentMode == RecognitionMode.ISL) {
-                // For ISL word-level signs, push to NLP sentence buffer
-                val bodyAnchor = BodySegmentation.detectActiveSegment(hands, activePose)?.id ?: ""
+                val bodyAnchor = activeSegs.joinToString("+") { it.id }.ifBlank { "" }
                 val token = GlossToken(
                     label = confirmedLabel,
                     bodyAnchor = bodyAnchor,
@@ -402,20 +538,36 @@ class MainActivity : ComponentActivity() {
                     confidence = newState.confidence
                 )
                 sentenceBuffer.push(token)
-
-                // Update live pending gloss chips in UI and synthesize live preview sentence
                 val pending = sentenceBuffer.peek().map { it.label }
-                val livePreview = IslGrammarSynthesizer.synthesize(sentenceBuffer.peek())
-                nlpState = nlpState.copy(
-                    pendingGlosses = pending,
-                    synthesizedSentence = livePreview
+                updatedNlpState = nlpState.copy(
+                    pendingGlosses = pending
                 )
-            } else {
-                // ASL / Fingerspelling: speak each letter individually as before
-                speechManager.speak(confirmedLabel)
             }
         }
 
+        // Atomically batch Compose snapshot state mutations in a single apply pass
+        androidx.compose.runtime.snapshots.Snapshot.withMutableSnapshot {
+            activeLandmarks = hands
+            activePose = currentPose
+            debounceState = newState
+            if (newFps != null) currentFps = newFps
+            if (updatedNlpState != null) nlpState = updatedNlpState
+        }
+        TrackingProfiler.onUiStateEmitted(frameId)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::previewView.isInitialized) {
+            cameraManager?.attachPreviewView(previewView)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (::speechManager.isInitialized) {
+            speechManager.stop()
+        }
     }
 
     override fun onDestroy() {
@@ -424,5 +576,6 @@ class MainActivity : ComponentActivity() {
         handHelper?.close()
         poseHelper?.close()
         speechManager.shutdown()
+        speechToSignManager.destroy()
     }
 }

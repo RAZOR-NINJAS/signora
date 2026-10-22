@@ -15,8 +15,9 @@ import numpy as np
 from signora.isl.train import DATA_DIR, DATA_SPATIAL_DIR, train_isl_model
 
 
-def inspect_dataset_file(json_path: Path) -> Dict[str, Any]:
+def inspect_dataset_file(json_path: Any) -> Dict[str, Any]:
     """Inspect exported JSON dataset metadata without importing."""
+    json_path = Path(json_path)
     if not json_path.exists():
         raise FileNotFoundError(f"Dataset file not found: {json_path}")
 
@@ -53,22 +54,38 @@ def inspect_dataset_file(json_path: Path) -> Dict[str, Any]:
         "total_classes": len(class_counts),
         "total_samples": total_samples,
         "classes": class_counts,
+        "_data": data,
     }
 
 
 def import_phone_dataset(
-    json_path: Path,
+    json_path: Any,
     target_dir: Optional[Path] = None,
-    append: bool = True,
+    append: bool = False,
     auto_train: bool = True,
     epochs: int = 50,
+    fresh: bool = True,
 ) -> Dict[str, Any]:
     """Parse phone-recorded dataset JSON, save .npy arrays, and optionally retrain model."""
+    json_path = Path(json_path)
     meta = inspect_dataset_file(json_path)
     feature_dim = meta["feature_dim"]
 
     if target_dir is None:
         target_dir = DATA_SPATIAL_DIR if feature_dim == 220 else DATA_DIR
+
+    if not append and target_dir.exists():
+        for old_npy in target_dir.glob("*.npy"):
+            try:
+                old_npy.unlink()
+            except Exception:
+                pass
+        if feature_dim == 220 and DATA_DIR.exists():
+            for old_npy in DATA_DIR.glob("*.npy"):
+                try:
+                    old_npy.unlink()
+                except Exception:
+                    pass
 
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,8 +100,10 @@ def import_phone_dataset(
     print(f"📂 Target Directory: {target_dir}")
     print("-" * 65)
 
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    data = meta.get("_data")
+    if data is None:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
     classes_dict = data.get("classes", {})
     if not classes_dict and "format" not in data:
@@ -156,6 +175,7 @@ def import_phone_dataset(
             data_dir=target_dir,
             epochs=epochs,
             in_dim=feature_dim,
+            fresh=fresh,
         )
         if feature_dim == 220:
             print("\n⚡ Retraining desktop 164D standard ISL neural model (data/isl/)...")
@@ -163,6 +183,7 @@ def import_phone_dataset(
                 data_dir=DATA_DIR,
                 epochs=epochs,
                 in_dim=164,
+                fresh=fresh,
             )
 
     return {
@@ -174,3 +195,7 @@ def import_phone_dataset(
         "train_result": train_result,
         "train_164_result": train_164_result,
     }
+
+
+# Convenience alias for external scripts and callers
+import_dataset_from_json = import_phone_dataset

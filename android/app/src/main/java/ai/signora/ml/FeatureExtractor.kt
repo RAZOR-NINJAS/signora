@@ -34,6 +34,59 @@ object FeatureExtractor {
 
     private val FINGERTIPS = intArrayOf(THUMB_TIP, INDEX_TIP, MIDDLE_TIP, RING_TIP, PINKY_TIP)
 
+    val DEFAULT_SPATIAL_MEANS = floatArrayOf(
+        -0.350870f, 0.799463f, 2.122782f, -0.350870f, 0.588879f, 2.051582f,
+        -0.354260f, 0.511963f, 1.742196f, -0.354260f, 0.397098f, 1.711337f,
+        -0.362729f, 0.231570f, 0.747201f, -0.825376f, 0.228161f, 1.061882f,
+        0.099923f, 0.234982f, 0.653235f, -0.943587f, -0.521120f, 1.999624f,
+        -0.339983f, -0.682873f, 0.779467f, 0.439348f, 0.062156f, 0.331111f,
+        0.726258f, 0.062156f, 0.253487f, 0.693702f, 0.061793f, 0.225335f,
+        0.583436f, 0.061793f, 0.182996f, 0.568106f, 0.058430f, 0.119391f,
+        0.222405f, -0.112170f, 0.119574f, 0.261301f, 0.229029f, 0.119208f,
+        0.305290f, -0.005683f, -0.001393f, 0.803014f, 0.062573f, -0.224628f,
+        0.244354f, 0.174898f
+    )
+
+    fun resolveHands(hands: List<HandLandmarks>): Pair<HandLandmarks?, HandLandmarks?> {
+        var leftHand: HandLandmarks? = null
+        var rightHand: HandLandmarks? = null
+
+        if (hands.isEmpty()) {
+            return Pair(null, null)
+        } else if (hands.size == 1) {
+            val h = hands[0]
+            if (h.isRightHand) {
+                rightHand = h
+            } else {
+                leftHand = h
+            }
+        } else {
+            val h1 = hands[0]
+            val h2 = hands[1]
+            if (h1.isRightHand != h2.isRightHand) {
+                if (h1.isRightHand) {
+                    rightHand = h1
+                    leftHand = h2
+                } else {
+                    leftHand = h1
+                    rightHand = h2
+                }
+            } else {
+                // Same handedness tag: sort by screen X position (wrist point)
+                val x1 = h1.points.getOrNull(WRIST)?.x ?: 0f
+                val x2 = h2.points.getOrNull(WRIST)?.x ?: 0f
+                if (x1 < x2) {
+                    leftHand = h1
+                    rightHand = h2
+                } else {
+                    leftHand = h2
+                    rightHand = h1
+                }
+            }
+        }
+        return Pair(leftHand, rightHand)
+    }
+
     fun extractAslFeatures(rawPoints: List<Point3D>, isRightHand: Boolean = true): FloatArray {
         if (rawPoints.size < 21) return FloatArray(74)
 
@@ -118,40 +171,7 @@ object FeatureExtractor {
         if (hands.isEmpty()) return out
 
         // Canonical hand assignment: [leftSlot, rightSlot]
-        var leftHand: HandLandmarks? = null
-        var rightHand: HandLandmarks? = null
-
-        if (hands.size == 1) {
-            val h = hands[0]
-            if (h.isRightHand) {
-                rightHand = h
-            } else {
-                leftHand = h
-            }
-        } else {
-            val h1 = hands[0]
-            val h2 = hands[1]
-            if (h1.isRightHand != h2.isRightHand) {
-                if (h1.isRightHand) {
-                    rightHand = h1
-                    leftHand = h2
-                } else {
-                    leftHand = h1
-                    rightHand = h2
-                }
-            } else {
-                // Same handedness tag: sort by screen X position (wrist point)
-                val x1 = h1.points.getOrNull(WRIST)?.x ?: 0f
-                val x2 = h2.points.getOrNull(WRIST)?.x ?: 0f
-                if (x1 < x2) {
-                    leftHand = h1
-                    rightHand = h2
-                } else {
-                    leftHand = h2
-                    rightHand = h1
-                }
-            }
-        }
+        val (leftHand, rightHand) = resolveHands(hands)
 
         // 1. Left hand features in slot 0..73
         if (leftHand != null && leftHand.points.size >= 21) {
@@ -279,12 +299,22 @@ object FeatureExtractor {
         return feats
     }
 
-    fun extractSpatialFeatures(hands: List<HandLandmarks>, pose: ai.signora.models.PoseLandmarks?): FloatArray {
+    fun extractSpatialFeatures(
+        hands: List<HandLandmarks>,
+        pose: ai.signora.models.PoseLandmarks?,
+        datasetMean: FloatArray? = null
+    ): FloatArray {
         val baseFeats = extractIslFeatures(hands)
         val out = FloatArray(220)
         System.arraycopy(baseFeats, 0, out, 0, 164)
 
         if (pose == null || pose.points.size < 25) {
+            // Impute anatomical body features with dataset mean to yield exactly 0.0 in z-score normalization
+            if (datasetMean != null && datasetMean.size >= 220) {
+                System.arraycopy(datasetMean, 164, out, 164, 56)
+            } else {
+                System.arraycopy(DEFAULT_SPATIAL_MEANS, 0, out, 164, 56)
+            }
             return out
         }
 
@@ -319,17 +349,13 @@ object FeatureExtractor {
             waistCenter
         )
 
-        var rightHand: HandLandmarks? = null
-        var leftHand: HandLandmarks? = null
-        for (h in hands) {
-            if (h.isRightHand && rightHand == null) rightHand = h
-            else if (!h.isRightHand && leftHand == null) leftHand = h
-        }
+        // Hand resolution identical to extractIslFeatures: handles identical MediaPipe handedness labels
+        val (leftHand, rightHand) = resolveHands(hands)
 
         var offset = 164
         val handPair = listOf(rightHand, leftHand)
 
-        for (h in handPair) {
+        for ((hIdx, h) in handPair.withIndex()) {
             if (h != null && h.points.size >= 21) {
                 val wrist = h.points[WRIST]
                 val idxTip = h.points[INDEX_TIP]
@@ -349,6 +375,13 @@ object FeatureExtractor {
                 val dfMouth = sqrt(dfMx * dfMx + dfMy * dfMy)
                 out[offset++] = dfMouth
             } else {
+                // Impute unobserved hand anchors with dataset mean instead of raw zero
+                val sourceOffset = 164 + hIdx * 28
+                if (datasetMean != null && datasetMean.size >= 220) {
+                    System.arraycopy(datasetMean, sourceOffset, out, offset, 28)
+                } else {
+                    System.arraycopy(DEFAULT_SPATIAL_MEANS, hIdx * 28, out, offset, 28)
+                }
                 offset += 28
             }
         }

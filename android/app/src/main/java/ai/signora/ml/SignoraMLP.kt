@@ -18,8 +18,8 @@ class SignoraMLP(
     val inDim: Int,
     val numClasses: Int,
     val labels: List<String>,
-    private val mean: FloatArray,
-    private val std: FloatArray,
+    val mean: FloatArray,
+    val std: FloatArray,
     private val temperature: Float,
     private val w0: Array<FloatArray>,
     private val b0: FloatArray,
@@ -35,6 +35,14 @@ class SignoraMLP(
 
     fun predict(feats: FloatArray): RecognitionResult {
         val probs = forward(feats)
+        if (probs.isEmpty()) {
+            return RecognitionResult(
+                label = "UNKNOWN",
+                confidence = 0f,
+                margin = 0f,
+                top3 = emptyList()
+            )
+        }
         var maxIdx = 0
         var maxProb = probs[0]
         var secondMaxProb = 0f
@@ -66,6 +74,9 @@ class SignoraMLP(
     }
 
     fun forward(feats: FloatArray): FloatArray {
+        if (numClasses <= 0) {
+            return FloatArray(0)
+        }
         val effectiveInDim = minOf(inDim, feats.size)
         // 1. Scale-invariant standardization: (x - mean) / std
         val xNorm = FloatArray(inDim)

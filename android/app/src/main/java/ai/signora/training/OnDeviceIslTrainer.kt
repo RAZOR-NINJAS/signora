@@ -365,6 +365,7 @@ class OnDeviceIslTrainer(private val context: Context) {
             put("in_dim", inDim)
             put("num_classes", numClasses)
             put("temperature", 1.0)
+            put("is_custom_trained", true)
 
             val labelsArray = JSONArray()
             for (l in labels) labelsArray.put(l)

@@ -12,7 +12,7 @@ package ai.signora.nlp
  * and the buffer is cleared.
  */
 class SentenceBuffer(
-    private val sentencePauseMs: Long = 5000L,
+    private val sentencePauseMs: Long = 1800L,
     private val onSentenceComplete: (List<GlossToken>) -> Unit
 ) {
     private val tokens = mutableListOf<GlossToken>()
@@ -48,9 +48,12 @@ class SentenceBuffer(
         }
     }
 
-    /** Manually flush – called when user presses Speak. */
+    val isFinalizedState: Boolean
+        get() = isFinalized
+
+    /** Manually flush – called when user presses Speak or hands rest. */
     fun flush() {
-        if (tokens.isNotEmpty()) finalizeAndFire()
+        if (tokens.isNotEmpty() && !isFinalized) finalizeAndFire()
     }
 
     /** Returns a snapshot of pending tokens without clearing. */
@@ -60,7 +63,11 @@ class SentenceBuffer(
     fun pop(): GlossToken? {
         if (tokens.isNotEmpty()) {
             isFinalized = false
-            return tokens.removeAt(tokens.size - 1)
+            val tok = tokens.removeAt(tokens.size - 1)
+            if (tokens.isEmpty()) {
+                lastTokenTimeMs = 0L
+            }
+            return tok
         }
         return null
     }

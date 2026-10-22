@@ -399,6 +399,7 @@ fun DinoGameScreen(
     currentMode: RecognitionMode,
     onModeChange: (RecognitionMode) -> Unit,
     onToggleCamera: () -> Unit,
+    onAttachPreview: (PreviewView) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1851,7 +1852,12 @@ fun DinoGameScreen(
                     AndroidView(
                         factory = { _ ->
                             (previewView.parent as? android.view.ViewGroup)?.removeView(previewView)
-                            previewView
+                            previewView.also {
+                                onAttachPreview(it)
+                            }
+                        },
+                        update = { view ->
+                            onAttachPreview(view)
                         },
                         modifier = Modifier.fillMaxSize()
                     )

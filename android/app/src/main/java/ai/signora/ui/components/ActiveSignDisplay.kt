@@ -58,15 +58,15 @@ fun ActiveSignDisplay(
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
-        modifier = modifier.size(140.dp)
+        modifier = modifier.size(104.dp)
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Thick (9dp) Circular Dwell Ring evaluated ONLY in Draw Phase (Zero Recompositions)
-            Canvas(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                val strokeWidth = 9.dp.toPx()
+            // Circular Dwell Ring evaluated ONLY in Draw Phase (Zero Recompositions)
+            Canvas(modifier = Modifier.fillMaxSize().padding(6.dp)) {
+                val strokeWidth = 6.dp.toPx()
                 val progress = dwellProgressProvider().coerceIn(0f, 1f)
 
                 // Background track
@@ -102,7 +102,7 @@ fun ActiveSignDisplay(
                             imageVector = Icons.Filled.SpaceBar,
                             contentDescription = "Space",
                             tint = if (isCommitted) successColor else MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                         Text(
                             text = "SPACE",
@@ -110,9 +110,11 @@ fun ActiveSignDisplay(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
+                        val displayTxt = ai.signora.engine.DebounceEngine.formatDisplayText(candidate)
                         Text(
-                            text = candidate,
-                            style = MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Black),
+                            text = displayTxt,
+                            style = if (displayTxt.length > 5) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black)
+                                    else MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
                             color = if (isCommitted) successColor else MaterialTheme.colorScheme.onSurface,
                             maxLines = 1
                         )

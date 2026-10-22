@@ -297,8 +297,8 @@ fun SettingsScreen(
                     Slider(
                         value = customDwellMs.toFloat(),
                         onValueChange = { onCustomDwellChange(it.toLong()) },
-                        valueRange = 300f..3000f,
-                        steps = 27
+                        valueRange = 150f..1500f,
+                        steps = 26
                     )
                 }
 

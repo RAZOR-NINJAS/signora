@@ -137,7 +137,7 @@ def test_spatial_pipeline_synthetic_lifecycle():
 
     frame, hand_lms, handedness, pose_lms = pipe.read(timeout=2.0)
     assert frame is not None
-    assert frame.shape == (480, 640, 3)
+    assert frame.shape == (720, 1280, 3)
     assert pose_lms is not None
     assert len(pose_lms) == 33
 

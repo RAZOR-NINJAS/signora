@@ -27,6 +27,7 @@ from signora.isl.spatial import (
     extract_spatial_features,
     get_body_anchor_pt,
 )
+from signora.core.motion import HandMotionTracker, match_sign_motion
 from signora.models.manifest import get_default_models_dir
 from signora.tts.piper import PiperTTS
 
@@ -41,10 +42,16 @@ def run_body_live(
     max_frames: Optional[int] = None,
     use_fake: bool = False,
     dwell_ms: Optional[int] = None,
+    width: int = 1280,
+    height: int = 720,
+    enable_topology: bool = True,
 ) -> int:
     """Run real-time whole-body pose and dual-hand spatial recognition loop."""
     print("=" * 65)
     print("  SIGNORA -- Upper-Body Pose & Hand Spatial Recognition Mode")
+    print(f"  Resolution: {width}x{height} (16:9 Widescreen)")
+    if not enable_topology:
+        print("  Topology engine: DISABLED (Using pure neural model only)")
     print("=" * 65)
     print("  Combines static hand gestures with anatomical body placement anchors:")
     print("    [Forehead]  : FATHER, THINK, FEVER, STUDENT")
@@ -58,7 +65,7 @@ def run_body_live(
     is_spatial_model = False
     if spatial_ckpt.exists():
         try:
-            predictor = Predictor(spatial_ckpt)
+            predictor = Predictor(spatial_ckpt, enable_topology=enable_topology)
             is_spatial_model = True
             print(f"✓ Loaded 220D Spatial Hand+Body neural checkpoint from {spatial_ckpt.name}")
         except Exception as e:
@@ -66,14 +73,26 @@ def run_body_live(
             is_spatial_model = False
 
     if not is_spatial_model:
-        try:
-            predictor = Predictor()
-        except FileNotFoundError:
-            print("[Auto-Healing] ISL neural model weights missing. Fetching...", file=sys.stderr)
-            from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
+        if not enable_topology:
+            predictor = Predictor(enable_topology=False)
+        else:
+            try:
+                predictor = Predictor(enable_topology=True)
+            except FileNotFoundError:
+                print("[Auto-Healing] ISL neural model weights missing. Fetching...", file=sys.stderr)
+                from scripts.fetch_models import DEFAULT_MANIFEST, fetch_models
 
-            fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
-            predictor = Predictor()
+                fetch_models(DEFAULT_MANIFEST, get_default_models_dir())
+                predictor = Predictor(enable_topology=True)
+
+    if not predictor.has_engine and not enable_topology:
+        print(
+            "\n[Error] No trained neural model weights found.\n"
+            "Train a clean model using: signora body --train --fresh\n"
+            "Or run sample collection first using: signora collect -s <SIGN> --body",
+            file=sys.stderr,
+        )
+        return 1
 
     engine = DebounceEngine(
         predictor=predictor,
@@ -92,19 +111,23 @@ def run_body_live(
         mirror=True,
         detect_every=detect_every,
         use_fake=use_fake,
+        width=width,
+        height=height,
     )
 
     if not pipe.started.wait(timeout=5) or pipe.error:
         print("[Auto-Healing] Physical camera unavailable. Launching synthetic mode...", file=sys.stderr)
         pipe.close()
         pipe = SpatialPipeline(
-            source=0, mirror=True, detect_every=detect_every, use_fake=True
+            source=0, mirror=True, detect_every=detect_every, use_fake=True, width=width, height=height
         )
         pipe.started.wait(timeout=5)
 
     if not headless:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
-        cv2.resizeWindow(WINDOW_NAME, 960, 720)
+        win_w = min(1280, width)
+        win_h = max(360, int(win_w * 9 / 16))
+        cv2.resizeWindow(WINDOW_NAME, win_w, win_h)
 
     frame_count = 0
     t0 = time.monotonic()
@@ -112,6 +135,7 @@ def run_body_live(
     fullscreen = False
     active_anchor_zone = "OPEN_SPACE"
     anchor_pt = None
+    motion_tracker = HandMotionTracker()
 
     try:
         while True:
@@ -138,36 +162,61 @@ def run_body_live(
                 )
                 hnd_list = handedness if isinstance(handedness, list) else [handedness]
 
-                # Base probability from hand articulation / spatial body features
-                if is_spatial_model:
-                    feats = extract_spatial_features(lms_list, hnd_list, pose_lms)
-                else:
-                    feats = extract_features(lms_list, hnd_list)
-                probs = predictor.probs(feats)
-                top_idx = int(np.argmax(probs))
-                raw_prob = float(probs[top_idx])
-                raw_label = predictor.labels[top_idx]
-
-                # Detect active body anchor for dominant hand
-                active_anchor_zone, anchor_dist, anchor_pt = detect_body_anchor(
-                    lms_list[0], pose_lms, w=frame.shape[1], h=frame.shape[0]
+                # Update multi-frame dynamic hand motion tracker
+                motion_state = motion_tracker.update(
+                    lms_list, hnd_list, pose_landmarks=pose_lms, timestamp=now
                 )
+
+                # 1. Detect active body anchor for dominant hand
+                if pose_lms and len(pose_lms) >= 25:
+                    active_anchor_zone, anchor_dist, anchor_pt = detect_body_anchor(
+                        lms_list[0], pose_lms, w=frame.shape[1], h=frame.shape[0]
+                    )
+
+                # 2. Real AI Invariant 3D Topology with body anchor context
+                top_label, top_prob = predictor.predict_from_landmarks(
+                    lms_list, hnd_list, body_anchor=active_anchor_zone
+                )
+
+                if top_label:
+                    raw_label = top_label
+                    raw_prob = top_prob
+                else:
+                    if is_spatial_model:
+                        feats = extract_spatial_features(lms_list, hnd_list, pose_lms)
+                    else:
+                        feats = extract_features(lms_list, hnd_list)
+                    probs = predictor.probs(feats)
+                    if len(probs) > 0 and len(predictor.labels) > 0:
+                        top_idx = int(np.argmax(probs))
+                        raw_prob = float(probs[top_idx])
+                        raw_label = predictor.labels[top_idx]
+                    else:
+                        raw_prob = 0.0
+                        raw_label = None
 
                 # Spatial Body Anchor Verification:
                 # If target sign requires a specific body placement anchor, verify proximity
-                required_anchor = SIGN_ANCHOR_MAP.get(raw_label.upper())
+                required_anchor = SIGN_ANCHOR_MAP.get(raw_label.upper()) if raw_label else None
 
                 if required_anchor is not None:
                     if active_anchor_zone == required_anchor:
                         cand_label = raw_label
-                        cand_prob = min(1.0, raw_prob * 1.15)  # Spatial alignment boost
+                        cand_prob = min(1.0, raw_prob * 1.25)  # Spatial alignment boost
+                    elif active_anchor_zone == "OPEN_SPACE":
+                        cand_label = raw_label
+                        cand_prob = raw_prob
                     else:
-                        # Anchor mismatch: suppress false trigger
-                        cand_label = None
-                        cand_prob = 0.0
+                        cand_label = raw_label
+                        cand_prob = raw_prob * 0.85
                 else:
                     cand_label = raw_label
                     cand_prob = raw_prob
+
+                # Dynamic Movement Verification
+                if cand_label:
+                    is_motion_match, motion_factor = match_sign_motion(cand_label, motion_state)
+                    cand_prob = min(1.0, cand_prob * motion_factor)
 
                 target_anchor_pt = None
                 is_anchor_matched = False
@@ -178,6 +227,7 @@ def run_body_live(
                     is_anchor_matched = (active_anchor_zone == required_anchor)
 
                 if not headless:
+                    motion_tracker.draw_motion_trail(frame)
                     draw_cyber_spatial(
                         frame=frame,
                         hand_lms_list=lms_list,
@@ -190,8 +240,10 @@ def run_body_live(
             else:
                 active_anchor_zone = "OPEN_SPACE"
                 anchor_pt = None
+                motion_state = motion_tracker.update([], [], pose_landmarks=pose_lms, timestamp=now)
 
-            st = engine.update(cand_label, cand_prob)
+            active_lms = lms_list[0] if hand_lms else None
+            st = engine.update(cand_label, cand_prob, landmarks=active_lms)
 
             if st.get("confirmed"):
                 confirmed = st["confirmed"]
@@ -206,10 +258,14 @@ def run_body_live(
                         tts.speak_async(confirmed)
 
             if not headless:
-                # Render HUD with spatial placement status
+                # Render HUD with spatial placement and motion dynamics
+                pat = motion_state.get("pattern", "STATIC")
+                speed = motion_state.get("speed", 0.0)
+                dual_pat = motion_state.get("dual_motion", "STATIC")
+
                 shown = render_flagship_hud(
                     frame=frame,
-                    mode_name=f"Spatial ISL [{active_anchor_zone}]",
+                    mode_name=f"Spatial ISL [{active_anchor_zone} | {pat}]",
                     st=st,
                     transcript=engine.buffer,
                     fps=fps_v,
@@ -220,15 +276,18 @@ def run_body_live(
                     window_name=WINDOW_NAME,
                 )
 
-                # Add Spatial Body Anchor Banner top-center
+                # Add Spatial Body Anchor & Motion Banner top-center
                 anchor_color = (6, 182, 212) if active_anchor_zone != "OPEN_SPACE" else (148, 163, 184)
-                banner_text = f"BODY ANCHOR: {active_anchor_zone}"
+                motion_desc = f"{pat} ({speed:.2f}m/s)" if pat != "STATIC" else pat
+                if dual_pat != "STATIC":
+                    motion_desc += f" | {dual_pat}"
+                banner_text = f"ANCHOR: {active_anchor_zone}  |  MOTION: {motion_desc}"
                 cv2.putText(
                     shown,
                     banner_text,
-                    (frame.shape[1] // 2 - 120, 30),
+                    (max(20, frame.shape[1] // 2 - 180), 30),
                     cv2.FONT_HERSHEY_DUPLEX,
-                    0.55,
+                    0.52,
                     anchor_color,
                     1,
                     cv2.LINE_AA,

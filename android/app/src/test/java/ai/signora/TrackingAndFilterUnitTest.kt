@@ -88,4 +88,19 @@ class TrackingAndFilterUnitTest {
         // Within 10 frames (~330ms), should converge close to target
         assertTrue("Filter must track fast step without excessive lag", lastFiltered > 0.85f)
     }
+
+    @Test
+    fun testOneEuroFilterBackwardsTimestamp() {
+        val filter = OneEuroFilter()
+        val first = filter.filter(0.5f, 1000L)
+        assertEquals(0.5f, first, 1e-4f)
+
+        // Advance normally
+        val second = filter.filter(0.52f, 1033L)
+        assertTrue(second > 0.49f && second < 0.55f)
+
+        // Backwards timestamp: should snap and not produce NaN or crash
+        val reversed = filter.filter(0.8f, 500L)
+        assertEquals(0.8f, reversed, 1e-4f)
+    }
 }

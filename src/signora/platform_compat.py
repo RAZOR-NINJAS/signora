@@ -54,7 +54,12 @@ def get_platform_info() -> Dict[str, str]:
 # ============================================================================
 
 
-def get_camera_capture(source: Any = 0, buffer_size: int = 1) -> cv2.VideoCapture:
+def get_camera_capture(
+    source: Any = 0,
+    buffer_size: int = 1,
+    width: int = 1280,
+    height: int = 720,
+) -> cv2.VideoCapture:
     """Create cv2.VideoCapture with optimized platform backend.
 
     On Windows: DirectShow (cv2.CAP_DSHOW) avoids MSMF startup delay & freezes.
@@ -72,6 +77,10 @@ def get_camera_capture(source: Any = 0, buffer_size: int = 1) -> cv2.VideoCaptur
         elif is_linux():
             cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
             if not cap.isOpened():
+                cap = cv2.VideoCapture(f"/dev/video{source}", cv2.CAP_V4L2)
+            if not cap.isOpened():
+                cap = cv2.VideoCapture(f"/dev/video{source}")
+            if not cap.isOpened():
                 cap = cv2.VideoCapture(source)
         else:
             cap = cv2.VideoCapture(source)
@@ -79,11 +88,37 @@ def get_camera_capture(source: Any = 0, buffer_size: int = 1) -> cv2.VideoCaptur
         # Source is a file path, video URL, or RTSP stream
         cap = cv2.VideoCapture(str(source))
 
-    if cap.isOpened() and buffer_size > 0:
+    if cap.isOpened():
+        if hasattr(cv2, "VideoWriter_fourcc"):
+            try:
+                cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+            except Exception:
+                pass
         try:
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, buffer_size)
-        except cv2.error:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+        except Exception:
             pass
+        if buffer_size > 0:
+            try:
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, buffer_size)
+            except cv2.error:
+                pass
+
+        if is_linux():
+            dev_str = f"/dev/video{source}" if isinstance(source, int) else str(source)
+            if dev_str.startswith("/dev/video"):
+                try:
+                    import subprocess
+                    subprocess.run(
+                        ["v4l2-ctl", "-d", dev_str, "-c", "exposure_dynamic_framerate=0"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=0.3,
+                    )
+                except Exception:
+                    pass
 
     return cap
 
@@ -92,7 +127,7 @@ def probe_cameras(max_probe: int = 4) -> List[Dict[str, Any]]:
     """Probe system camera devices and return metadata for available devices."""
     detected = []
     for idx in range(max_probe):
-        cap = get_camera_capture(idx, buffer_size=1)
+        cap = get_camera_capture(idx, buffer_size=2)
         if cap.isOpened():
             ret, frame = cap.read()
             if ret and frame is not None:

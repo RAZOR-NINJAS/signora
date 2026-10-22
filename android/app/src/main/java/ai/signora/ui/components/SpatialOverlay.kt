@@ -56,6 +56,9 @@ fun SpatialOverlay(
     targetAnchorPt: Point3D?,
     isAnchorMatched: Boolean,
     cameraResolution: Pair<Int, Int> = Pair(480, 640),
+    isFitCenter: Boolean = false,
+    rightMotionTrail: List<Pair<Float, Float>> = emptyList(),
+    leftMotionTrail: List<Pair<Float, Float>> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val textPaint = remember {
@@ -76,6 +79,18 @@ fun SpatialOverlay(
         }
     }
 
+    // Hoist expensive BodySegmentation computation out of the Canvas draw lambda
+    // so it only re-runs when hands/pose change, not on every draw pass
+    val segmentData = remember(hands, pose) {
+        if (pose != null && pose.points.size >= 25) {
+            val segs = BodySegmentation.computeSegments(pose)
+            val active = BodySegmentation.detectActiveSegments(hands, pose)
+            Triple(segs, active, pose)
+        } else {
+            null
+        }
+    }
+
     Canvas(modifier = modifier.fillMaxSize()) {
         val canvasWidth = size.width
         val canvasHeight = size.height
@@ -83,7 +98,11 @@ fun SpatialOverlay(
         val camW = cameraResolution.first.toFloat().coerceAtLeast(1f)
         val camH = cameraResolution.second.toFloat().coerceAtLeast(1f)
 
-        val scale = maxOf(canvasWidth / camW, canvasHeight / camH)
+        val scale = if (isFitCenter) {
+            minOf(canvasWidth / camW, canvasHeight / camH)
+        } else {
+            maxOf(canvasWidth / camW, canvasHeight / camH)
+        }
         val scaledW = camW * scale
         val scaledH = camH * scale
         val offsetX = (canvasWidth - scaledW) / 2f
@@ -97,14 +116,13 @@ fun SpatialOverlay(
         }
 
         // 1. Compute and Draw Anatomical Body Segments
-        if (pose != null && pose.points.size >= 25) {
-            val segments = BodySegmentation.computeSegments(pose)
-            val activeSegment = BodySegmentation.detectActiveSegment(hands, pose)
+        if (segmentData != null) {
+            val (segments, activeSegments, poseNonNull) = segmentData
             val targetSegment = BodySegmentation.matchTargetSegment(targetAnchor, segments)
 
             drawBodySegments(
                 segments = segments,
-                activeSegment = activeSegment,
+                activeSegments = activeSegments,
                 targetSegment = targetSegment,
                 isTargetMatched = isAnchorMatched,
                 toScreen = toScreen,
@@ -114,11 +132,11 @@ fun SpatialOverlay(
             )
 
             // Draw Upper Body Skeleton Lines
-            drawBodyPose(pose, toScreen)
+            drawBodyPose(poseNonNull, toScreen)
 
             // Draw Top Active Segment Cybernetic HUD Pill
             drawSegmentHud(
-                activeSegment = activeSegment,
+                activeSegments = activeSegments,
                 targetSegment = targetSegment,
                 isMatched = isAnchorMatched,
                 canvasWidth = canvasWidth,
@@ -129,6 +147,38 @@ fun SpatialOverlay(
         // 2. Draw Hand Skeletons
         for (hand in hands) {
             drawHandSkeleton(hand, toScreen)
+        }
+
+        // 2.5 Draw Glowing Motion Trails for dynamic gestures
+        val cyanBase = Color(0xFF06B6D4) // Right hand neon cyan
+        val roseBase = Color(0xFFF43F5E) // Left hand neon rose
+
+        listOf(
+            rightMotionTrail to cyanBase,
+            leftMotionTrail to roseBase
+        ).forEach { (trail, color) ->
+            if (trail.size >= 2) {
+                val n = trail.size
+                for (i in 1 until n) {
+                    val p0 = trail[i - 1]
+                    val p1 = trail[i]
+                    val o0 = Offset(p0.first * scaledW + offsetX, p0.second * scaledH + offsetY)
+                    val o1 = Offset(p1.first * scaledW + offsetX, p1.second * scaledH + offsetY)
+                    val alpha = i.toFloat() / n.toFloat()
+                    val width = (3.5f * alpha).coerceAtLeast(1.5f)
+                    drawLine(
+                        color = color.copy(alpha = alpha * 0.9f),
+                        start = o0,
+                        end = o1,
+                        strokeWidth = width,
+                        cap = StrokeCap.Round
+                    )
+                }
+                val last = trail.last()
+                val lastOffset = Offset(last.first * scaledW + offsetX, last.second * scaledH + offsetY)
+                drawCircle(color = color, radius = 6f, center = lastOffset)
+                drawCircle(color = Color.White, radius = 2.5f, center = lastOffset)
+            }
         }
 
         // 3. Draw Target Reticle if targetAnchorPt is provided
@@ -145,7 +195,7 @@ fun SpatialOverlay(
 
 private fun DrawScope.drawBodySegments(
     segments: List<BodySegmentZone>,
-    activeSegment: BodySegmentZone?,
+    activeSegments: List<BodySegmentZone>,
     targetSegment: BodySegmentZone?,
     isTargetMatched: Boolean,
     toScreen: (Point3D) -> Offset,
@@ -159,6 +209,10 @@ private fun DrawScope.drawBodySegments(
     val cyan = Color(0xFF06B6D4)
 
     for (seg in segments) {
+        val isActive = activeSegments.any { it.id == seg.id }
+        val isTarget = (targetSegment?.id == seg.id)
+        if (!isActive && !isTarget) continue
+
         val center = toScreen(seg.center)
         val w = seg.width * scaledW
         val h = seg.height * scaledH
@@ -166,9 +220,6 @@ private fun DrawScope.drawBodySegments(
         val top = center.y - h / 2f
         val right = left + w
         val bottom = top + h
-
-        val isActive = (activeSegment?.id == seg.id)
-        val isTarget = (targetSegment?.id == seg.id)
 
         val strokeColor = when {
             isActive -> emerald
@@ -242,15 +293,15 @@ private fun DrawScope.drawBodySegments(
 }
 
 private fun DrawScope.drawSegmentHud(
-    activeSegment: BodySegmentZone?,
+    activeSegments: List<BodySegmentZone>,
     targetSegment: BodySegmentZone?,
     isMatched: Boolean,
     canvasWidth: Float,
     hudPaint: Paint
 ) {
-    if (activeSegment == null && targetSegment == null) return
+    if (activeSegments.isEmpty() && targetSegment == null) return
 
-    val hudWidth = 440f
+    val hudWidth = if (activeSegments.size >= 2) 520f else 440f
     val hudHeight = 44f
     val hudLeft = (canvasWidth - hudWidth) / 2f
     val hudTop = 16f
@@ -258,7 +309,7 @@ private fun DrawScope.drawSegmentHud(
     val emerald = Color(0xFF10B981)
     val amber = Color(0xFFF59E0B)
 
-    val activeColor = if (isMatched || (activeSegment != null && activeSegment == targetSegment)) emerald else if (activeSegment != null) emerald else amber
+    val activeColor = if (isMatched || activeSegments.any { it == targetSegment }) emerald else if (activeSegments.isNotEmpty()) emerald else amber
 
     drawRoundRect(
         color = Color(0xFF0F172A).copy(alpha = 0.85f),
@@ -278,7 +329,8 @@ private fun DrawScope.drawSegmentHud(
     hudPaint.color = activeColor.toArgb()
     val hudText = when {
         isMatched -> "✓ TARGET MATCHED: ${targetSegment?.shortTag ?: ""}"
-        activeSegment != null -> "📍 ZONE: ${activeSegment.displayName.uppercase()}"
+        activeSegments.size >= 2 -> "📍 DUAL ZONES: ${activeSegments[0].shortTag} + ${activeSegments[1].shortTag}"
+        activeSegments.size == 1 -> "📍 ZONE: ${activeSegments[0].displayName.uppercase()}"
         targetSegment != null -> "🎯 TARGET: ${targetSegment.shortTag}"
         else -> ""
     }
@@ -317,13 +369,13 @@ private fun DrawScope.drawBodyPose(pose: PoseLandmarks, toScreen: (Point3D) -> O
         if (idx < pts.size) {
             val center = toScreen(pts[idx])
             drawCircle(
-                color = jointColor.copy(alpha = 0.35f),
-                radius = 9f,
+                color = jointColor,
+                radius = 5f,
                 center = center
             )
             drawCircle(
-                color = jointColor,
-                radius = 5.5f,
+                color = Color.White,
+                radius = 2f,
                 center = center
             )
         }
@@ -346,7 +398,7 @@ private fun DrawScope.drawHandSkeleton(hand: HandLandmarks, toScreen: (Point3D) 
                 color = boneColor,
                 start = p1,
                 end = p2,
-                strokeWidth = 5f,
+                strokeWidth = 3.5f,
                 cap = StrokeCap.Round
             )
         }
@@ -355,13 +407,13 @@ private fun DrawScope.drawHandSkeleton(hand: HandLandmarks, toScreen: (Point3D) 
     for (p in pts) {
         val center = toScreen(p)
         drawCircle(
-            color = jointColor.copy(alpha = 0.35f),
-            radius = 8f,
+            color = jointColor,
+            radius = 4.5f,
             center = center
         )
         drawCircle(
-            color = jointColor,
-            radius = 5f,
+            color = Color.White,
+            radius = 1.8f,
             center = center
         )
     }

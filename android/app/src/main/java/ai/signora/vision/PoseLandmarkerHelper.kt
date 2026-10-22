@@ -35,7 +35,7 @@ class PoseLandmarkerHelper(
         private set
 
     // One-Euro smoother for 33 pose landmarks: steady shoulders/face with zero latency
-    private val poseSmoother = LandmarkSmoother(maxPoints = 33, minCutoff = 1.0f, beta = 0.05f)
+    private val poseSmoother = LandmarkSmoother(maxPoints = 33, minCutoff = 0.8f, beta = 2.5f)
     private val frameMetaMap = ConcurrentHashMap<Long, FrameMeta>()
 
     init {
@@ -64,12 +64,15 @@ class PoseLandmarkerHelper(
             baseOptionsBuilder.setDelegate(delegate)
 
             var configured = false
-            // 1. Prefer loading directly from APK assets
-            try {
+            // 1. Only load from APK assets if file actually exists
+            val assetExists = try {
+                context.assets.open("models/pose_landmarker.task").use { true }
+            } catch (_: Exception) {
+                false
+            }
+            if (assetExists) {
                 baseOptionsBuilder.setModelAssetPath("models/pose_landmarker.task")
                 configured = true
-            } catch (_: Exception) {
-                // Fallback below
             }
 
             // 2. If needed, load from external downloaded file buffer
@@ -85,7 +88,7 @@ class PoseLandmarkerHelper(
             } else {
                 false
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             false
         }
     }
@@ -93,9 +96,9 @@ class PoseLandmarkerHelper(
     private fun initWithOptions(baseOptions: BaseOptions) {
         val options = PoseLandmarker.PoseLandmarkerOptions.builder()
             .setBaseOptions(baseOptions)
-            .setMinPoseDetectionConfidence(0.30f)
-            .setMinTrackingConfidence(0.30f)
-            .setMinPosePresenceConfidence(0.30f)
+            .setMinPoseDetectionConfidence(0.35f)
+            .setMinTrackingConfidence(0.35f)
+            .setMinPosePresenceConfidence(0.35f)
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setResultListener { result: PoseLandmarkerResult, _ ->
                 val timestamp = result.timestampMs()
@@ -110,6 +113,8 @@ class PoseLandmarkerHelper(
         poseLandmarker = PoseLandmarker.createFromOptions(context, options)
     }
 
+    private var lastInputTimestamp = -1L
+
     fun detectLiveStream(
         mpImage: MPImage,
         rotationDegrees: Int,
@@ -117,15 +122,19 @@ class PoseLandmarkerHelper(
         frameId: Long,
         frameTime: Long
     ) {
+        var adjustedTime = frameTime
         try {
+            adjustedTime = if (frameTime <= lastInputTimestamp) lastInputTimestamp + 1 else frameTime
+            lastInputTimestamp = adjustedTime
+
             val imageProcessingOptions = ImageProcessingOptions.builder()
                 .setRotationDegrees(rotationDegrees)
                 .build()
 
-            frameMetaMap[frameTime] = FrameMeta(frameId, isFrontCamera)
-            poseLandmarker?.detectAsync(mpImage, imageProcessingOptions, frameTime)
+            frameMetaMap[adjustedTime] = FrameMeta(frameId, isFrontCamera)
+            poseLandmarker?.detectAsync(mpImage, imageProcessingOptions, adjustedTime)
         } catch (e: Exception) {
-            frameMetaMap.remove(frameTime)
+            frameMetaMap.remove(adjustedTime)
             onError("Pose detection frame drop: ${e.message}")
         }
     }

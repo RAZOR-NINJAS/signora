@@ -15,6 +15,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from signora.isl.model import get_torch_model
 from signora.models.export import export_model_to_json
@@ -66,6 +67,7 @@ def load_dataset(
     data_dir: Path,
     baseline_ckpt_path: Path,
     expected_dim: Optional[int] = None,
+    fresh: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, List[str], int]:
     """Assemble complete training dataset combining existing and newly recorded classes."""
     dataset_dict: Dict[str, np.ndarray] = {}
@@ -84,8 +86,8 @@ def load_dataset(
         else:
             target_in_dim = 220 if "spatial" in str(data_dir) else 164
 
-    # 1. Load baseline checkpoint to preserve prior classes if dimensions match
-    if baseline_ckpt_path.exists():
+    # 1. Load baseline checkpoint to preserve prior classes if dimensions match and not fresh
+    if baseline_ckpt_path.exists() and not fresh:
         ckpt = torch.load(baseline_ckpt_path, map_location="cpu", weights_only=False)
         base_in_dim = ckpt.get("in_dim", 164)
         if base_in_dim == target_in_dim:
@@ -104,7 +106,7 @@ def load_dataset(
                 f"[Info] Baseline checkpoint has dimension {base_in_dim}D, but current dataset requires {target_in_dim}D. Training fresh {target_in_dim}D model."
             )
     else:
-        print("[Warning] No previous baseline checkpoint found. Training from scratch.")
+        print("[Info] Training clean model from scratch on user-provided data only.")
 
     # 2. Load newly recorded user samples from data_dir/*.npy
     if not new_files and not dataset_dict:
@@ -135,13 +137,15 @@ def load_dataset(
 
     for label_idx, label in enumerate(all_labels):
         samples = dataset_dict[label]
-        # Data augmentation: jitter noise to improve generalization
+        # Data augmentation: jitter noise to improve generalization only if class is small (< 100 samples)
         noisy_samples = []
-        for _ in range(max(1, 100 // len(samples))):
-            noise = np.random.normal(0, 0.015, size=samples.shape).astype(np.float32)
-            noisy_samples.append(samples + noise)
+        if len(samples) < 100:
+            target_reps = min(5, max(1, 100 // max(1, len(samples))))
+            for _ in range(target_reps):
+                noise = np.random.normal(0, 0.015, size=samples.shape).astype(np.float32)
+                noisy_samples.append(samples + noise)
 
-        combined = np.vstack([samples] + noisy_samples)
+        combined = np.vstack([samples] + noisy_samples) if noisy_samples else samples
         X_list.append(combined)
         y_list.append(np.full(len(combined), label_idx, dtype=np.int64))
 
@@ -158,6 +162,8 @@ def train_isl_model(
     batch_size: int = 32,
     ckpt_path: Optional[Path] = None,
     in_dim: Optional[int] = None,
+    fresh: bool = False,
+    export_mobile: bool = False,
 ) -> Dict[str, Any]:
     """Train or fine-tune the ISL MLP model on data_dir and update model checkpoint."""
     print("=" * 65)
@@ -176,7 +182,7 @@ def train_isl_model(
             if not ckpt_path.exists():
                 ckpt_path = MODELS_DIR / "isl_mlp.pt"
 
-    X, y, labels, actual_dim = load_dataset(data_dir, ckpt_path, expected_dim=in_dim)
+    X, y, labels, actual_dim = load_dataset(data_dir, ckpt_path, expected_dim=in_dim, fresh=fresh)
     if actual_dim == 220 and ckpt_path.name == "isl_mlp.pt":
         ckpt_path = MODELS_DIR / "isl_spatial_mlp.pt"
 
@@ -195,12 +201,14 @@ def train_isl_model(
     X_train, y_train = torch.tensor(X_norm[train_idx]), torch.tensor(y[train_idx])
     X_val, y_val = torch.tensor(X_norm[val_idx]), torch.tensor(y[val_idx])
 
-    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=True)
+    eff_batch_size = 128 if (batch_size == 32 and len(X_train) >= 2000) else batch_size
+    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=eff_batch_size, shuffle=True)
 
     n_classes = len(labels)
     model = get_torch_model(in_dim=actual_dim, n_classes=n_classes)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.05)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs, eta_min=lr * 0.05)
 
     best_acc = 0.0
     best_state = None
@@ -218,6 +226,8 @@ def train_isl_model(
             optimizer.step()
             total_loss += loss.item() * len(bx)
 
+        scheduler.step()
+
         model.eval()
         with torch.no_grad():
             v_out = model(X_val)
@@ -228,11 +238,28 @@ def train_isl_model(
             best_acc = acc
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
 
-        if epoch % 10 == 0 or epoch == epochs:
+        if epoch % 5 == 0 or epoch == epochs or epoch == 1:
             avg_loss = total_loss / len(X_train)
-            print(f"  Epoch [{epoch:02d}/{epochs:02d}]  Loss: {avg_loss:.4f}  Val Acc: {acc * 100:.1f}%")
+            print(f"  Epoch [{epoch:02d}/{epochs:02d}]  Loss: {avg_loss:.4f}  Val Acc: {acc * 100:.1f}%", flush=True)
 
-    print(f"\n✓ Best Validation Accuracy: {best_acc * 100:.2f}%")
+    print(f"\n✓ Best Validation Accuracy: {best_acc * 100:.2f}%", flush=True)
+
+    # Temperature calibration: find T that minimises NLL on the validation split
+    model.load_state_dict(best_state)
+    model.eval()
+    with torch.no_grad():
+        val_logits = model(X_val)  # (N, C)
+
+    best_nll = float("inf")
+    calibrated_temperature = 1.0
+    for t_cand in [0.3, 0.5, 0.7, 1.0, 1.3, 1.5, 2.0]:
+        scaled = val_logits / t_cand
+        log_probs = scaled - torch.logsumexp(scaled, dim=-1, keepdim=True)
+        nll = -log_probs[torch.arange(len(y_val)), y_val].mean().item()
+        if nll < best_nll:
+            best_nll = nll
+            calibrated_temperature = t_cand
+    print(f"✓ Calibrated temperature: {calibrated_temperature} (NLL={best_nll:.4f})")
 
     # Backup previous model
     if ckpt_path.exists():
@@ -248,7 +275,7 @@ def train_isl_model(
         "n_classes": n_classes,
         "mean": mean.astype(np.float32),
         "std": std.astype(np.float32),
-        "temperature": 0.05,
+        "temperature": calibrated_temperature,
         "meta": {
             "val_acc": best_acc,
             "n_samples": len(X),
@@ -275,13 +302,14 @@ def train_isl_model(
         except Exception as me:
             print(f"[Warning] Could not update models.json manifest: {me}")
 
-    # Automatically export for Android APK only when training production models
+    # Automatically export for Android APK
     is_production_ckpt = (ckpt_path.parent.resolve() == MODELS_DIR.resolve())
-    if is_production_ckpt and actual_dim == 220:
+    if (is_production_ckpt or export_mobile) and actual_dim == 220:
         mobile_out = ROOT_DIR / "android" / "app" / "src" / "main" / "assets" / "models" / "isl_model.json"
         if mobile_out.parent.exists() or (ROOT_DIR / "android").exists():
             try:
-                print(f"\n⚡ Exporting mobile assets ({actual_dim}D) for Android Signora app...")
+                mobile_out.parent.mkdir(parents=True, exist_ok=True)
+                print(f"\n⚡ Exporting mobile assets ({actual_dim}D) for Android Signora app -> {mobile_out}...")
                 export_model_to_json(ckpt_path, "isl", mobile_out)
             except Exception as e:
                 print(f"[Warning] Mobile asset export skipped: {e}")

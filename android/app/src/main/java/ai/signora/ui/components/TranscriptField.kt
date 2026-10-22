@@ -18,17 +18,22 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ai.signora.engine.DebounceEngine
 import ai.signora.ui.theme.AppTheme
 import ai.signora.ui.theme.SignoraTheme
-import ai.signora.ui.theme.TranscriptMonospace
 
+@Suppress("DEPRECATION")
 @Composable
 fun TranscriptField(
     transcript: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    synthesizedSentence: String = ""
 ) {
     val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
+
+    val displayText = DebounceEngine.formatTranscriptForDisplay(transcript)
 
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -51,16 +56,21 @@ fun TranscriptField(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "TRANSCRIPT",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "TRANSCRIPT",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                if (transcript.isNotBlank()) {
+                if (displayText.isNotBlank()) {
                     IconButton(
                         onClick = {
-                            clipboardManager.setText(AnnotatedString(transcript))
+                            clipboardManager.setText(AnnotatedString(displayText))
                         },
                         modifier = Modifier.size(28.dp)
                     ) {
@@ -80,19 +90,22 @@ fun TranscriptField(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp, max = 96.dp)
+                    .heightIn(min = 52.dp, max = 110.dp)
                     .verticalScroll(scrollState),
                 contentAlignment = Alignment.CenterStart
             ) {
-                if (transcript.isNotBlank()) {
+                if (displayText.isNotBlank()) {
                     Text(
-                        text = transcript,
-                        style = TranscriptMonospace,
+                        text = displayText,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 24.sp
+                        ),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 } else {
                     Text(
-                        text = "Start signing to transcribe...",
+                        text = "Sign with hands to translate...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -110,9 +123,9 @@ private fun TranscriptFieldPreviewLight() {
     }
 }
 
-@Preview(name = "TranscriptField Empty Dark")
+@Preview(name = "TranscriptField Empty")
 @Composable
-private fun TranscriptFieldPreviewDark() {
+private fun TranscriptFieldPreviewEmpty() {
     SignoraTheme(dynamicColor = false) {
         TranscriptField(transcript = "")
     }

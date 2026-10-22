@@ -15,9 +15,13 @@ import java.net.URL
  * If any model is missing from the APK bundle or corrupted, it automatically downloads
  * the required model assets in the background from official CDN releases.
  */
-class AutoAssetManager(private val context: Context) {
+class AutoAssetManager(
+    private val context: Context? = null,
+    baseDir: File? = null,
+    private val assetLoader: ((String) -> String)? = null
+) {
 
-    private val modelsDir = File(context.filesDir, "models").apply { mkdirs() }
+    private val modelsDir = baseDir ?: File(context?.filesDir ?: File(System.getProperty("java.io.tmpdir"), "models"), "models").apply { mkdirs() }
 
     data class AssetStatus(
         val isReady: Boolean,
@@ -40,20 +44,53 @@ class AutoAssetManager(private val context: Context) {
         for ((idx, filename) in requiredAssets.withIndex()) {
             val targetFile = File(modelsDir, filename)
 
-            // 1. If target file already exists and valid (e.g. retrained on-device model or extracted asset), keep it
-            if (targetFile.exists() && targetFile.length() > 0) {
+            // For JSON models, verify cached file is not shadowing a richer APK bundled model
+            if (targetFile.exists() && targetFile.length() > 0 && filename.endsWith(".json")) {
+                var needsBundledOverwrite = false
+                try {
+                    val bundledStr = loadBundledModelJsonString(filename)
+                    val bundledObj = org.json.JSONObject(bundledStr)
+                    val cachedObj = org.json.JSONObject(targetFile.readText(Charsets.UTF_8))
+                    val bundledClasses = bundledObj.optInt("num_classes", bundledObj.optJSONArray("labels")?.length() ?: 0)
+                    val cachedClasses = cachedObj.optInt("num_classes", cachedObj.optJSONArray("labels")?.length() ?: 0)
+                    val bundledInDim = bundledObj.optInt("in_dim", 0)
+                    val cachedInDim = cachedObj.optInt("in_dim", 0)
+                    val hasWeights = cachedObj.has("net_0_weight") && cachedObj.has("mean") && cachedObj.has("std")
+                    val isCustomTrained = cachedObj.optBoolean("is_custom_trained", false)
+
+                    // Overwrite if cached model has fewer classes, lower dimensionality, lacks weights,
+                    // or is not explicitly custom-trained and has same class count as bundled asset.
+                    if (cachedClasses < bundledClasses || cachedInDim < bundledInDim || !hasWeights) {
+                        needsBundledOverwrite = true
+                    } else if (cachedClasses == bundledClasses && !isCustomTrained) {
+                        needsBundledOverwrite = true
+                    }
+                } catch (_: Exception) {
+                    needsBundledOverwrite = true
+                }
+
+                if (!needsBundledOverwrite) {
+                    continue
+                }
+            } else if (targetFile.exists() && targetFile.length() > 0) {
                 continue
             }
 
             // 2. Attempt extraction from APK bundled assets
             var copiedFromApk = false
             try {
-                context.assets.open("models/$filename").use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
+                if (assetLoader != null) {
+                    val bundledStr = assetLoader.invoke(filename)
+                    targetFile.writeText(bundledStr, Charsets.UTF_8)
+                    copiedFromApk = true
+                } else if (context != null) {
+                    context.assets.open("models/$filename").use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
                     }
+                    copiedFromApk = true
                 }
-                copiedFromApk = true
             } catch (_: Exception) {
                 copiedFromApk = false
             }
@@ -62,7 +99,7 @@ class AutoAssetManager(private val context: Context) {
                 continue
             }
 
-            // 2. Self-Healing Fallback: Auto-Download from CDN
+            // 3. Self-Healing Fallback: Auto-Download from CDN
             val downloadUrl = assetUrls[filename]
             if (downloadUrl != null) {
                 onProgress(
@@ -96,28 +133,95 @@ class AutoAssetManager(private val context: Context) {
 
         // Always prioritize fresh extraction from bundled APK assets
         try {
-            context.assets.open("models/$filename").use { input ->
-                FileOutputStream(f).use { output ->
-                    input.copyTo(output)
+            if (assetLoader != null) {
+                val bundledStr = assetLoader.invoke(filename)
+                f.writeText(bundledStr, Charsets.UTF_8)
+                return f
+            } else if (context != null) {
+                context.assets.open("models/$filename").use { input ->
+                    FileOutputStream(f).use { output ->
+                        input.copyTo(output)
+                    }
                 }
+                return f
             }
-            return f
         } catch (_: Exception) {}
 
         if (f.exists() && f.length() > 0) return f
         return f
     }
 
-    fun loadModelJsonString(filename: String): String {
+    fun loadBundledModelJsonString(filename: String): String {
+        if (assetLoader != null) {
+            return assetLoader.invoke(filename)
+        }
+        val ctx = context ?: throw IllegalStateException("Context is null and assetLoader not provided")
+        return ctx.assets.open("models/$filename").bufferedReader().use { it.readText() }
+    }
+
+    fun loadModelJsonString(filename: String, forceBundled: Boolean = false): String {
         val f = File(modelsDir, filename)
-        if (f.exists() && f.length() > 0) {
-            return f.readText(Charsets.UTF_8)
-        }
+        var bundledJson: String? = null
         try {
-            return context.assets.open("models/$filename").bufferedReader().use { it.readText() }
-        } catch (_: Exception) {
-            throw IllegalStateException("Model asset $filename not found in APK assets or local storage")
+            bundledJson = loadBundledModelJsonString(filename)
+        } catch (_: Exception) {}
+
+        if (forceBundled && bundledJson != null) {
+            try {
+                f.writeText(bundledJson, Charsets.UTF_8)
+            } catch (_: Exception) {}
+            return bundledJson
         }
+
+        if (f.exists() && f.length() > 0) {
+            val cachedJson = try {
+                f.readText(Charsets.UTF_8)
+            } catch (_: Exception) {
+                null
+            }
+
+            if (cachedJson != null && bundledJson != null && filename.endsWith(".json")) {
+                try {
+                    val cachedObj = org.json.JSONObject(cachedJson)
+                    val bundledObj = org.json.JSONObject(bundledJson)
+
+                    val cachedClasses = cachedObj.optInt("num_classes", cachedObj.optJSONArray("labels")?.length() ?: 0)
+                    val bundledClasses = bundledObj.optInt("num_classes", bundledObj.optJSONArray("labels")?.length() ?: 0)
+                    val cachedInDim = cachedObj.optInt("in_dim", 0)
+                    val bundledInDim = bundledObj.optInt("in_dim", 0)
+                    val hasWeights = cachedObj.has("net_0_weight") && cachedObj.has("mean") && cachedObj.has("std")
+                    val isCustomTrained = cachedObj.optBoolean("is_custom_trained", false)
+
+                    // If cached model has fewer classes, lower dimensionality, or fails validation,
+                    // restore from APK bundled asset
+                    if (cachedClasses < bundledClasses || cachedInDim < bundledInDim || !hasWeights) {
+                        f.writeText(bundledJson, Charsets.UTF_8)
+                        return bundledJson
+                    }
+                    if (cachedClasses > bundledClasses || isCustomTrained) {
+                        return cachedJson
+                    }
+                    // Stale shadow copy with same number of classes: overwrite from bundled APK
+                    f.writeText(bundledJson, Charsets.UTF_8)
+                    return bundledJson
+                } catch (_: Exception) {
+                    // Corrupted cached JSON: restore from bundled
+                    f.writeText(bundledJson, Charsets.UTF_8)
+                    return bundledJson
+                }
+            } else if (cachedJson != null) {
+                return cachedJson
+            }
+        }
+
+        if (bundledJson != null) {
+            try {
+                f.writeText(bundledJson, Charsets.UTF_8)
+            } catch (_: Exception) {}
+            return bundledJson
+        }
+
+        throw IllegalStateException("Model asset $filename not found in APK assets or local storage")
     }
 
     private fun downloadFile(urlStr: String, destination: File): Boolean {

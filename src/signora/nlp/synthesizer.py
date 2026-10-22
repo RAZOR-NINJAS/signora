@@ -13,7 +13,7 @@ GUARANTEES:
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Set, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 
 @dataclass
@@ -29,6 +29,32 @@ class IslGrammarSynthesizer:
     TEMPORAL_FUTURE: Set[str] = {"TOMORROW", "LATER", "SOON"}
     TEMPORAL_PAST: Set[str] = {"YESTERDAY", "BEFORE", "PAST"}
     ASPECT_PERFECT: Set[str] = {"FINISH", "FINISHED", "ALREADY", "DONE"}
+
+    TEMPORALS: Set[str] = {
+        "TODAY", "TOMORROW", "YESTERDAY", "TONIGHT", "NOW", "LATER", "SOON",
+        "MORNING", "AFTERNOON", "EVENING", "NIGHT", "SUNDAY", "MONDAY",
+        "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "WEEKEND"
+    }
+
+    STATE_PREDICATES: Dict[str, str] = {
+        "OFF": "an off",
+        "HOLIDAY": "a holiday",
+        "LEAVE": "on leave",
+        "VACATION": "on vacation",
+        "CLOSED": "closed",
+        "OPEN": "open",
+        "BUSY": "busy",
+        "FREE": "free",
+        "CANCELLED": "cancelled",
+        "DELAYED": "delayed",
+        "READY": "ready",
+    }
+
+    LOCATIONS: Set[str] = {
+        "HOME", "OFFICE", "SCHOOL", "COLLEGE", "HOSPITAL", "CLINIC", "BANK",
+        "MARKET", "STATION", "AIRPORT", "STORE", "SHOP", "ROOM", "HOTEL",
+        "WORK", "CLASS", "GYM"
+    }
 
     SUBJECT_PRONOUNS = {
         "I": "I",
@@ -52,7 +78,8 @@ class IslGrammarSynthesizer:
     }
 
     MOTION_VERBS: Set[str] = {
-        "GO", "COME", "TRAVEL", "WALK", "RUN", "DRIVE", "RIDE", "FLY"
+        "GO", "COME", "TRAVEL", "WALK", "RUN", "DRIVE", "RIDE", "FLY",
+        "ARRIVE", "LEAVE", "REACH"
     }
 
     VERBS: Set[str] = {
@@ -62,7 +89,8 @@ class IslGrammarSynthesizer:
         "WAKE", "SIT", "STAND", "PLAY", "WORK", "LEARN", "HELP", "REMEMBER",
         "FORGET", "LISTEN", "LOOK", "BUY", "MEET", "LIKE", "LOVE", "TEACH",
         "WRITE", "READ", "TAKE", "BRING", "SHOW", "MAKE", "FIND", "COOK",
-        "CLEAN", "REST", "PROMISE", "AGREE", "DISAGREE"
+        "CLEAN", "REST", "PROMISE", "AGREE", "DISAGREE", "ARRIVE", "LEAVE",
+        "REACH", "SAY", "SPEAK", "TELL", "ASK", "BEGIN", "FINISH", "DO"
     }
 
     BODY_PARTS: Set[str] = {
@@ -71,8 +99,36 @@ class IslGrammarSynthesizer:
     }
 
     SYMPTOMS: Set[str] = {
-        "PAIN", "HURT", "FEVER", "COUGH", "COLD", "INJURY", "BLEEDING",
+        "PAIN", "HURT", "FEVER", "COUGH", "COLD", "HEADACHE", "INJURY", "BLEEDING",
         "BLOOD", "SICK", "TIRED", "WEAK", "DIZZY", "HUNGRY", "THIRSTY"
+    }
+
+    ADJECTIVES: Set[str] = {
+        "HAPPY", "SAD", "TIRED", "READY", "BUSY", "FINE", "GOOD", "BAD",
+        "HOT", "COLD", "BEAUTIFUL", "SICK", "WEAK", "DIZZY", "HUNGRY",
+        "THIRSTY", "BIG", "SMALL", "LATE", "EARLY", "CONFUSED", "ANGRY",
+        "EXCITED", "NERVOUS", "OLD", "NEW", "CLEAN", "DIRTY"
+    }
+
+    COMPOUND_NOUNS: Set[Tuple[str, str]] = {
+        ("TRAIN", "STATION"), ("BUS", "STAND"), ("BUS", "STOP"),
+        ("POLICE", "STATION"), ("TRAIN", "TICKET"), ("AIRPORT", "TICKET"),
+        ("DOCTOR", "APPOINTMENT"), ("WATER", "BOTTLE"), ("HOTEL", "ROOM")
+    }
+
+    IDIOMS: Dict[Tuple[str, ...], str] = {
+        ("GOOD", "MORNING"): "Good morning.",
+        ("GOOD", "AFTERNOON"): "Good afternoon.",
+        ("GOOD", "EVENING"): "Good evening.",
+        ("GOOD", "NIGHT"): "Good night.",
+        ("THANK", "YOU"): "Thank you.",
+        ("THANKS", "YOU"): "Thank you.",
+        ("NICE", "MEET", "YOU"): "Nice to meet you.",
+        ("NICE", "MEET"): "Nice to meet you.",
+        ("HOW", "YOU"): "How are you?",
+        ("SEE", "YOU", "LATER"): "See you later.",
+        ("TAKE", "CARE"): "Take care.",
+        ("I", "FINE"): "I am fine.",
     }
 
     SPECIAL_SINGLETONS = {
@@ -210,16 +266,34 @@ class IslGrammarSynthesizer:
 
         wh_disp = wh_word.capitalize()
 
+        # Resolve subject and object noun phrases
+        subj_pronoun = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), None)
+        if subj_pronoun:
+            subj = subj_pronoun
+            obj_labels = [l for l in non_verb if l not in cls.SUBJECT_PRONOUNS]
+            obj = cls._format_noun_phrase(obj_labels)
+            is_third_person = subj in {"he", "she", "it"}
+        elif non_verb:
+            topic = cls._format_noun_phrase(non_verb)
+            if not any(topic.lower().startswith(p) for p in ("the ", "a ", "an ", "this ", "that ", "my ", "your ", "his ", "her ", "our ", "their ")):
+                topic = f"the {topic}"
+            subj = topic
+            obj = ""
+            is_third_person = True
+        else:
+            subj = "you"
+            obj = ""
+            is_third_person = False
+
+        aux = "does" if is_third_person else "do"
+        copula = "am" if subj == "I" else ("is" if is_third_person else "are")
+        obj_part = f" {obj}" if obj else ""
+
         if wh_word == "WHERE":
-            if verb and non_verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                obj_labels = [l for l in non_verb if l not in cls.SUBJECT_PRONOUNS]
-                obj = cls._format_noun_phrase(obj_labels)
-                obj_part = f" {obj}" if obj else ""
-                return f"Where do {subj} {cls.normalize_label(verb)}{obj_part}?"
+            if verb and not non_verb:
+                return f"Where are you {cls._verb_participle(verb)}?"
             elif verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                return f"Where are {subj} {cls._verb_participle(verb)}?"
+                return f"Where {aux} {subj} {cls.normalize_label(verb)}{obj_part}?"
             elif non_verb:
                 topic = cls._format_noun_phrase(non_verb)
                 return f"Where is {topic}?"
@@ -232,8 +306,7 @@ class IslGrammarSynthesizer:
             if "TIME" in non_verb:
                 return "What time is it?"
             if verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                return f"What do {subj} {cls.normalize_label(verb)}?"
+                return f"What {aux} {subj} {cls.normalize_label(verb)}{obj_part}?"
             if non_verb:
                 topic = cls._format_noun_phrase(non_verb)
                 return f"What is {topic}?"
@@ -245,16 +318,17 @@ class IslGrammarSynthesizer:
             if "MUCH" in non_wh or "MONEY" in non_wh:
                 return "How much is this?"
             if verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                obj_labels = [l for l in non_verb if l not in cls.SUBJECT_PRONOUNS]
-                obj = cls._format_noun_phrase(obj_labels)
-                obj_part = f" {obj}" if obj else ""
-                return f"How do {subj} {cls.normalize_label(verb)}{obj_part}?"
+                return f"How {aux} {subj} {cls.normalize_label(verb)}{obj_part}?"
             if non_verb:
-                return f"How is {' '.join(cls.normalize_label(l) for l in non_verb)}?"
+                if subj_pronoun:
+                    return f"How {copula} {subj}?"
+                topic = cls._format_noun_phrase(non_verb)
+                return f"How is {topic}?"
             return "How?"
 
         if wh_word == "WHO":
+            if verb and non_verb and subj_pronoun:
+                return f"Who {aux} {subj} {cls.normalize_label(verb)}{obj_part}?"
             if verb:
                 return f"Who {cls._verb_past_or_third(verb)}?"
             if non_verb:
@@ -263,18 +337,16 @@ class IslGrammarSynthesizer:
 
         if wh_word == "WHEN":
             if verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                return f"When will {subj} {cls.normalize_label(verb)}?"
+                return f"When will {subj} {cls.normalize_label(verb)}{obj_part}?"
             if non_verb:
                 return f"When is {cls._format_noun_phrase(non_verb)}?"
             return "When?"
 
         if wh_word == "WHY":
             if verb:
-                subj = next((cls.SUBJECT_PRONOUNS[l] for l in non_verb if l in cls.SUBJECT_PRONOUNS), "you")
-                return f"Why did {subj} {cls.normalize_label(verb)}?"
+                return f"Why did {subj} {cls.normalize_label(verb)}{obj_part}?"
             if non_verb:
-                return f"Why {' '.join(cls.normalize_label(l) for l in non_verb)}?"
+                return f"Why is {cls._format_noun_phrase(non_verb)}?"
             return "Why?"
 
         rest = " ".join(cls.normalize_label(l) for l in non_wh)
@@ -301,13 +373,69 @@ class IslGrammarSynthesizer:
 
         temporals = [l for l in labels if l in cls.TEMPORAL_FUTURE or l in cls.TEMPORAL_PAST or l in cls.ASPECT_PERFECT]
         content_labels = [l for l in labels if l not in temporals]
+        if not content_labels:
+            content_labels = labels
+
+        # Check if all tokens are single letters (fingerspelled word)
+        if all(len(l) == 1 and l.isalpha() for l in content_labels):
+            word = "".join(content_labels).capitalize()
+            return f"{word}."
+
+        # Check multi-token idioms & greetings
+        tuple_content = tuple(content_labels)
+        if tuple_content in cls.IDIOMS:
+            return cls.IDIOMS[tuple_content]
+
+        # Check Temporal + State Predicate (e.g. ["TOMORROW", "OFF"] -> "Tomorrow is an off.")
+        temporal_match = next((l for l in labels if l in cls.TEMPORALS), None)
+        state_match = next((l for l in labels if l in cls.STATE_PREDICATES), None)
+        if temporal_match and state_match and len(labels) == 2:
+            temp_str = temporal_match.capitalize()
+            phrase = cls.STATE_PREDICATES[state_match]
+            copula = "was" if temporal_match in cls.TEMPORAL_PAST else "is"
+            return f"{temp_str} {copula} {phrase}."
+
+        # Check Location / Place + State Predicate (e.g. ["OFFICE", "CLOSED"] -> "The office is closed.")
+        loc_match = next((l for l in labels if l in cls.LOCATIONS), None)
+        if loc_match and state_match and len(labels) == 2 and not temporal_match:
+            phrase = cls.STATE_PREDICATES[state_match]
+            loc_str = "Home" if loc_match == "HOME" else f"The {cls.normalize_label(loc_match)}"
+            return f"{loc_str} is {phrase}."
+
+        # Check Symptom + Medicine (e.g. ["FEVER", "MEDICINE"] -> "I need medicine for fever.")
+        if "MEDICINE" in content_labels:
+            symptom = next((l for l in content_labels if l in cls.SYMPTOMS or l in cls.BODY_PARTS), None)
+            if symptom:
+                return f"I need medicine for {cls.normalize_label(symptom)}."
+
+        # Name introduction: e.g. ["MY", "NAME", "RAHUL"] or ["MY_NAME_IS", "RAHUL"]
+        if "NAME" in content_labels or "MY_NAME_IS" in content_labels:
+            poss = next((cls.POSSESSIVE_PRONOUNS[l] for l in content_labels if l in cls.POSSESSIVE_PRONOUNS), None)
+            if not poss and ("I" in content_labels or "ME" in content_labels):
+                poss = "my"
+            name_parts = [cls.normalize_label(l).capitalize() for l in content_labels if l not in {"MY", "NAME", "IS", "MY_NAME_IS", "I", "ME", "YOUR", "HIS", "HER"} and l not in cls.SUBJECT_PRONOUNS]
+            if name_parts:
+                poss_str = poss.capitalize() if poss else "My"
+                return f"{poss_str} name is {' '.join(name_parts)}."
+            elif "MY_NAME_IS" in content_labels:
+                return "My name is."
 
         subject_tok = next((l for l in content_labels if l in cls.SUBJECT_PRONOUNS), None)
         subject = cls.SUBJECT_PRONOUNS[subject_tok] if subject_tok else "I"
 
+        # Check Subject + Location without Verb (e.g. ["I", "HOME"] -> "I am at home.")
+        if subject_tok and loc_match and len(content_labels) == 2 and not any(l in cls.VERBS for l in content_labels):
+            subj_c = subject.capitalize()
+            copula = "am" if subject == "I" else ("is" if subject in {"he", "she", "it"} else "are")
+            loc_prep = "at home" if loc_match == "HOME" else f"at the {cls.normalize_label(loc_match)}"
+            return f"{subj_c} {copula} {loc_prep}."
+
         non_subject = [l for l in content_labels if l != subject_tok]
         verb = next((l for l in non_subject if l in cls.VERBS), None)
         objects = [l for l in non_subject if l != verb]
+
+        has_neg = any(l in {"NOT", "NO", "DONT", "DON'T"} for l in content_labels)
+        objects = [l for l in objects if l not in {"NOT", "NO", "DONT", "DON'T"}]
 
         temporal_word = ""
         if temporals:
@@ -318,7 +446,18 @@ class IslGrammarSynthesizer:
         subj_cap = subject.capitalize()
 
         if verb:
-            if tense == "FUTURE":
+            if has_neg:
+                if tense == "FUTURE":
+                    verb_phrase = f"will not {cls.normalize_label(verb)}"
+                elif tense == "PAST":
+                    verb_phrase = f"did not {cls.normalize_label(verb)}"
+                elif tense == "PERFECT":
+                    aux = "have not" if subject in {"I", "you", "we", "they"} else "has not"
+                    verb_phrase = f"{aux} {cls._verb_past_participle(verb)}"
+                else:
+                    aux = "does not" if subject in {"he", "she", "it"} else "do not"
+                    verb_phrase = f"{aux} {cls.normalize_label(verb)}"
+            elif tense == "FUTURE":
                 verb_phrase = f"will {cls.normalize_label(verb)}"
             elif tense == "PAST":
                 verb_phrase = cls._verb_past(verb)
@@ -342,17 +481,58 @@ class IslGrammarSynthesizer:
 
             return f"{main} {temporal_word}." if temporal_word else f"{main}."
         else:
+            # No verb present: zero-hallucination processing
             symptom = next((l for l in objects if l in cls.SYMPTOMS), None)
             body_part = next((l for l in objects if l in cls.BODY_PARTS), None)
 
+            # Symptom + Body Part (e.g. ["CHEST", "PAIN"] -> "I have pain in my chest.")
             if symptom and body_part:
-                return f"{subj_cap} have {cls.normalize_label(symptom)} in my {cls.normalize_label(body_part)}."
+                poss = "my" if subject == "I" else ("your" if subject == "you" else ("his" if subject == "he" else ("her" if subject == "she" else ("their" if subject == "they" else "our"))))
+                aux = "has" if subject in {"he", "she", "it"} else "have"
+                return f"{subj_cap} {aux} {cls.normalize_label(symptom)} in {poss} {cls.normalize_label(body_part)}."
+
+            # Check Predicate Adjectives (Copula: is / am / are)
+            adj = next((l for l in objects if l in cls.ADJECTIVES), None)
+            if adj and subject_tok:
+                copula = "am" if subject == "I" else ("is" if subject in {"he", "she", "it"} else "are")
+                return f"{subj_cap} {copula} {cls.normalize_label(adj)}."
+            elif adj and len(objects) > 1:
+                non_adj = [l for l in objects if l != adj]
+                if non_adj:
+                    topic = cls._format_noun_phrase(non_adj)
+                    if not any(topic.lower().startswith(p) for p in ("the ", "a ", "an ", "this ", "that ", "my ", "your ", "his ", "her ", "our ", "their ")):
+                        topic = f"the {topic}"
+                    return f"{topic.capitalize()} is {cls.normalize_label(adj)}."
+
             if symptom:
-                return f"{subj_cap} have {cls.normalize_label(symptom)}."
+                aux = "has" if subject in {"he", "she", "it"} else "have"
+                return f"{subj_cap} {aux} {cls.normalize_label(symptom)}."
+
+            # Check Predicate Nouns with Subject (e.g. ["I", "DOCTOR"] -> "I am a doctor.")
+            if subject_tok and objects:
+                norm_objs = [cls.normalize_label(l) for l in objects]
+                noun_str = " ".join(norm_objs)
+                copula = "am" if subject == "I" else ("is" if subject in {"he", "she", "it"} else "are")
+                is_plural = subject in {"we", "they"}
+                article = "" if is_plural else ("an " if noun_str and noun_str[0] in "aeiou" else "a ")
+                final_noun = f"{noun_str}s" if (is_plural and not noun_str.endswith("s")) else noun_str
+                return f"{subj_cap} {copula} {article}{final_noun}."
+
+            # Nouns / Objects signed WITHOUT subject and WITHOUT verb
+            # NEVER hallucinate "I need"!
             if objects:
-                obj_str = " and ".join(cls._format_noun_phrase([l]) for l in objects)
-                return f"{subj_cap} need {obj_str}."
-            return " ".join(cls.normalize_label(l) for l in labels) + "."
+                norm_words = [cls.normalize_label(l) for l in objects]
+                if len(norm_words) == 1:
+                    return f"{norm_words[0].capitalize()}."
+                elif len(norm_words) == 2:
+                    pair = (objects[0].upper(), objects[1].upper())
+                    if pair in cls.COMPOUND_NOUNS:
+                        return f"{norm_words[0].capitalize()} {norm_words[1]}."
+                    return f"{norm_words[0].capitalize()} and {norm_words[1]}."
+                else:
+                    return f"{norm_words[0].capitalize()}, " + ", ".join(norm_words[1:-1]) + f", and {norm_words[-1]}."
+
+            return " ".join(cls.normalize_label(l) for l in labels).capitalize() + "."
 
     @classmethod
     def _detect_tense(cls, labels: List[str]) -> str:

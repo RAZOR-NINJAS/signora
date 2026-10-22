@@ -1,5 +1,6 @@
 package ai.signora.training
 
+import ai.signora.engine.*
 import ai.signora.models.SignInfo
 
 /**
@@ -13,52 +14,72 @@ import ai.signora.models.SignInfo
 object IslVocabulary {
 
     val LETTERS: List<SignInfo> = listOf(
-        SignInfo("A", "Letters", false, 2, null, "Left vertical fist with thumb up, right open palm wraps over it", "Wrap right palm around left thumb"),
-        SignInfo("B", "Letters", false, 2, null, "Both hands join index fingertips and thumbs forming double 'B' loops", "Touch index and thumb tips together"),
+        SignInfo("A", "Letters", false, 1, null, "Left vertical fist with thumb up, right open palm wraps over it", "Wrap right palm around left thumb"),
+        SignInfo("B", "Letters", false, 1, null, "Both hands join index fingertips and thumbs forming double 'B' loops", "Touch index and thumb tips together"),
         SignInfo("C", "Letters", false, 1, null, "Right hand forms curved 'C' shape facing left", "Curve fingers and thumb into a C arc"),
-        SignInfo("D", "Letters", false, 2, null, "Left index finger vertical, right curved hand touches index top and bottom", "Form circle against left index finger"),
-        SignInfo("E", "Letters", false, 2, null, "Left index horizontal, right thumb and fingers clasp over it", "Clasp right hand over left horizontal finger"),
-        SignInfo("F", "Letters", false, 2, null, "Left index and middle fingers horizontal, right two fingers cross over them", "Cross right two fingers over left fingers"),
-        SignInfo("G", "Letters", false, 2, null, "Both fists stacked vertically with right fist resting on left fist", "Stack right closed fist on left closed fist"),
-        SignInfo("H", "Letters", false, 2, null, "Left flat palm horizontal, right flat palm brushes across left palm", "Place right flat hand across left palm"),
-        SignInfo("I", "Letters", false, 2, null, "Left open flat palm vertical, right index finger touches left middle fingertip", "Touch right index to left middle fingertip"),
-        SignInfo("J", "Letters", false, 2, null, "Right index traces 'J' curve on open left palm", "Trace J hook across left open palm"),
-        SignInfo("K", "Letters", false, 2, null, "Left index vertical, right 'V' shape fingers hook around left index knuckle", "Hook right V-fingers onto left index"),
+        SignInfo("D", "Letters", false, 1, null, "Left index finger vertical, right curved hand touches index top and bottom", "Form circle against left index finger"),
+        SignInfo("E", "Letters", false, 1, null, "Left index horizontal, right thumb and fingers clasp over it", "Clasp right hand over left horizontal finger"),
+        SignInfo("F", "Letters", false, 1, null, "Left index and middle fingers horizontal, right two fingers cross over them", "Cross right two fingers over left fingers"),
+        SignInfo("G", "Letters", false, 1, null, "Both fists stacked vertically with right fist resting on left fist", "Stack right closed fist on left closed fist"),
+        SignInfo("H", "Letters", false, 1, null, "Left flat palm horizontal, right flat palm brushes across left palm", "Place right flat hand across left palm"),
+        SignInfo("I", "Letters", false, 1, null, "Left open flat palm vertical, right index finger touches left middle fingertip", "Touch right index to left middle fingertip"),
+        SignInfo("J", "Letters", false, 1, null, "Right index traces 'J' curve on open left palm", "Trace J hook across left open palm"),
+        SignInfo("K", "Letters", false, 1, null, "Left index vertical, right 'V' shape fingers hook around left index knuckle", "Hook right V-fingers onto left index"),
         SignInfo("L", "Letters", false, 1, null, "Right hand forms 'L' shape with thumb and index finger extended 90 degrees", "Extend thumb and index finger at right angle"),
-        SignInfo("M", "Letters", false, 2, null, "Left flat palm facing up, right three fingers (index, middle, ring) rest on it", "Rest 3 downward fingers on left open palm"),
-        SignInfo("N", "Letters", false, 2, null, "Left flat palm facing up, right two fingers (index, middle) rest on it", "Rest 2 downward fingers on left open palm"),
-        SignInfo("O", "Letters", false, 2, null, "Left index and thumb form 'C', right index and thumb form reverse 'C' touching tips", "Join finger tips to form an O circle"),
-        SignInfo("P", "Letters", false, 2, null, "Left index pointing up, right index and thumb form small loop touching left tip", "Loop right thumb & index on left index tip"),
-        SignInfo("Q", "Letters", false, 2, null, "Left hand forms horizontal 'O', right index finger hooks into bottom edge", "Hook right index through left finger ring"),
-        SignInfo("R", "Letters", false, 2, null, "Left flat palm vertical, right curved index finger hooks over left index", "Hook right curved index over left finger"),
-        SignInfo("S", "Letters", false, 2, null, "Left pinky finger extended, right pinky finger hooks into left pinky", "Hook both pinkies together firmly"),
-        SignInfo("T", "Letters", false, 2, null, "Left flat vertical hand facing right, right index finger touches left palm edge", "Touch right index perpendicular to left edge"),
-        SignInfo("U", "Letters", false, 2, null, "Left open hand vertical, right index finger touches left pinky fingertip", "Touch right index to left pinky fingertip"),
+        SignInfo("M", "Letters", false, 1, null, "Left flat palm facing up, right three fingers (index, middle, ring) rest on it", "Rest 3 downward fingers on left open palm"),
+        SignInfo("N", "Letters", false, 1, null, "Left flat palm facing up, right two fingers (index, middle) rest on it", "Rest 2 downward fingers on left open palm"),
+        SignInfo("O", "Letters", false, 1, null, "Left index and thumb form 'C', right index and thumb form reverse 'C' touching tips", "Join finger tips to form an O circle"),
+        SignInfo("P", "Letters", false, 1, null, "Left index pointing up, right index and thumb form small loop touching left tip", "Loop right thumb & index on left index tip"),
+        SignInfo("Q", "Letters", false, 1, null, "Left hand forms horizontal 'O', right index finger hooks into bottom edge", "Hook right index through left finger ring"),
+        SignInfo("R", "Letters", false, 1, null, "Left flat palm vertical, right curved index finger hooks over left index", "Hook right curved index over left finger"),
+        SignInfo("S", "Letters", false, 1, null, "Left pinky finger extended, right pinky finger hooks into left pinky", "Hook both pinkies together firmly"),
+        SignInfo("T", "Letters", false, 1, null, "Left flat vertical hand facing right, right index finger touches left palm edge", "Touch right index perpendicular to left edge"),
+        SignInfo("U", "Letters", false, 1, null, "Left open hand vertical, right index finger touches left pinky fingertip", "Touch right index to left pinky fingertip"),
         SignInfo("V", "Letters", false, 1, null, "Right hand forms 'V' shape with index and middle fingers extended", "Extend index and middle fingers in peace sign"),
-        SignInfo("W", "Letters", false, 2, null, "Both hands interlace fingers pointing upward forming a 'W' crown", "Interlace fingers upright to create W crown"),
-        SignInfo("X", "Letters", false, 2, null, "Both index fingers extended, crossing each other to form an 'X'", "Cross both index fingers in front of chest"),
-        SignInfo("Y", "Letters", false, 2, null, "Left open hand spread wide, right index finger rests in V-cleft between thumb and index", "Rest right index in left thumb-index cleft"),
-        SignInfo("Z", "Letters", false, 2, null, "Right index finger held against open left palm then held steady", "Hold right index across left flat palm"),
+        SignInfo("W", "Letters", false, 1, null, "Both hands interlace fingers pointing upward forming a 'W' crown", "Interlace fingers upright to create W crown"),
+        SignInfo("X", "Letters", false, 1, null, "Both index fingers extended, crossing each other to form an 'X'", "Cross both index fingers in front of chest"),
+        SignInfo("Y", "Letters", false, 1, null, "Left open hand spread wide, right index finger rests in V-cleft between thumb and index", "Rest right index in left thumb-index cleft"),
+        SignInfo("Z", "Letters", false, 1, null, "Right index finger held against open left palm then held steady", "Hold right index across left flat palm"),
         SignInfo("SPACE", "Letters", false, 1, null, "Open flat hand pressed firmly downward at waist level", "Press flat palm downward horizontally")
     )
 
     val WORDS_300: List<SignInfo> = listOf(
+        // 0. Intro & Project Identity (8)
+        SignInfo(
+            "MY_NAME_IS",
+            "Intro",
+            true,
+            1,
+            "CHEST",
+            "Press flat right palm to chest then tap H-fingers twice",
+            "Continuous phrase: Right palm touches chest (MY) then H-fingers double-tap left fingers (NAME)",
+            DUAL_CONVERGING,
+            "Smooth transition from heart-center touch to horizontal two-finger tap"
+        ),
+        SignInfo("YOU", "Intro", true, 1, "CHEST", "Right index finger pointing directly forward toward person", "Point index directly forward", PATTERN_STATIC, "Hold pointing index straight toward partner"),
+        SignInfo("WHAT", "Intro", true, 2, "WAIST", "Both open palms upturned shaking gently side to side at waist level", "Hold upturned palms at waist shaking side to side", PATTERN_WAVE, "Side-to-side gentle wave of upturned palms"),
+        SignInfo("NICE", "Intro", true, 2, "CHEST", "Right open flat palm sliding across horizontal left flat palm forward", "Slide right flat palm across left flat palm", PATTERN_SWIPE_RIGHT, "Slide flat right palm smoothly across left palm"),
+        SignInfo("MEET", "Intro", true, 2, "CHEST", "Both vertical index fingers brought together until knuckles touch", "Bring index fingers together at chest", DUAL_CONVERGING, "Bring both index fingers toward each other until meeting"),
+        SignInfo("SIGNORA", "Intro", true, 2, "CHEST", "Right 'S' fist opening into an open 5-palm flourishing outward", "Open right fist into vibrant open palm flourish", PATTERN_WAVE, "Flourish hand outward gracefully from chest"),
+        SignInfo("PROJECT", "Intro", true, 2, "CHEST", "Right 'P' middle finger sliding down and circling left flat palm", "Circle P-shape down left palm", PATTERN_CIRCLE, "Trace small arc down left flat palm"),
+        SignInfo("DEMO", "Intro", true, 2, "CHEST", "Right open palm resting against back of left fist moving forward together", "Present both hands forward together", PATTERN_SWIPE_DOWN, "Push both hands forward together"),
+
         // 1. Greetings & Courtesy (15)
-        SignInfo("NAMASTE", "Greetings", true, 2, "CHEST", "Both flat palms pressed together at chest center in traditional prayer", "Join palms at sternum level"),
-        SignInfo("HELLO", "Greetings", true, 1, "SHOULDER", "Open flat palm facing forward upright at shoulder level", "Hold flat palm steady at shoulder height"),
-        SignInfo("WELCOME", "Greetings", true, 2, "WAIST", "Both open palms upturned, extended forward in gesture of receiving", "Extend open palms forward at waist level"),
-        SignInfo("THANK_YOU", "Greetings", true, 1, "CHIN", "Flat right fingertips touch chin/lips then held facing forward", "Touch chin with flat fingers"),
-        SignInfo("PLEASE", "Greetings", true, 1, "CHEST", "Flat open right palm placed over center of chest", "Hold flat right palm against chest center"),
-        SignInfo("CONGRATS", "Greetings", true, 2, "CHEST", "Both thumbs up pointing upward side-by-side", "Hold double thumbs-up at chest height"),
-        SignInfo("RESPECT", "Greetings", true, 2, "TEMPLE", "Right flat palm vertical beside temple, left hand flat at chest", "Right hand at temple, left at chest"),
-        SignInfo("PEACE", "Greetings", true, 1, "CHEST", "V-sign (victory) with index and middle fingers extended upright", "Hold V-sign steady in front of shoulder"),
-        SignInfo("LOVE", "Greetings", true, 1, "CHEST", "Thumb, index, and pinky extended upright (ILY sign)", "Extend thumb, index, and pinky upright"),
-        SignInfo("FRIEND", "Greetings", true, 2, "CHEST", "Index fingers of both hands hooked into each other", "Hook index fingers together at chest level"),
-        SignInfo("FAMILY", "Greetings", true, 2, "CHEST", "Both hands form 'F' shapes with index & thumb circles touching", "Touch index-thumb circles together"),
-        SignInfo("TOGETHER", "Greetings", true, 2, "CHEST", "Both open palms facing each other with fingers interlaced", "Interlace fingers firmly in front of chest"),
-        SignInfo("PROMISE", "Greetings", true, 2, "MOUTH_LIPS", "Right index vertical touching lips, left flat palm horizontal", "Index to lips with flat left palm support"),
-        SignInfo("APOLOGY", "Greetings", true, 1, "CHEST", "Right closed fist placed gently on chest", "Rest closed fist over heart center"),
-        SignInfo("GOODBYE", "Greetings", true, 1, "SHOULDER", "Open flat right hand held steady tilted slightly outward", "Hold flat palm at head height facing forward"),
+        SignInfo("NAMASTE", "Greetings", true, 2, "CHEST", "Both flat palms pressed together at chest center in traditional prayer", "Join palms at sternum level", DUAL_CONVERGING, "Press both palms together smoothly"),
+        SignInfo("HELLO", "Greetings", true, 1, "SHOULDER", "Open flat palm facing forward waving side to side at shoulder level", "Hold flat palm at shoulder height", PATTERN_WAVE, "Wave open palm side to side"),
+        SignInfo("WELCOME", "Greetings", true, 2, "WAIST", "Both open palms upturned, extended forward in gesture of receiving", "Extend open palms forward at waist level", PATTERN_SWIPE_DOWN, "Glide open hands inward toward body"),
+        SignInfo("THANK_YOU", "Greetings", true, 1, "CHIN", "Flat right fingertips touch chin/lips then swipe forward", "Touch chin with flat fingers", PATTERN_SWIPE_DOWN, "Swipe flat fingertips forward from chin"),
+        SignInfo("PLEASE", "Greetings", true, 1, "CHEST", "Flat open right palm placed over center of chest rubbing clockwise", "Hold flat right palm against chest center", PATTERN_CIRCLE, "Rub palm in small clockwise circle over chest"),
+        SignInfo("CONGRATS", "Greetings", true, 2, "CHEST", "Both thumbs up pointing upward shaking with enthusiasm", "Hold double thumbs-up at chest height", PATTERN_NOD, "Pump thumbs up gently"),
+        SignInfo("RESPECT", "Greetings", true, 2, "TEMPLE", "Right flat palm vertical beside temple, left hand flat at chest", "Right hand at temple, left at chest", PATTERN_STATIC, "Hold dignified salute pose"),
+        SignInfo("PEACE", "Greetings", true, 1, "CHEST", "V-sign (victory) with index and middle fingers extended upright", "Hold V-sign steady in front of shoulder", PATTERN_STATIC, "Hold peace sign rock steady"),
+        SignInfo("LOVE", "Greetings", true, 1, "CHEST", "Thumb, index, and pinky extended upright (ILY sign)", "Extend thumb, index, and pinky upright", PATTERN_STATIC, "Hold ILY sign steady at chest"),
+        SignInfo("FRIEND", "Greetings", true, 2, "CHEST", "Index fingers of both hands hooked into each other", "Hook index fingers together at chest level", DUAL_CONVERGING, "Hook index fingers together firmly"),
+        SignInfo("FAMILY", "Greetings", true, 2, "CHEST", "Both hands form 'F' shapes with index & thumb circles circling around together", "Circle F-shapes together at chest", PATTERN_CIRCLE, "Trace outward circles until pinkies meet"),
+        SignInfo("TOGETHER", "Greetings", true, 2, "CHEST", "Both open palms facing each other with fingers interlaced", "Interlace fingers firmly in front of chest", DUAL_CONVERGING, "Interlace fingers together tightly"),
+        SignInfo("PROMISE", "Greetings", true, 2, "MOUTH_LIPS", "Right index vertical touching lips, left flat palm horizontal", "Index to lips with flat left palm support", PATTERN_STATIC, "Touch lips with index finger"),
+        SignInfo("APOLOGY", "Greetings", true, 1, "CHEST", "Right closed fist circling gently over heart center", "Circle closed fist over heart center", PATTERN_CIRCLE, "Rub fist in gentle circle over chest"),
+        SignInfo("GOODBYE", "Greetings", true, 1, "SHOULDER", "Open flat right hand waving side to side at head height", "Hold flat palm at head height facing forward", PATTERN_WAVE, "Wave open palm side to side goodbye"),
 
         // 2. Daily Responses & Feedback (15)
         SignInfo("YES", "Responses", true, 1, "CHEST", "Closed right fist held firmly with thumb over knuckles", "Hold compact fist steady in front of chest"),
@@ -376,7 +397,11 @@ object IslVocabulary {
         SignInfo("SEARCH", "Tech", true, 1, "TEMPLE", "Right 'C' hand circled around right eye like magnifying glass", "Circle C-hand in front of eye"),
         SignInfo("APP", "Tech", true, 2, "CHEST", "Both hands forming 'A' shapes bumping together", "Bump A-fists together at center"),
         SignInfo("ONLINE", "Tech", true, 2, "CHEST", "Both middle fingers linked and rotating forward", "Link middle fingers and rotate forward"),
-        SignInfo("OFFLINE", "Tech", true, 2, "CHEST", "Both hands crossed at wrists breaking apart downward", "Break crossed hands apart downward")
+        SignInfo("OFFLINE", "Tech", true, 2, "CHEST", "Both hands crossed at wrists breaking apart downward", "Break crossed hands apart downward"),
+
+        // User-defined signs (trained locally; articulation intentionally left open)
+        SignInfo("HALA_MADRID", "Custom", true, 1, null, "Custom sign: perform your own Hala Madrid gesture", "Record your own articulation in Static or Motion mode"),
+        SignInfo("SUII", "Custom", true, 1, null, "Custom sign: perform your own Suii gesture", "Record your own articulation in Static or Motion mode")
     )
 
     val ALL_SIGNS: List<SignInfo> = LETTERS + WORDS_300

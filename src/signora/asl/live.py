@@ -34,10 +34,13 @@ def run_asl_live(
     max_frames: Optional[int] = None,
     use_fake: bool = False,
     dwell_ms: Optional[int] = None,
+    width: int = 1280,
+    height: int = 720,
 ) -> int:
     """Run real-time ASL fingerspelling recognition loop."""
     print("=" * 60)
     print("  SIGNORA -- American Sign Language (ASL) Fingerspelling")
+    print(f"  Resolution: {width}x{height} (16:9 Widescreen)")
     print("=" * 60)
 
     try:
@@ -71,6 +74,8 @@ def run_asl_live(
         mirror=True,
         detect_every=detect_every,
         use_fake=use_fake,
+        width=width,
+        height=height,
     )
 
     if not pipe.started.wait(timeout=5) or pipe.error:
@@ -90,7 +95,7 @@ def run_asl_live(
         if alt_source is not None:
             print(f"[Auto-Healing] Automatically switched to Camera {alt_source}.", file=sys.stderr)
             pipe = HandPipeline(
-                source=alt_source, num_hands=1, mirror=True, detect_every=detect_every
+                source=alt_source, num_hands=1, mirror=True, detect_every=detect_every, width=width, height=height
             )
             pipe.started.wait(timeout=5)
         else:
@@ -99,13 +104,15 @@ def run_asl_live(
                 file=sys.stderr,
             )
             pipe = HandPipeline(
-                source=0, num_hands=1, mirror=True, detect_every=detect_every, use_fake=True
+                source=0, num_hands=1, mirror=True, detect_every=detect_every, use_fake=True, width=width, height=height
             )
             pipe.started.wait(timeout=5)
 
     if not headless:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
-        cv2.resizeWindow(WINDOW_NAME, 960, 720)
+        win_w = min(1280, width)
+        win_h = max(360, int(win_w * 9 / 16))
+        cv2.resizeWindow(WINDOW_NAME, win_w, win_h)
 
     frame_count = 0
     t0 = time.monotonic()
@@ -140,7 +147,7 @@ def run_asl_live(
                 if not headless:
                     draw_cyber_hands(frame, landmarks, handedness)
 
-            st = engine.update(cand_label, cand_prob)
+            st = engine.update(cand_label, cand_prob, landmarks=landmarks)
 
             if st.get("confirmed"):
                 confirmed = st["confirmed"]

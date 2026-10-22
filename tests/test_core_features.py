@@ -28,3 +28,27 @@ def test_extract_features_pipeline():
     pts = [(0.1 * i, 0.2 * i, 0.0) for i in range(21)]
     feats = extract_features(pts, handedness="Left")
     assert len(feats) == FEATURE_DIM
+
+
+def test_empty_and_undersized_landmarks():
+    """Verify empty and undersized landmark lists safely return zero feature vectors without raising."""
+    empty_feats = extract_features([])
+    assert len(empty_feats) == FEATURE_DIM
+    assert np.all(empty_feats == 0.0)
+
+    partial_feats = extract_features([(0.1, 0.2, 0.0)] * 5)
+    assert len(partial_feats) == FEATURE_DIM
+    assert np.all(partial_feats == 0.0)
+
+    none_feats = extract_features(None)
+    assert len(none_feats) == FEATURE_DIM
+    assert np.all(none_feats == 0.0)
+
+
+def test_zero_palm_distance_degeneracy():
+    """Verify that coincident wrist and middle MCP do not cause division by zero."""
+    coincident_pts = [(0.5, 0.5, 0.0) for _ in range(21)]
+    feats = extract_features(coincident_pts)
+    assert len(feats) == FEATURE_DIM
+    assert np.all(np.isfinite(feats))
+

@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 
 from signora.core.hands import HAND_CONNECTIONS, HandPipeline
+from signora.core.motion import HandMotionTracker
 from signora.isl.config import STATIC_WORDS, get_expected_hands
 from signora.isl.features import extract_features
 
@@ -361,6 +362,7 @@ def draw_hud(
     active_anchor: str = "OPEN_SPACE",
     target_anchor: Optional[str] = None,
     button_boxes: Optional[Dict[str, Any]] = None,
+    motion_state: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Render interactive Glassmorphic Studio HUD."""
     h, w = frame.shape[:2]
@@ -681,6 +683,24 @@ def draw_hud(
             cv2.LINE_AA,
         )
 
+    if motion_state:
+        pat = motion_state.get("pattern", "STATIC")
+        speed = motion_state.get("speed", 0.0)
+        dual_pat = motion_state.get("dual_motion", "STATIC")
+        motion_desc = f"{pat} ({speed:.2f}m/s)" if pat != "STATIC" else pat
+        if dual_pat != "STATIC":
+            motion_desc += f" | {dual_pat}"
+        cv2.putText(
+            frame,
+            f"Hand Motion: [{motion_desc}]",
+            (w - 340, h - 62),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.44,
+            (6, 182, 212) if pat != "STATIC" else (148, 163, 184),
+            1,
+            cv2.LINE_AA,
+        )
+
     # 5. Bottom Hotkey Navigation Bar
     cv2.rectangle(frame, (0, h - 45), (w, h), (10, 15, 30), -1)
     if button_boxes is not None:
@@ -735,6 +755,8 @@ def run_isl_collector(
     auto_train: bool = False,
     enable_body: bool = False,
     auto_start: bool = False,
+    width: int = 1280,
+    height: int = 720,
 ) -> int:
     """Main execution loop for interactive ISL Studio (supporting hands & body pose)."""
     target_data_dir = (
@@ -784,9 +806,9 @@ def run_isl_collector(
         from signora.core.spatial import SpatialPipeline, draw_cyber_spatial
         from signora.isl.spatial import SIGN_ANCHOR_MAP, detect_body_anchor, extract_spatial_features
 
-        pipe = SpatialPipeline(source=source, mirror=True, detect_every=1, use_fake=use_fake)
+        pipe = SpatialPipeline(source=source, mirror=True, detect_every=1, use_fake=use_fake, width=width, height=height)
     else:
-        pipe = HandPipeline(source=source, num_hands=2, mirror=True, use_fake=use_fake)
+        pipe = HandPipeline(source=source, num_hands=2, mirror=True, use_fake=use_fake, width=width, height=height)
 
     if not pipe.started.wait(timeout=5) or pipe.error:
         print("[Error] Could not initialize camera.", file=sys.stderr)
@@ -885,6 +907,9 @@ def run_isl_collector(
         cv2.resizeWindow(win_name, 960, 720)
         cv2.setMouseCallback(win_name, _on_mouse)
 
+    motion_tracker = HandMotionTracker()
+    motion_state: Dict[str, Any] = {}
+
     try:
         while True:
             pose_lms = None
@@ -933,6 +958,12 @@ def run_isl_collector(
                     if isinstance(handedness, list)
                     else ([handedness] if handedness else [])
                 )
+
+                # Update dynamic motion tracker
+                motion_state = motion_tracker.update(
+                    lms_list, hnds_list, pose_landmarks=pose_lms if enable_body else None
+                )
+                motion_tracker.draw_motion_trail(frame)
 
                 active_anchor_zone = "OPEN_SPACE"
                 target_anchor = None
@@ -1067,6 +1098,7 @@ def run_isl_collector(
                 active_anchor=active_anchor_zone if enable_body else "OPEN_SPACE",
                 target_anchor=target_anchor if enable_body else None,
                 button_boxes=button_boxes,
+                motion_state=motion_state,
             )
 
             if not headless:

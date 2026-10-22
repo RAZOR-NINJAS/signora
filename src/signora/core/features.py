@@ -29,6 +29,9 @@ def _dist(a: np.ndarray, b: np.ndarray) -> float:
 
 def normalize_hand(points: Union[np.ndarray, List[Any]], handedness: str = "Right") -> np.ndarray:
     """Normalize hand translation, scale, and lateral orientation."""
+    if points is None or len(points) < 21:
+        return np.zeros((21, 3), dtype=np.float32)
+
     if not isinstance(points, np.ndarray):
         p = np.array(
             [
@@ -56,6 +59,9 @@ def normalize_hand(points: Union[np.ndarray, List[Any]], handedness: str = "Righ
 
 def landmark_features(p: Union[np.ndarray, List[Any]]) -> np.ndarray:
     """Compute 74D geometric feature vector from normalized 21-landmark array."""
+    if p is None or len(p) < 21:
+        return np.zeros(FEATURE_DIM, dtype=np.float32)
+
     p = np.asarray(p, dtype=np.float32).reshape(21, 3)
     palm = _dist(p[WRIST], p[MIDDLE_MCP])
     if palm < 1e-6:

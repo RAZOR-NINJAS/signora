@@ -12,7 +12,7 @@ from .synthesizer import GlossToken
 class SentenceBuffer:
     def __init__(
         self,
-        sentence_pause_s: float = 5.0,
+        sentence_pause_s: float = 1.8,
         on_sentence_complete: Optional[Callable[[List[GlossToken]], None]] = None,
     ):
         self.sentence_pause_s = sentence_pause_s
@@ -44,7 +44,7 @@ class SentenceBuffer:
             self.finalize_and_fire()
 
     def flush(self) -> None:
-        if self.tokens:
+        if self.tokens and not self.is_finalized:
             self.finalize_and_fire()
 
     def peek(self) -> List[GlossToken]:
@@ -53,7 +53,10 @@ class SentenceBuffer:
     def pop(self) -> Optional[GlossToken]:
         if self.tokens:
             self.is_finalized = False
-            return self.tokens.pop()
+            tok = self.tokens.pop()
+            if not self.tokens:
+                self.last_token_time = 0.0
+            return tok
         return None
 
     def clear(self) -> None:

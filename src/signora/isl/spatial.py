@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from signora.isl.features import extract_features
+from signora.isl.features import canonicalize_hands, extract_features
 
 SPATIAL_FEATURE_DIM = 220  # 164D hands + 56D body spatial placement
 
@@ -85,11 +85,11 @@ SIGN_ANCHOR_MAP: Dict[str, str] = {
 
 
 def _get_point_coords(pt: Any) -> Tuple[float, float, float]:
-    """Extract (x, y, z) from LandmarkPoint or MediaPipe NormalizedLandmark."""
+    """Extract (x, y, z) from LandmarkPoint, MediaPipe NormalizedLandmark, or np.ndarray."""
     if hasattr(pt, "x") and hasattr(pt, "y"):
         z = getattr(pt, "z", 0.0)
         return float(pt.x), float(pt.y), float(z)
-    if isinstance(pt, (list, tuple)) and len(pt) >= 2:
+    if isinstance(pt, (list, tuple, np.ndarray)) and len(pt) >= 2:
         z = float(pt[2]) if len(pt) > 2 else 0.0
         return float(pt[0]), float(pt[1]), z
     return 0.5, 0.5, 0.0
@@ -148,17 +148,8 @@ def extract_spatial_features(
     # 3. Compute relative vectors for each hand
     body_features: List[float] = []
 
-    # Map detected hands to Right and Left
-    right_hand_pts = None
-    left_hand_pts = None
-    for idx, lms in enumerate(hand_lms_list):
-        if not lms:
-            continue
-        side = handedness_list[idx] if idx < len(handedness_list) else ("Right" if idx == 0 else "Left")
-        if side == "Right" and right_hand_pts is None:
-            right_hand_pts = lms
-        elif side == "Left" and left_hand_pts is None:
-            left_hand_pts = lms
+    # Map detected hands to Right and Left using canonical assignment
+    left_hand_pts, right_hand_pts = canonicalize_hands(hand_lms_list, handedness_list)
 
     for hand_pts, is_right in ((right_hand_pts, True), (left_hand_pts, False)):
         if hand_pts is not None and len(hand_pts) >= 21:

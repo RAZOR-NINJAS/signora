@@ -190,18 +190,20 @@ object BodySegmentation {
     }
 
     /**
-     * Determines which body segment the active hands are currently engaging with.
+     * Determines which body segments the active hands are currently engaging with.
+     * Evaluates each hand independently so dual-hand gestures spanning two distinct
+     * anatomical divisions (e.g. Chest Right + Chest Left, Throat + Chest) are both detected.
      */
-    fun detectActiveSegment(
+    fun detectActiveSegments(
         hands: List<HandLandmarks>,
         pose: PoseLandmarks?
-    ): BodySegmentZone? {
-        if (pose == null || hands.isEmpty()) return null
+    ): List<BodySegmentZone> {
+        if (pose == null || hands.isEmpty()) return emptyList()
         val segments = computeSegments(pose)
-        if (segments.isEmpty()) return null
+        if (segments.isEmpty()) return emptyList()
 
-        var bestSegment: BodySegmentZone? = null
-        var minNormDist = 1.35f // Capture proximity threshold
+        val activeList = mutableListOf<BodySegmentZone>()
+        val seenIds = mutableSetOf<String>()
 
         for (hand in hands) {
             if (hand.points.size < 21) continue
@@ -215,18 +217,35 @@ object BodySegmentation {
             )
             val candidates = listOf(indexTip, thumbTip, palm, wrist)
 
+            var bestForHand: BodySegmentZone? = null
+            var minNormDist = 1.35f // Capture proximity threshold
+
             for (seg in segments) {
                 for (pt in candidates) {
                     val d = seg.normalizedDistance(pt)
                     if (d < minNormDist) {
                         minNormDist = d
-                        bestSegment = seg
+                        bestForHand = seg
                     }
                 }
             }
+
+            if (bestForHand != null && seenIds.add(bestForHand.id)) {
+                activeList.add(bestForHand)
+            }
         }
 
-        return bestSegment
+        return activeList
+    }
+
+    /**
+     * Returns the primary active body segment, preserving single-segment backward compatibility.
+     */
+    fun detectActiveSegment(
+        hands: List<HandLandmarks>,
+        pose: PoseLandmarks?
+    ): BodySegmentZone? {
+        return detectActiveSegments(hands, pose).firstOrNull()
     }
 
     fun matchTargetSegment(

@@ -56,6 +56,7 @@ fun HandAwareBottomBar(
     onDelete: () -> Unit,
     onClear: () -> Unit,
     onSpeak: () -> Unit,
+    synthesizedSentence: String = "",
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -123,6 +124,7 @@ fun HandAwareBottomBar(
                     // Transcript Text Box
                     TranscriptField(
                         transcript = debounceState.transcript,
+                        synthesizedSentence = synthesizedSentence,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -232,8 +234,8 @@ fun HandAwareBottomBar(
                             }
                         }
 
-                        // Mini Transcript Chip (last 8-12 characters)
-                        val lastTranscript = debounceState.transcript.takeLast(10)
+                        // Mini Transcript Chip
+                        val displayMini = ai.signora.engine.DebounceEngine.formatTranscriptForDisplay(debounceState.transcript)
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
@@ -242,8 +244,8 @@ fun HandAwareBottomBar(
                                 .padding(horizontal = 6.dp)
                         ) {
                             Text(
-                                text = if (lastTranscript.isNotBlank()) "...$lastTranscript" else "Listening...",
-                                style = TelemetryMonospace.copy(fontSize = 11.sp),
+                                text = if (displayMini.isNotBlank()) displayMini else "Listening...",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,

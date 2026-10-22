@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import ai.signora.ui.theme.SignoraTheme
 
@@ -22,6 +23,7 @@ fun FloatingCameraToolbar(
     onToggleTorch: () -> Unit,
     onTogglePause: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSpeechToSign: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     HorizontalFloatingToolbar(
@@ -31,7 +33,22 @@ fun FloatingCameraToolbar(
         ),
         modifier = modifier
     ) {
-        // 1. Flip Camera
+        // 1. Hearing Person Speaks (Speech to Sign)
+        if (onOpenSpeechToSign != null) {
+            IconButton(
+                onClick = onOpenSpeechToSign,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Hearing,
+                    contentDescription = "Hearing Person Speaks to ISL",
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // 2. Flip Camera
         IconButton(
             onClick = onToggleCamera,
             modifier = Modifier.size(40.dp)
@@ -44,7 +61,7 @@ fun FloatingCameraToolbar(
             )
         }
 
-        // 2. Torch
+        // 3. Torch
         IconButton(
             onClick = onToggleTorch,
             modifier = Modifier.size(40.dp)
@@ -57,7 +74,7 @@ fun FloatingCameraToolbar(
             )
         }
 
-        // 3. Pause / Resume
+        // 4. Pause / Resume
         IconButton(
             onClick = onTogglePause,
             modifier = Modifier.size(40.dp)
@@ -70,7 +87,7 @@ fun FloatingCameraToolbar(
             )
         }
 
-        // 4. Settings
+        // 5. Settings
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier.size(40.dp)

@@ -37,7 +37,7 @@ def test_isl_predictor_inference():
     assert 0.0 <= conf <= 1.0
 
 
-def test_isl_collect_studio():
+def test_isl_collect_studio(tmp_path):
     from signora.isl.collect import ISL_LETTERS, get_existing_counts, run_isl_collector
 
     assert len(ISL_LETTERS) == 27
@@ -45,10 +45,10 @@ def test_isl_collect_studio():
     assert "Z" in ISL_LETTERS
     assert "SPACE" in ISL_LETTERS
 
-    counts = get_existing_counts()
+    counts = get_existing_counts(tmp_path)
     assert isinstance(counts, dict)
 
-    rc = run_isl_collector(sign="A", count=1, headless=True, use_fake=True)
+    rc = run_isl_collector(sign="A", count=1, headless=True, use_fake=True, data_dir=tmp_path)
     assert rc == 0
 
 
@@ -102,11 +102,11 @@ def test_isl_300_static_words():
         assert isinstance(guide2, str) and len(guide2) > 0
 
 
-def test_isl_studio_word_collection():
+def test_isl_studio_word_collection(tmp_path):
     """Verify that ISL collector accepts word signs like WATER and HELP."""
     from signora.isl.collect import run_isl_collector
 
-    rc = run_isl_collector(sign="WATER", count=1, headless=True, use_fake=True)
+    rc = run_isl_collector(sign="WATER", count=1, headless=True, use_fake=True, data_dir=tmp_path)
     assert rc == 0
 
 
@@ -146,5 +146,121 @@ def test_isl_phone_dataset_ingestion(tmp_path):
 
     arr = np.load(out_dir / "NAMASTE.npy")
     assert arr.shape == (3, 220)
+
+
+def test_topology_normalized_landmarks():
+    """Verify RealAITopologyClassifier correctly parses NormalizedLandmark objects without raising TypeError."""
+    from types import SimpleNamespace
+    from signora.isl.topology import RealAITopologyClassifier
+
+    classifier = RealAITopologyClassifier()
+
+    # Create mock NormalizedLandmark objects matching MediaPipe's runtime structure
+    mock_hand1 = [SimpleNamespace(x=0.5 + i * 0.01, y=0.5 - i * 0.01, z=0.0) for i in range(21)]
+    mock_hand2 = [SimpleNamespace(x=0.4 + i * 0.01, y=0.4 - i * 0.01, z=0.0) for i in range(21)]
+
+    # Must classify without raising TypeError: float() argument must be a string or a real number, not 'NormalizedLandmark'
+    res = classifier.classify([mock_hand1, mock_hand2], ["Left", "Right"])
+    assert res is None or (isinstance(res, tuple) and len(res) == 2)
+
+
+def test_isl_mlp_zero_std_and_batched_input():
+    """Verify ISL_MLP handles zero-variance feature standard deviations and batched 2D inputs without NaN."""
+    from signora.isl.model import ISL_MLP
+
+    in_dim = 164
+    hidden1 = 32
+    hidden2 = 16
+    n_classes = 5
+
+    # Mock weights
+    w0 = (np.random.randn(in_dim, hidden1).astype(np.float32) * 0.01, np.zeros(hidden1, dtype=np.float32))
+    ln0 = (np.ones(hidden1, dtype=np.float32), np.zeros(hidden1, dtype=np.float32))
+    w1 = (np.random.randn(hidden1, hidden2).astype(np.float32) * 0.01, np.zeros(hidden2, dtype=np.float32))
+    ln1 = (np.ones(hidden2, dtype=np.float32), np.zeros(hidden2, dtype=np.float32))
+    w2 = (np.random.randn(hidden2, n_classes).astype(np.float32) * 0.01, np.zeros(n_classes, dtype=np.float32))
+
+    labels = ["A", "B", "C", "D", "E"]
+    mean = np.zeros(in_dim, dtype=np.float32)
+    # Inject zeros into standard deviation to simulate invariant features
+    std = np.zeros(in_dim, dtype=np.float32)
+
+    mlp = ISL_MLP(
+        weights=[w0, w1, w2],
+        ln_params=[ln0, ln1],
+        labels=labels,
+        mean=mean,
+        std=std,
+        temperature=1.0,
+    )
+
+    # 1. 1D sample
+    sample_1d = np.ones(in_dim, dtype=np.float32)
+    probs_1d = mlp.forward(sample_1d)
+    assert probs_1d.shape == (n_classes,)
+    assert np.all(np.isfinite(probs_1d))
+    assert np.isclose(np.sum(probs_1d), 1.0, atol=1e-5)
+
+    # 2. Batched 2D samples (batch_size=4)
+    batch_2d = np.ones((4, in_dim), dtype=np.float32)
+    probs_2d = mlp.forward(batch_2d)
+    assert probs_2d.shape == (4, n_classes)
+    assert np.all(np.isfinite(probs_2d))
+    assert np.allclose(np.sum(probs_2d, axis=-1), 1.0, atol=1e-5)
+
+
+def test_isl_mlp_feature_dimension_mismatch():
+    """Verify ISL_MLP aligns input feature dimensions when input size differs from in_dim."""
+    from signora.isl.model import ISL_MLP
+
+    in_dim = 164
+    w0 = (np.zeros((in_dim, 16), dtype=np.float32), np.zeros(16, dtype=np.float32))
+    ln0 = (np.ones(16, dtype=np.float32), np.zeros(16, dtype=np.float32))
+    w1 = (np.zeros((16, 8), dtype=np.float32), np.zeros(8, dtype=np.float32))
+    ln1 = (np.ones(8, dtype=np.float32), np.zeros(8, dtype=np.float32))
+    w2 = (np.zeros((8, 3), dtype=np.float32), np.zeros(3, dtype=np.float32))
+
+    mlp = ISL_MLP(
+        weights=[w0, w1, w2],
+        ln_params=[ln0, ln1],
+        labels=["A", "B", "C"],
+        mean=np.zeros(in_dim, dtype=np.float32),
+        std=np.ones(in_dim, dtype=np.float32),
+    )
+
+    # 74D input (undersized)
+    probs_under = mlp.forward(np.ones(74, dtype=np.float32))
+    assert probs_under.shape == (3,)
+    assert np.isclose(np.sum(probs_under), 1.0)
+
+    # 220D input (oversized)
+    probs_over = mlp.forward(np.ones(220, dtype=np.float32))
+    assert probs_over.shape == (3,)
+    assert np.isclose(np.sum(probs_over), 1.0)
+
+
+def test_isl_mlp_zero_classes():
+    """Verify ISL_MLP handles empty label set / 0 classes safely."""
+    from signora.isl.model import ISL_MLP
+
+    in_dim = 16
+    w0 = (np.zeros((in_dim, 8), dtype=np.float32), np.zeros(8, dtype=np.float32))
+    ln0 = (np.ones(8, dtype=np.float32), np.zeros(8, dtype=np.float32))
+    w1 = (np.zeros((8, 4), dtype=np.float32), np.zeros(4, dtype=np.float32))
+    ln1 = (np.ones(4, dtype=np.float32), np.zeros(4, dtype=np.float32))
+    w2 = (np.zeros((4, 0), dtype=np.float32), np.zeros(0, dtype=np.float32))
+
+    mlp = ISL_MLP(
+        weights=[w0, w1, w2],
+        ln_params=[ln0, ln1],
+        labels=[],
+        mean=np.zeros(in_dim, dtype=np.float32),
+        std=np.ones(in_dim, dtype=np.float32),
+    )
+
+    probs = mlp.forward(np.ones(in_dim, dtype=np.float32))
+    assert len(probs) == 0
+
+
 
 

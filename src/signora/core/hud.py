@@ -256,6 +256,7 @@ def draw_keycap(
 
 
 _CANVAS_CACHE: dict = {}
+_RECT_CACHE: dict = {}
 
 
 def prepare_window_canvas(
@@ -267,13 +268,20 @@ def prepare_window_canvas(
     if not window_name:
         return frame
 
-    try:
-        rect = cv2.getWindowImageRect(window_name)
-        if not rect or len(rect) < 4:
+    now = time.monotonic()
+    cached = _RECT_CACHE.get(window_name)
+
+    if cached and (now - cached[0] < 0.75):
+        rx, ry, rw, rh = cached[1], cached[2], cached[3], cached[4]
+    else:
+        try:
+            rect = cv2.getWindowImageRect(window_name)
+            if not rect or len(rect) < 4:
+                return frame
+            rx, ry, rw, rh = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
+            _RECT_CACHE[window_name] = (now, rx, ry, rw, rh)
+        except Exception:
             return frame
-        rx, ry, rw, rh = int(rect[0]), int(rect[1]), int(rect[2]), int(rect[3])
-    except Exception:
-        return frame
 
     fh, fw = frame.shape[:2]
     # In OpenCV Qt, (rx, ry) represents the letterbox margin offset of the image inside the viewport.
@@ -287,6 +295,9 @@ def prepare_window_canvas(
     scale = min(win_w / fw, win_h / fh)
     new_w = max(1, int(fw * scale))
     new_h = max(1, int(fh * scale))
+
+    if new_w == fw and new_h == fh and win_w == fw and win_h == fh:
+        return frame
 
     cache_key = (win_h, win_w, bg_color)
     if cache_key not in _CANVAS_CACHE:
@@ -321,6 +332,7 @@ def render_flagship_hud(
     ai_model_name: str = "",
 ) -> np.ndarray:
     """Render high-polish cyberpunk glassmorphic HUD over camera frame."""
+    orig_h, orig_w = frame.shape[:2]
     if window_name:
         frame = prepare_window_canvas(frame, window_name=window_name)
 
@@ -330,7 +342,7 @@ def render_flagship_hud(
     # --------------------------------------------------------------------------
     # 1. Top Status Pill
     # --------------------------------------------------------------------------
-    header_w = min(w - 32, 680)
+    header_w = min(w - 32, 720)
     hx = (w - header_w) // 2
     draw_glass_card(frame, hx, 14, header_w, 42, alpha=0.82, radius=12)
 
@@ -357,12 +369,11 @@ def render_flagship_hud(
     fps_color = (
         COLOR_EMERALD if fps >= 20.0 else (COLOR_AMBER if fps >= 10.0 else COLOR_MAGENTA_NEON)
     )
-    audio_str = "SPEAKING" if tts_speaking else "TTS READY"
-    metrics_str = f"{fps:4.1f} FPS   |   {delegate.upper()}   |   {audio_str}"
+    metrics_str = f"{orig_w}x{orig_h}   |   {fps:4.1f} FPS   |   {delegate.upper()}"
     cv2.putText(
         frame,
         metrics_str,
-        (hx + header_w - 275, 38),
+        (hx + header_w - 280, 38),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.42,
         fps_color,
@@ -398,6 +409,22 @@ def render_flagship_hud(
             1,
             cv2.LINE_AA,
         )
+
+        is_fluid = st.get("fluid_mode", True) or float(st.get("effective_dwell_ms", 1000)) <= 350
+        is_apex = st.get("is_apex", False)
+        badge_txt = "FLUID APEX" if is_apex else ("FLUID" if is_fluid else "")
+        if badge_txt:
+            badge_col = COLOR_EMERALD if is_apex else COLOR_CYAN_NEON
+            cv2.putText(
+                frame,
+                badge_txt,
+                (cx + cw - 14 - len(badge_txt) * 7, cy + 24),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.35,
+                badge_col,
+                1,
+                cv2.LINE_AA,
+            )
 
         # Active Sign Display
         disp_cand = "[SPACE]" if cand == "SPACE" else cand

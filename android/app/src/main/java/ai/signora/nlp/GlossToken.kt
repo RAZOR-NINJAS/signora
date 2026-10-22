@@ -10,7 +10,7 @@ package ai.signora.nlp
  */
 data class GlossToken(
     val label: String,
-    val bodyAnchor: String,
-    val timestamp: Long,
-    val confidence: Float
+    val bodyAnchor: String = "",
+    val timestamp: Long = 0L,
+    val confidence: Float = 1.0f
 )

@@ -46,12 +46,25 @@ fun AppNavigationBar(
         AppDestination.values().forEach { destination ->
             val isSelected = currentDestination == destination
             val iconScale by androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (isSelected) 1.18f else 1.0f,
+                targetValue = if (isSelected) 1.24f else 1.0f,
                 animationSpec = androidx.compose.animation.core.spring(
-                    dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                    dampingRatio = 0.35f,
+                    stiffness = 600f
                 ),
                 label = "NavIconScale"
+            )
+            val iconLift by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isSelected) -2f else 0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.45f,
+                    stiffness = 500f
+                ),
+                label = "NavIconLift"
+            )
+            val labelAlpha by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isSelected) 1f else 0.72f,
+                animationSpec = androidx.compose.animation.core.tween(220),
+                label = "NavLabelAlpha"
             )
             NavigationBarItem(
                 selected = isSelected,
@@ -63,11 +76,15 @@ fun AppNavigationBar(
                         modifier = Modifier.graphicsLayer {
                             scaleX = iconScale
                             scaleY = iconScale
+                            translationY = iconLift
                         }
                     )
                 },
                 label = {
-                    Text(text = destination.title)
+                    Text(
+                        text = destination.title,
+                        modifier = Modifier.graphicsLayer { alpha = labelAlpha }
+                    )
                 },
                 alwaysShowLabel = true
             )
@@ -88,13 +105,25 @@ fun AppNavigationRail(
     ) {
         AppDestination.values().forEach { destination ->
             val isSelected = currentDestination == destination
+            val iconScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isSelected) 1.18f else 1.0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.35f,
+                    stiffness = 600f
+                ),
+                label = "RailIconScale"
+            )
             NavigationRailItem(
                 selected = isSelected,
                 onClick = { onNavigate(destination) },
                 icon = {
                     Icon(
                         imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
-                        contentDescription = destination.title
+                        contentDescription = destination.title,
+                        modifier = Modifier.graphicsLayer {
+                            scaleX = iconScale
+                            scaleY = iconScale
+                        }
                     )
                 },
                 label = {
